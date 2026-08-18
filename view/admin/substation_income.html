@@ -1,0 +1,127 @@
+{{include file="layout/admin_header" web_title="分站收益记录"}}
+<div id="kt_content_container" class="app-container container-fluid">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <div class="d-flex flex-wrap gap-3 align-items-center">
+          <input type="text" id="keyword" class="form-control form-control-solid w-250px" placeholder="搜索分站ID / UID / 订单号 / 场景 / 备注">
+          <select id="scene" class="form-select form-select-solid w-200px">
+            <option value="">全部场景</option>
+            <option value="substation_wallet_income">分站收益入账</option>
+            <option value="substation_wallet_transfer_out">钱包划转</option>
+            <option value="substation_order_income">订单收益记录</option>
+            <option value="substation_admin_adjust_balance">后台余额调整</option>
+          </select>
+          <select id="change_type" class="form-select form-select-solid w-140px">
+            <option value="">增减类型</option>
+            <option value="1">增加</option>
+            <option value="2">减少</option>
+          </select>
+          <select id="limit" class="form-select form-select-solid w-125px">
+            <option value="10">10条/页</option>
+            <option value="20" selected>20条/页</option>
+            <option value="50">50条/页</option>
+            <option value="100">100条/页</option>
+          </select>
+          <button class="btn btn-primary" type="button" onclick="reloadList(1)">查询</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-body pb-5">
+      <table class="table align-middle table-row-dashed fs-6 gy-5">
+        <thead>
+          <tr class="text-start text-gray-400 fw-bold fs-7 text-uppercase gs-0">
+            <th>ID</th>
+            <th>分站</th>
+            <th>用户</th>
+            <th>场景</th>
+            <th>金额</th>
+            <th>前后余额</th>
+            <th>订单号</th>
+            <th>备注</th>
+            <th>时间</th>
+          </tr>
+        </thead>
+        <tbody id="table_body"></tbody>
+      </table>
+
+      <div class="d-flex justify-content-between align-items-center mt-5 flex-wrap gap-3">
+        <div class="text-muted" id="pager_text">--</div>
+        <div class="d-flex gap-2 align-items-center">
+          <button class="btn btn-sm btn-light" type="button" id="prev_btn" onclick="changePage(-1)">上一页</button>
+          <span class="badge badge-light-primary" id="page_no">1 / 1</span>
+          <button class="btn btn-sm btn-light" type="button" id="next_btn" onclick="changePage(1)">下一页</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{include file="layout/admin_footer"}}
+<script>
+const base='{{:getConfig("backstage_entrance")}}';
+const substationId='{{$_GET["substation_id"]|default=""}}';
+let page=1,total=0;
+
+function esc(v){return String(v??'').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));}
+function sceneText(v){
+  const map={
+    substation_wallet_income:'分站收益入账',
+    substation_wallet_transfer_out:'钱包划转',
+    substation_order_income:'订单收益记录',
+    substation_admin_adjust_balance:'后台余额调整'
+  };
+  return map[String(v||'')] || String(v||'--');
+}
+function amountText(row){
+  const value=Number(row.amount||0).toFixed(2);
+  return Number(row.change_type||0)===2
+    ? `<span class="text-danger">-${value}U</span>`
+    : `<span class="text-success">+${value}U</span>`;
+}
+
+async function reloadList(targetPage){
+  page=targetPage||1;
+  const params={
+    page,
+    limit:$('#limit').val(),
+    substation_id:substationId,
+    keyword:$('#keyword').val(),
+    scene:$('#scene').val(),
+    change_type:$('#change_type').val()
+  };
+  const res=await $.get(base+'/substation/income-log',params);
+  if(res.code!==200){toastr.error(res.message||'加载失败'); return;}
+  const data=res.data||{};
+  total=Number(data.total||0);
+  const list=Array.isArray(data.list)?data.list:[];
+  const totalPages=Math.max(1,Math.ceil(total/Number(params.limit||20)));
+  $('#pager_text').text(`共 ${total} 条`);
+  $('#page_no').text(`${page} / ${totalPages}`);
+  $('#prev_btn').prop('disabled',page<=1);
+  $('#next_btn').prop('disabled',page>=totalPages);
+  $('#table_body').html(list.length?list.map(row=>`<tr>
+    <td>${row.id}</td>
+    <td><div class="fw-bold">${esc(row.site_name||'--')}</div><div class="text-muted fs-7">分站ID：${row.substation_id}</div><div class="text-muted fs-7">域名：${esc(row.full_domain||'--')}</div></td>
+    <td><div>${esc(row.user_mobile||'--')}</div><div class="text-muted fs-7">UID：${row.uid}</div></td>
+    <td>${esc(sceneText(row.scene))}</td>
+    <td>${amountText(row)}</td>
+    <td><div>${Number(row.balance_before||0).toFixed(2)}U → ${Number(row.balance_after||0).toFixed(2)}U</div></td>
+    <td>${esc(row.order_number||'--')}</td>
+    <td>${esc(row.remark||'--')}</td>
+    <td>${esc(row.create_time||'--')}</td>
+  </tr>`).join(''):`<tr><td colspan="9" class="text-center text-muted py-10">暂无数据</td></tr>`);
+}
+
+function changePage(offset){
+  const limit=Number($('#limit').val()||20);
+  const totalPages=Math.max(1,Math.ceil(total/limit));
+  const next=Math.min(totalPages,Math.max(1,page+offset));
+  if(next!==page) reloadList(next);
+}
+
+$('#limit,#scene,#change_type').on('change',()=>reloadList(1));
+$('#keyword').on('keydown',e=>{if(e.key==='Enter') reloadList(1)});
+reloadList(1);
+</script>

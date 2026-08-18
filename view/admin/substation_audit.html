@@ -1,0 +1,96 @@
+{{include file="layout/admin_header" web_title="分站审核"}}
+<div id="kt_content_container" class="app-container container-fluid">
+  <div class="card mb-6">
+    <div class="card-header border-0 pt-6">
+      <div class="card-title"><h3 class="mb-0">分站审核</h3></div>
+    </div>
+    <div class="card-body pt-2">
+      <div class="row g-4 align-items-end">
+        <div class="col-md-5">
+          <label class="form-label">基础域名配置</label>
+          <div class="input-group">
+            <input type="text" id="base_domain" class="form-control form-control-solid" placeholder="例如 example.com">
+            <button class="btn btn-primary" type="button" onclick="saveBaseDomain()">保存</button>
+          </div>
+          <div class="form-text">审核通过后将自动拼接为 二级前缀.基础域名</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">关键字</label>
+          <input type="text" id="search_keyword" class="form-control form-control-solid" placeholder="用户ID/网站名/域名">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">审核状态</label>
+          <select id="search_status" class="form-select form-select-solid">
+            <option value="">全部状态</option>
+            <option value="0">待审核</option>
+            <option value="1">已通过</option>
+            <option value="2">已驳回</option>
+          </select>
+        </div>
+        <div class="col-md-2 d-flex gap-3">
+          <button class="btn btn-primary flex-fill" onclick="reloadCurrent()">查询</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header border-0 pt-6">
+      <div class="card-title">
+        <ul class="nav nav-tabs nav-line-tabs fs-6 fw-bold">
+          <li class="nav-item"><a class="nav-link active" href="#" data-audit-type="1" onclick="switchTab(event,1)">开通审核</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" data-audit-type="2" onclick="switchTab(event,2)">资料审核</a></li>
+        </ul>
+      </div>
+      <div class="card-toolbar text-muted">分页 + 统一布局</div>
+    </div>
+    <div class="card-body pt-2">
+      <div class="table-responsive">
+        <table class="table align-middle table-row-dashed fs-6 gy-4">
+          <thead>
+            <tr class="text-start text-gray-400 fw-bold fs-7 text-uppercase gs-0">
+              <th>ID</th><th>分站ID</th><th>用户ID</th><th>网站名</th><th>域名</th><th>类型</th><th>状态</th><th>提交时间</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="audit_body"></tbody>
+        </table>
+      </div>
+      <div class="d-flex justify-content-between align-items-center pt-4">
+        <div class="text-muted" id="audit_page_info">--</div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-light" onclick="changePage(-1)">上一页</button>
+          <button class="btn btn-sm btn-light" onclick="changePage(1)">下一页</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{{include file="layout/admin_footer"/}}
+<script>
+const base='{{:getConfig("backstage_entrance")}}';
+let auditType=1,page=1,limit=20,total=0;
+function esc(v){return String(v??'').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));}
+function switchTab(e,type){e.preventDefault(); auditType=type; page=1; document.querySelectorAll('[data-audit-type]').forEach(el=>el.classList.toggle('active', Number(el.dataset.auditType)===type)); loadAuditList();}
+function renderAuditRows(list=[]){ const html=list.map(row=>`<tr>
+<td>${row.id}</td><td>${row.substation_id}</td><td>${row.uid}</td><td>${esc(row.site_name||'--')}</td><td>${esc(row.full_domain||row.subdomain||'--')}</td>
+<td><span class="badge badge-light-info">${esc(row.audit_type_text||'--')}</span></td>
+<td><span class="badge ${Number(row.status)===0?'badge-light-warning':(Number(row.status)===1?'badge-light-success':'badge-light-danger')}">${esc(row.status_text||'--')}</span></td>
+<td>${esc(row.create_time||'--')}</td>
+<td>${Number(row.status)===0?`<div class="d-flex gap-2"><button class="btn btn-sm btn-light-success" onclick="auditItem(${row.id},1)">通过</button><button class="btn btn-sm btn-light-danger" onclick="auditItem(${row.id},2)">驳回</button></div>`:(row.reject_reason?`<span class="text-muted">${esc(row.reject_reason)}</span>`:'-')}</td>
+</tr>`).join('');
+ document.getElementById('audit_body').innerHTML=html || `<tr><td colspan="9" class="text-center text-muted py-10">暂无数据</td></tr>`;
+}
+async function loadAuditList(){
+ const params={audit_type:auditType,page,limit,keyword:$('#search_keyword').val(),status:$('#search_status').val()};
+ const res=await $.get(base+'/substation/audit-list', params);
+ if(res.code!==200){toastr.error(res.message||'加载失败');return;}
+ const data=res.data||{}; total=Number(data.total||0); if(data.base_domain!==undefined) $('#base_domain').val(data.base_domain||'');
+ renderAuditRows(data.list||[]); document.getElementById('audit_page_info').textContent=`第 ${page} 页 / 共 ${Math.max(1, Math.ceil(total/limit))} 页，共 ${total} 条`;
+}
+async function saveBaseDomain(){ const baseDomain=$('#base_domain').val().trim(); const res=await $.post(base+'/substation/save-base-domain',{base_domain:baseDomain}); if(res.code===200){toastr.success(res.message||'保存成功'); loadAuditList();} else {toastr.error(res.message||'保存失败');}}
+async function auditItem(id,status){ let reject_reason=''; if(status===2){ reject_reason=prompt('请输入驳回原因','')||''; }
+ const res=await $.post(base+'/substation/audit',{audit_id:id,status,reject_reason}); if(res.code===200){toastr.success(res.message||'操作成功'); loadAuditList();} else {toastr.error(res.message||'操作失败');}}
+function reloadCurrent(){page=1; loadAuditList();}
+function changePage(delta){ const totalPages=Math.max(1,Math.ceil(total/limit)); const next=page+delta; if(next<1||next>totalPages) return; page=next; loadAuditList(); }
+loadAuditList();
+</script>

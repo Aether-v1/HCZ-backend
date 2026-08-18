@@ -1,0 +1,54 @@
+<script src="__INDEX__/js/jquery.min.js"></script>
+<script>
+    out_order();
+    function out_order() {
+        $.ajax({
+            url: "/footer_post/out_order",
+            method: 'POST',
+            dataType: 'json',
+            success: function(res) {
+                if (res.code === 200) {
+                    let startTime = getLocalStorage('startTime_' + res.data);
+                    let currentTime = new Date().getTime();
+                    let timeDifference = (currentTime - startTime) / (1000 * 60);
+
+                    if (timeDifference > 20) {
+                        var utterThis = new window.SpeechSynthesisUtterance('审核池有'+res.data+'笔订单带确认');
+                        utterThis.pitch=1
+                        utterThis.rate=1.2
+                        utterThis.voiceURI='BaiduMandarinMale'
+                        window.speechSynthesis.speak(utterThis);
+                        setLocalStorage('startTime_' + res.data, new Date().getTime());
+                    } else {
+                        return 0;
+                    }
+                    setTimeout(function (){
+                        out_order();
+                    },10000);
+                }else{
+                    setTimeout(function (){
+                        out_order();
+                    },3000);
+                }
+            }
+        });
+    };
+    let audio;
+    if (audio != undefined) {
+       audio.addEventListener('ended', function() {
+        isPlaying = false;
+    });  
+    }
+    
+
+
+    // 存储数据到本地缓存
+    function setLocalStorage(key, value) {
+        localStorage.setItem(key, JSON.stringify(value));
+    }
+    // 从本地缓存获取数据
+    function getLocalStorage(key) {
+        let data = localStorage.getItem(key);
+        return data ? JSON.parse(data) : null;
+    }
+</script>

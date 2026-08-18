@@ -1,0 +1,1 @@
+Legacy frontend plugin assets were moved to public/static/plugin_legacy_disabled.

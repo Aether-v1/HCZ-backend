@@ -1,0 +1,646 @@
+{{include file="layout/admin_header" web_title="站内消息"}}
+<div id="kt_content_container" class="app-container container-fluid">
+    <div class="row g-5 g-xl-8">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div>
+                            <h3 class="mb-1">站内消息发送</h3>
+                            <div class="text-muted fs-7">支持给单个用户发送平台消息，也支持发送全局消息（所有老用户 + 后续新注册用户都会收到）。</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row g-5">
+                        <div class="col-md-3">
+                            <label class="form-label" for="message_is_global">全局消息</label>
+                            <div class="form-check form-switch form-check-custom form-check-solid mt-3">
+                                <input class="form-check-input" type="checkbox" value="1" id="message_is_global" name="message_is_global">
+                                <label class="form-check-label" for="message_is_global">发送给全体用户（含未来新用户）</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label" for="target_user_id">用户ID</label>
+                            <input type="number" min="1" class="form-control" id="target_user_id" name="target_user_id" placeholder="优先按用户ID发送">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label" for="target_account">用户账号</label>
+                            <input type="text" class="form-control" id="target_account" name="target_account" placeholder="支持手机号 / 昵称 / 姓氏">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="required form-label" for="message_type">消息类型</label>
+                            <select class="form-select" id="message_type" name="message_type">
+                                <option value="official">官方消息</option>
+                                <option value="recharge">充值</option>
+                                <option value="withdraw">提现</option>
+                                <option value="order">订单</option>
+                                <option value="trade">交易</option>
+                                <option value="agent">分销</option>
+                                <option value="auth">实名</option>
+                                <option value="other">其他</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="required form-label" for="action_type">动作类型</label>
+                            <select class="form-select" id="action_type" name="action_type">
+                                <option value="none">无跳转</option>
+                                <option value="route">前端路由</option>
+                                <option value="link">外部链接</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label" for="message_is_pinned">置顶显示</label>
+                            <div class="form-check form-switch form-check-custom form-check-solid mt-3">
+                                <input class="form-check-input" type="checkbox" value="1" id="message_is_pinned" name="message_is_pinned">
+                                <label class="form-check-label" for="message_is_pinned">发送后置顶</label>
+                            </div>
+                        </div>
+                        <div class="col-md-9">
+                            <label class="required form-label" for="message_title">消息标题</label>
+                            <input type="text" class="form-control" id="message_title" name="message_title" maxlength="120" placeholder="请输入消息标题">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="message_summary">消息摘要</label>
+                            <input type="text" class="form-control" id="message_summary" name="message_summary" maxlength="255" placeholder="可不填，不填则前端自动截取正文">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="action_value">跳转地址 / 路由</label>
+                            <input type="text" class="form-control" id="action_value" name="action_value" maxlength="255" placeholder="例如 /orders/123 或 https://example.com">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="required form-label" for="message_content">消息正文</label>
+                            <textarea class="form-control" id="message_content" name="message_content" rows="6" placeholder="请输入消息正文"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex justify-content-end gap-3">
+                    <button type="button" class="btn btn-light" onclick="resetMessageForm()">重置</button>
+                    <button type="button" class="btn btn-primary" onclick="sendMessage()">发送消息</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="d-flex align-items-center position-relative my-1 me-3">
+                            <span class="svg-icon svg-icon-1 position-absolute ms-4">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <rect opacity="0.5" x="17.0365" y="15.1223" width="8.15546" height="2" rx="1" transform="rotate(45 17.0365 15.1223)" fill="currentColor" />
+                                    <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17 14.4667 17 11C17 7.53333 14.4667 5 11 5Z" fill="currentColor" />
+                                </svg>
+                            </span>
+                            <input type="text" data-kt="search" class="form-control form-control-solid w-250px ps-15 search" placeholder="搜索标题、摘要、用户ID或账号">
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body pb-5">
+                    <table id="message_table" class="table align-middle table-row-dashed fs-6 gy-5">
+                        <thead>
+                            <tr class="text-start text-gray-400 fw-bold fs-7 text-uppercase gs-0">
+                                <th>ID</th>
+                                <th>接收用户</th>
+                                <th>标题</th>
+                                <th>类型</th>
+                                <th>已读状态</th>
+                                <th>发送人</th>
+                                <th>发送时间</th>
+                                <th class="text-end">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-gray-600 fw-semibold"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" tabindex="-1" id="message_detail_modal">
+    <div class="modal-dialog modal-dialog-centered mw-700px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="detail_title">消息详情</h3>
+                <div class="btn btn-icon btn-sm btn-active-light-primary ms-2" data-bs-dismiss="modal" aria-label="Close">
+                    <span class="svg-icon svg-icon-1">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path opacity="0.3" d="M6.7 19.4L5.3 18C4.9 17.6 4.9 17 5.3 16.6L16.6 5.3C17 4.9 17.6 4.9 18 5.3L19.4 6.7C19.8 7.1 19.8 7.7 19.4 8.1L8.1 19.4C7.8 19.8 7.1 19.8 6.7 19.4Z" fill="currentColor"/>
+                            <path d="M19.5 18L18.1 19.4C17.7 19.8 17.1 19.8 16.7 19.4L5.40001 8.1C5.00001 7.7 5.00001 7.1 5.40001 6.7L6.80001 5.3C7.20001 4.9 7.80001 4.9 8.20001 5.3L19.5 16.6C19.9 16.9 19.9 17.6 19.5 18Z" fill="currentColor"/>
+                        </svg>
+                    </span>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="mb-4">
+                    <div class="text-muted fs-7 mb-1" id="detail_meta">-</div>
+                    <div class="text-muted fs-7" id="detail_target">-</div>
+                </div>
+                <div class="border rounded p-4 bg-light-light" id="detail_content" style="white-space: pre-wrap; word-break: break-word; min-height: 140px;"></div>
+                <div class="mt-4 text-muted fs-7" id="detail_action">动作：无跳转</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script id="message_initial_rows" type="application/json">{{$message_rows_json|raw|default='[]'}}</script>
+
+{{include file="layout/admin_footer"/}}
+<script type="text/javascript">
+    const messageTypeTextMap = {
+        official: '官方消息',
+        global: '全局消息',
+        recharge: '充值',
+        withdraw: '提现',
+        order: '订单',
+        trade: '交易',
+        agent: '分销',
+        auth: '实名',
+        other: '其他'
+    };
+
+    const actionTypeTextMap = {
+        none: '无跳转',
+        route: '前端路由',
+        link: '外部链接'
+    };
+
+    const queryParams = new URLSearchParams(window.location.search);
+    const presetUid = queryParams.get('uid') || '';
+    const presetAccount = queryParams.get('account') || '';
+    const messageListUrl = "{{:getConfig('backstage_entrance')}}/message/list";
+    const messagePinUrl = "{{:getConfig('backstage_entrance')}}/message/pin";
+    const messageDetailUrl = "{{:getConfig('backstage_entrance')}}/message/detail";
+    const messageDeleteUrl = "{{:getConfig('backstage_entrance')}}/message/delete";
+    const initialMessageRows = getInitialMessageRows();
+    let dt = null;
+
+    if (presetUid) {
+        $('#target_user_id').val(presetUid);
+    }
+    if (presetAccount) {
+        $('#target_account').val(decodeURIComponent(presetAccount));
+    }
+
+    function sortMessageRows(rows) {
+        return (Array.isArray(rows) ? rows.slice() : []).sort(function (a, b) {
+            const pinnedDiff = Number(b.is_pinned || 0) - Number(a.is_pinned || 0);
+            if (pinnedDiff !== 0) {
+                return pinnedDiff;
+            }
+            return Number(b.id || 0) - Number(a.id || 0);
+        });
+    }
+
+    function getInitialMessageRows() {
+        const node = document.getElementById('message_initial_rows');
+        if (!node) {
+            return [];
+        }
+
+        try {
+            const parsed = JSON.parse(node.textContent || '[]');
+            return sortMessageRows(Array.isArray(parsed) ? parsed : []);
+        } catch (error) {
+            return [];
+        }
+    }
+
+    function escapeHtml(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function buildUserText(user, row) {
+        const account = user.account || user.mobile || user.nickname || user.surname || '-';
+        const nickname = user.nickname || user.surname || '';
+        return `
+            <div class="d-flex flex-column">
+                <span class="fw-bold">UID: ${row.user_id || '-'}</span>
+                <span class="text-muted fs-7">${escapeHtml(account)}</span>
+                ${nickname ? `<span class="text-muted fs-8">${escapeHtml(nickname)}</span>` : ''}
+            </div>
+        `;
+    }
+
+    function buildSummaryText(row) {
+        const source = String(row.summary || row.content || '').replace(/\s+/g, ' ').trim();
+        if (!source) {
+            return '';
+        }
+        return source.length > 60 ? `${source.slice(0, 60)}...` : source;
+    }
+
+    function normalizeMessageRow(row) {
+        const next = Object.assign({}, row || {});
+        next.id = Number(next.id || 0);
+        next.user_id = Number(next.user_id || 0);
+        next.is_read = Number(next.is_read || 0);
+        next.is_pinned = Number(next.is_pinned || 0);
+        next.title = String(next.title || '').trim();
+        next.summary = String(next.summary || '').trim();
+        next.content = String(next.content || '').trim();
+        next.message_type = String(next.message_type || 'official').trim() || 'official';
+        next.action_type = String(next.action_type || 'none').trim() || 'none';
+        next.action_value = String(next.action_value || '').trim();
+        next.created_at = String(next.created_at || '').trim();
+        next.user_info = next.user_info || null;
+        next.sender_admin_info = next.sender_admin_info || next.sender_admin || null;
+        return next;
+    }
+
+    function getAllMessageRows() {
+        if (!dt) {
+            return [];
+        }
+        return dt.rows().data().toArray().map(normalizeMessageRow);
+    }
+
+    function getMessageRowById(id) {
+        const targetId = Number(id);
+        return getAllMessageRows().find(function (row) {
+            return Number(row.id) === targetId;
+        }) || null;
+    }
+
+    function updateMessageRow(id, patch) {
+        if (!dt) {
+            return;
+        }
+
+        const rows = getAllMessageRows().map(function (row) {
+            if (Number(row.id) !== Number(id)) {
+                return row;
+            }
+            return normalizeMessageRow(Object.assign({}, row, patch || {}));
+        });
+
+        renderMessageRows(rows);
+    }
+
+    function removeMessageRow(id) {
+        if (!dt) {
+            return;
+        }
+
+        const rows = getAllMessageRows().filter(function (row) {
+            return Number(row.id) !== Number(id);
+        });
+
+        renderMessageRows(rows);
+    }
+
+    function fillMessageDetail(data) {
+        const user = data.user_info || {};
+        const sender = data.sender_admin || data.sender_admin_info || {};
+        const account = user.account || user.mobile || user.nickname || user.surname || '-';
+        const userName = user.nickname || user.surname || '';
+        const senderName = sender.name || sender.account || '-';
+        const content = String(data.content || data.summary || '').trim() || '暂无正文内容';
+        const pinText = Number(data.is_pinned || 0) === 1 ? ' / 置顶' : '';
+
+        $('#detail_title').text(data.title || '消息详情');
+        $('#detail_meta').text(`类型：${messageTypeTextMap[data.message_type] || data.message_type || '-'} / 状态：${Number(data.is_read) === 1 ? '已读' : '未读'} / 发送人：${senderName} / 时间：${data.created_at || '-'}${pinText}`);
+        $('#detail_target').text(`接收用户：UID ${data.user_id || '-'} / ${account}${userName ? ' / ' + userName : ''}`);
+        $('#detail_content').text(content);
+        $('#detail_action').text(`动作：${actionTypeTextMap[data.action_type] || data.action_type || '无跳转'}${data.action_value ? ' / ' + data.action_value : ''}`);
+    }
+
+    function renderMessageRows(rows) {
+        if (!dt) {
+            return;
+        }
+
+        const nextRows = sortMessageRows((Array.isArray(rows) ? rows : []).map(normalizeMessageRow));
+        dt.clear();
+        if (nextRows.length > 0) {
+            dt.rows.add(nextRows);
+        }
+        dt.draw(false);
+    }
+
+    function initMessageTable() {
+        dt = $('#message_table').DataTable({
+            processing: true,
+            serverSide: false,
+            searching: false,
+            ordering: false,
+            stateSave: false,
+            pageLength: 10,
+            lengthMenu: [[10, 20, 50], [10, 20, 50]],
+            pagingType: 'simple_numbers',
+            data: Array.isArray(initialMessageRows) ? initialMessageRows : [],
+            language: {
+                zeroRecords: '未找到相关数据信息',
+                emptyTable: '暂无消息数据',
+                infoEmpty: '暂无消息数据',
+                infoFiltered: ''
+            },
+            columns: [
+                { data: 'id', defaultContent: '' },
+                { data: 'user_id', defaultContent: '' },
+                { data: 'title', defaultContent: '' },
+                { data: 'message_type', defaultContent: '' },
+                { data: 'is_read', defaultContent: 0 },
+                { data: 'sender_admin_id', defaultContent: '' },
+                { data: 'created_at', defaultContent: '' },
+                { data: null, defaultContent: '' }
+            ],
+            columnDefs: [
+                {
+                    targets: 1,
+                    orderable: false,
+                    render: function (data, type, row) {
+                        return buildUserText(row.user_info || {}, row);
+                    }
+                },
+                {
+                    targets: 2,
+                    orderable: false,
+                    render: function (data, type, row) {
+                        const pinBadge = Number(row.is_pinned || 0) === 1
+                            ? '<span class="badge badge-light-warning ms-2">置顶</span>'
+                            : '';
+                        const summary = buildSummaryText(row);
+                        const summaryHtml = summary ? `<div class="text-muted fs-7 mt-1 text-break">${escapeHtml(summary)}</div>` : '';
+                        return `<div class="d-flex flex-column"><span class="fw-bold">${escapeHtml(row.title || '-')}</span>${pinBadge}${summaryHtml}</div>`;
+                    }
+                },
+                {
+                    targets: 3,
+                    orderable: false,
+                    render: function (data) {
+                        return `<span class="badge badge-light-primary">${messageTypeTextMap[data] || data || '-'}</span>`;
+                    }
+                },
+                {
+                    targets: 4,
+                    orderable: false,
+                    render: function (data) {
+                        return Number(data) === 1
+                            ? '<span class="badge badge-light-success">已读</span>'
+                            : '<span class="badge badge-light-danger">未读</span>';
+                    }
+                },
+                {
+                    targets: 5,
+                    orderable: false,
+                    render: function (data, type, row) {
+                        const admin = row.sender_admin_info || {};
+                        return escapeHtml(admin.name || admin.account || '-');
+                    }
+                },
+                {
+                    targets: -1,
+                    orderable: false,
+                    className: 'text-end',
+                    render: function (data, type, row) {
+                        const pinText = Number(row.is_pinned || 0) === 1 ? '取消置顶' : '设为置顶';
+                        const pinValue = Number(row.is_pinned || 0) === 1 ? 0 : 1;
+                        return `
+                            <div class="d-flex justify-content-end gap-2 flex-wrap">
+                                <a class="btn btn-sm btn-light-warning" href="javascript:void(0)" onclick="togglePin(${row.id}, ${pinValue})">${pinText}</a>
+                                <a class="btn btn-sm btn-light-primary" href="javascript:void(0)" onclick="viewDetail(${row.id})">查看详情</a>
+                            </div>
+                        `;
+                    }
+                }
+            ],
+            drawCallback: function () {
+                const api = this.api();
+                const pageInfo = api.page.info();
+                const hasData = Number(pageInfo.recordsDisplay || 0) > 0;
+                $('#message_table_wrapper .dataTables_paginate').toggle(hasData);
+                $('#message_table_wrapper .dataTables_info').toggle(hasData);
+                api.rows({ page: 'current' }).every(function () {
+                    const row = normalizeMessageRow(this.data() || {});
+                    const $cell = $(this.node()).find('td').last();
+                    if (!$cell.length || !row.id) {
+                        return;
+                    }
+                    if ($cell.find('.message-delete-btn').length) {
+                        return;
+                    }
+                    $cell.find('.btn-light-primary').after(
+                        ` <a class="btn btn-sm btn-light-danger message-delete-btn" href="javascript:void(0)" onclick="deleteMessageRecord(${row.id})">删除</a>`
+                    );
+                });
+            }
+        });
+    }
+
+    function buildListRequestData() {
+        return {
+            draw: 1,
+            start: 0,
+            length: 500,
+            uid: (presetUid || '').trim(),
+            'search[value]': ($('[data-kt="search"]').val() || '').trim()
+        };
+    }
+
+    function applyMessageFilter() {
+        if (!dt) {
+            return;
+        }
+
+        dt.search(($('[data-kt="search"]').val() || '').trim()).draw();
+    }
+
+    function refreshMessageTable(showErrorToast) {
+        $.ajax({
+            url: messageListUrl,
+            method: 'GET',
+            dataType: 'json',
+            data: buildListRequestData(),
+            success: function (res) {
+                if (res && Array.isArray(res.data)) {
+                    if (res.data.length > 0 || dt.rows().count() === 0) {
+                        renderMessageRows(res.data);
+                    }
+                    return;
+                }
+
+                if (dt.rows().count() === 0) {
+                    renderMessageRows([]);
+                }
+                if (showErrorToast && dt.rows().count() === 0) {
+                    toastr.error('消息列表加载失败', { closeButton: true, timeOut: '3000' });
+                }
+            },
+            error: function () {
+                if (showErrorToast && dt.rows().count() === 0) {
+                    toastr.error('消息列表加载失败，请稍后重试', { closeButton: true, timeOut: '3000' });
+                }
+            }
+        });
+    }
+
+    function togglePin(id, isPinned) {
+        $.ajax({
+            url: messagePinUrl,
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                id: id,
+                is_pinned: isPinned
+            },
+            success: function (res) {
+                if (Number(res.code) !== 200) {
+                    toastr.error(res.message || '置顶操作失败', { closeButton: true, timeOut: '3000' });
+                    return;
+                }
+
+                updateMessageRow(id, { is_pinned: isPinned });
+                toastr.success(res.message || '操作成功', { closeButton: true, timeOut: '3000' });
+            },
+            error: function () {
+                toastr.error('置顶操作失败，请稍后重试', { closeButton: true, timeOut: '3000' });
+            }
+        });
+    }
+
+    function sendMessage() {
+        $.ajax({
+            url: "{{:getConfig('backstage_entrance')}}/message/send",
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                user_id: $('#target_user_id').val(),
+                account: $('#target_account').val(),
+                title: $('#message_title').val(),
+                summary: $('#message_summary').val(),
+                content: $('#message_content').val(),
+                message_type: $('#message_type').val(),
+                action_type: $('#action_type').val(),
+                action_value: $('#action_value').val(),
+                is_pinned: $('#message_is_pinned').is(':checked') ? 1 : 0,
+                is_global: $('#message_is_global').is(':checked') ? 1 : 0
+            },
+            success: function (res) {
+                if (Number(res.code) === 200) {
+                    toastr.success(res.message || '发送成功', { closeButton: true, timeOut: '3000' });
+                    resetMessageForm();
+                    setTimeout(function () {
+                        window.location.reload();
+                    }, 500);
+                } else {
+                    toastr.error(res.message || '发送失败', { closeButton: true, timeOut: '3000' });
+                }
+            },
+            error: function () {
+                toastr.error('发送失败，请稍后重试', { closeButton: true, timeOut: '3000' });
+            }
+        });
+    }
+
+    function resetMessageForm() {
+        $('#message_title').val('');
+        $('#message_summary').val('');
+        $('#message_content').val('');
+        $('#message_type').val('official');
+        $('#action_type').val('none');
+        $('#action_value').val('');
+        $('#message_is_pinned').prop('checked', false);
+        $('#message_is_global').prop('checked', false);
+        if (!presetUid) {
+            $('#target_user_id').val('');
+        }
+        if (!presetAccount) {
+            $('#target_account').val('');
+        }
+    }
+
+    function viewDetail(id) {
+        const rowData = getMessageRowById(id);
+        if (rowData) {
+            fillMessageDetail(rowData);
+            $('#message_detail_modal').modal('show');
+            if (String(rowData.content || rowData.summary || '').trim() !== '') {
+                return;
+            }
+        }
+
+        $.ajax({
+            url: messageDetailUrl,
+            method: 'GET',
+            dataType: 'json',
+            data: { id: id },
+            success: function (res) {
+                if (Number(res.code) !== 200) {
+                    toastr.error(res.message || '查询失败', { closeButton: true, timeOut: '3000' });
+                    return;
+                }
+
+                const data = normalizeMessageRow(res.data || {});
+                updateMessageRow(id, data);
+                fillMessageDetail(data);
+                $('#message_detail_modal').modal('show');
+            },
+            error: function () {
+                toastr.error('查询失败，请稍后重试', { closeButton: true, timeOut: '3000' });
+            }
+        });
+    }
+
+    function deleteMessageRecord(id) {
+        if (!id) {
+            return;
+        }
+
+        Swal.fire({
+            text: '删除后，这条消息将不会继续显示给用户，确认删除吗？',
+            icon: 'warning',
+            showCancelButton: true,
+            buttonsStyling: false,
+            confirmButtonText: '确定删除',
+            cancelButtonText: '取消',
+            customClass: {
+                confirmButton: 'btn btn-danger',
+                cancelButton: 'btn btn-light'
+            }
+        }).then(function (result) {
+            if (!result.isConfirmed) {
+                return;
+            }
+
+            $.ajax({
+                url: messageDeleteUrl,
+                method: 'POST',
+                dataType: 'json',
+                data: { id: id },
+                success: function (res) {
+                    if (Number(res.code) !== 200) {
+                        toastr.error(res.message || '删除失败', { closeButton: true, timeOut: '3000' });
+                        return;
+                    }
+
+                    removeMessageRow(id);
+                    $('#message_detail_modal').modal('hide');
+                    toastr.success(res.message || '删除成功', { closeButton: true, timeOut: '3000' });
+                },
+                error: function () {
+                    toastr.error('删除失败，请稍后重试', { closeButton: true, timeOut: '3000' });
+                }
+            });
+        });
+    }
+
+    KTUtil.onDOMContentLoaded(function () {
+        initMessageTable();
+        applyMessageFilter();
+
+        if (initialMessageRows.length === 0) {
+            refreshMessageTable(false);
+        }
+
+        $('[data-kt="search"]').on('keyup', function () {
+            applyMessageFilter();
+        });
+    });
+</script>

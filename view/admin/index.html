@@ -1,0 +1,754 @@
+{{include file="layout/admin_header" web_title="首页概况总览"/}}
+
+<style>
+    .admin-trend-page {
+        --trend-ink: #102033;
+        --trend-muted: #738096;
+        --trend-border: rgba(104, 124, 180, 0.16);
+        --trend-panel: rgba(255, 255, 255, 0.94);
+        --trend-primary: #0f766e;
+        --trend-accent: #0ea5e9;
+        --trend-shadow: 0 24px 70px rgba(48, 69, 124, 0.12);
+    }
+    .trend-shell {
+        overflow: hidden;
+        border: 1px solid var(--trend-border);
+        border-radius: 32px;
+        background:
+            radial-gradient(circle at 10% 8%, rgba(45, 212, 191, 0.18), transparent 28%),
+            radial-gradient(circle at 88% 0%, rgba(14, 165, 233, 0.18), transparent 24%),
+            var(--trend-panel);
+        box-shadow: var(--trend-shadow);
+    }
+    .trend-hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+        gap: 22px;
+        padding: 28px;
+        color: #fff;
+        background:
+            radial-gradient(circle at 20% 18%, rgba(34, 197, 94, 0.32), transparent 28%),
+            linear-gradient(135deg, #0f172a 0%, #134e4a 50%, #0369a1 100%);
+    }
+    .trend-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.14);
+        color: rgba(255, 255, 255, 0.78);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+    }
+    .trend-hero h1 {
+        margin: 16px 0 8px;
+        color: #fff;
+        font-size: clamp(30px, 4vw, 46px);
+        font-weight: 950;
+        letter-spacing: -0.05em;
+    }
+    .trend-hero p {
+        max-width: 620px;
+        margin: 0;
+        color: rgba(255, 255, 255, 0.72);
+        line-height: 1.8;
+    }
+    .trend-balance {
+        align-self: stretch;
+        padding: 22px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.14);
+        backdrop-filter: blur(14px);
+    }
+    .trend-balance span {
+        display: block;
+        margin-bottom: 10px;
+        color: rgba(255, 255, 255, 0.72);
+        font-size: 13px;
+        font-weight: 800;
+    }
+    .trend-balance strong {
+        display: block;
+        color: #fff;
+        font-size: clamp(34px, 5vw, 54px);
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -0.06em;
+    }
+    .trend-balance small {
+        display: block;
+        margin-top: 12px;
+        color: rgba(255, 255, 255, 0.68);
+        font-weight: 800;
+    }
+    .trend-board {
+        padding: 26px;
+    }
+    .trend-summary {
+        margin-bottom: 18px;
+    }
+    .trend-summary-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+    .trend-summary-head h2 {
+        margin: 0;
+        color: var(--trend-ink);
+        font-size: 18px;
+        font-weight: 900;
+    }
+    .trend-summary-head p {
+        margin: 0;
+        color: var(--trend-muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .trend-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .trend-summary-card {
+        padding: 14px;
+        border: 1px solid var(--trend-border);
+        border-radius: 16px;
+        background: linear-gradient(180deg, #ffffff, #f8fbff);
+    }
+    .trend-summary-card b {
+        display: block;
+        color: var(--trend-muted);
+        font-size: 12px;
+        font-weight: 800;
+        margin-bottom: 8px;
+    }
+    .trend-summary-card strong {
+        display: block;
+        color: var(--trend-ink);
+        font-size: 22px;
+        line-height: 1.2;
+        font-weight: 900;
+        letter-spacing: -0.02em;
+        word-break: break-word;
+    }
+    .trend-summary-card span {
+        display: block;
+        margin-top: 6px;
+        color: var(--trend-muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .trend-toolbar {
+        display: grid;
+        grid-template-columns: minmax(240px, 0.7fr) minmax(0, 1.3fr);
+        gap: 16px;
+        align-items: end;
+        margin-bottom: 22px;
+    }
+    .trend-field label,
+    .trend-range-label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--trend-muted);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.04em;
+    }
+    .trend-select {
+        width: 100%;
+        height: 48px;
+        padding: 0 16px;
+        border: 1px solid var(--trend-border);
+        border-radius: 16px;
+        background: #f8fbff;
+        color: var(--trend-ink);
+        font-size: 14px;
+        font-weight: 800;
+        outline: none;
+    }
+    .trend-range {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .trend-range button {
+        min-width: 88px;
+        height: 48px;
+        padding: 0 16px;
+        border: 1px solid var(--trend-border);
+        border-radius: 16px;
+        background: #f8fbff;
+        color: #526179;
+        font-weight: 900;
+        transition: all 0.18s ease;
+    }
+    .trend-range button.active {
+        border-color: transparent;
+        color: #fff;
+        background: linear-gradient(135deg, var(--trend-primary), var(--trend-accent));
+        box-shadow: 0 14px 30px rgba(14, 165, 233, 0.2);
+    }
+    .trend-window {
+        display: grid;
+        grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+        gap: 20px;
+    }
+    .trend-current {
+        min-height: 360px;
+        padding: 24px;
+        border: 1px solid var(--trend-border);
+        border-radius: 26px;
+        background: linear-gradient(180deg, #ffffff, #f8fbff);
+    }
+    .trend-current-tag {
+        display: inline-flex;
+        padding: 7px 11px;
+        border-radius: 999px;
+        background: rgba(14, 165, 233, 0.1);
+        color: #0369a1;
+        font-size: 12px;
+        font-weight: 900;
+    }
+    .trend-current h2 {
+        margin: 16px 0 8px;
+        color: var(--trend-ink);
+        font-size: 22px;
+        font-weight: 950;
+    }
+    .trend-current-value {
+        display: block;
+        margin-top: 18px;
+        color: var(--trend-primary);
+        font-size: clamp(36px, 5vw, 60px);
+        font-weight: 950;
+        line-height: 1;
+        letter-spacing: -0.07em;
+        word-break: break-word;
+    }
+    .trend-current-unit {
+        display: block;
+        margin-top: 10px;
+        color: var(--trend-muted);
+        font-weight: 800;
+    }
+    .trend-insight {
+        margin-top: 16px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        background: rgba(236, 253, 245, 0.8);
+        color: #065f46;
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.6;
+    }
+    .trend-insight.negative {
+        border-color: rgba(239, 68, 68, 0.25);
+        background: rgba(254, 242, 242, 0.84);
+        color: #991b1b;
+    }
+    .trend-insight strong {
+        font-weight: 900;
+    }
+    .trend-point-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 26px;
+    }
+    .trend-point {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: #f1f7ff;
+        color: #5f6f86;
+        font-weight: 800;
+    }
+    .trend-point strong {
+        color: var(--trend-ink);
+    }
+    .trend-point.active {
+        color: #fff;
+        background: linear-gradient(135deg, var(--trend-primary), var(--trend-accent));
+    }
+    .trend-point.active strong {
+        color: #fff;
+    }
+    .trend-chart-card {
+        min-height: 360px;
+        padding: 22px;
+        border: 1px solid var(--trend-border);
+        border-radius: 26px;
+        background: #fff;
+    }
+    .trend-chart-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 12px;
+    }
+    .trend-chart-head h3 {
+        margin: 0;
+        color: var(--trend-ink);
+        font-size: 18px;
+        font-weight: 950;
+    }
+    .trend-chart-head p {
+        margin: 5px 0 0;
+        color: var(--trend-muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .trend-chart-badge {
+        flex: 0 0 auto;
+        padding: 8px 11px;
+        border-radius: 999px;
+        background: #ecfdf5;
+        color: #047857;
+        font-size: 12px;
+        font-weight: 900;
+    }
+    .trend-svg-wrap {
+        position: relative;
+        height: 250px;
+        margin-top: 12px;
+        border-radius: 22px;
+        background:
+            linear-gradient(rgba(15, 23, 42, 0.055) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(15, 23, 42, 0.055) 1px, transparent 1px),
+            linear-gradient(180deg, #f8fbff, #ffffff);
+        background-size: 100% 25%, 25% 100%, 100% 100%;
+        overflow: hidden;
+    }
+    #overviewTrendSvg {
+        width: 100%;
+        height: 100%;
+        display: block;
+    }
+    .trend-axis {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 12px;
+        color: var(--trend-muted);
+        font-size: 12px;
+        font-weight: 900;
+    }
+    @media (max-width: 1199px) {
+        .trend-hero,
+        .trend-toolbar,
+        .trend-window {
+            grid-template-columns: 1fr;
+        }
+        .trend-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 640px) {
+        .trend-summary-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="d-flex flex-column flex-column-fluid admin-trend-page">
+    /* ── dark theme ── */
+    [data-bs-theme-mode="dark"] .admin-trend-page {
+        --trend-ink: #e2e8f0;
+        --trend-muted: #94a3b8;
+        --trend-border: rgba(148, 163, 184, 0.14);
+        --trend-panel: rgba(15, 23, 42, 0.97);
+        --trend-primary: #2dd4bf;
+        --trend-accent: #38bdf8;
+        --trend-shadow: 0 24px 70px rgba(0, 0, 0, 0.36);
+    }
+    [data-bs-theme-mode="dark"] .trend-shell {
+        background:
+            radial-gradient(circle at 10% 8%, rgba(45, 212, 191, 0.12), transparent 28%),
+            radial-gradient(circle at 88% 0%, rgba(14, 165, 233, 0.12), transparent 24%),
+            rgba(15, 23, 42, 0.97);
+    }
+    [data-bs-theme-mode="dark"] .trend-summary-card {
+        background: linear-gradient(180deg, #1e293b, #172032);
+    }
+    [data-bs-theme-mode="dark"] .trend-select {
+        background: #1e293b;
+        color: var(--trend-ink);
+        border-color: var(--trend-border);
+        color-scheme: dark;
+    }
+    [data-bs-theme-mode="dark"] .trend-range button {
+        background: #1e293b;
+        color: #94a3b8;
+        border-color: var(--trend-border);
+    }
+    [data-bs-theme-mode="dark"] .trend-range button.active {
+        background: linear-gradient(135deg, #0f766e, #0369a1);
+        color: #fff;
+        border-color: transparent;
+    }
+    [data-bs-theme-mode="dark"] .trend-current {
+        background: linear-gradient(180deg, #1e293b, #172032);
+    }
+    [data-bs-theme-mode="dark"] .trend-current-tag {
+        background: rgba(14, 165, 233, 0.15);
+        color: #38bdf8;
+    }
+    [data-bs-theme-mode="dark"] .trend-insight {
+        border-color: rgba(45, 212, 191, 0.2);
+        background: rgba(6, 78, 59, 0.4);
+        color: #6ee7b7;
+    }
+    [data-bs-theme-mode="dark"] .trend-insight.negative {
+        border-color: rgba(239, 68, 68, 0.2);
+        background: rgba(127, 29, 29, 0.4);
+        color: #fca5a5;
+    }
+    [data-bs-theme-mode="dark"] .trend-point {
+        background: #1e293b;
+        color: #94a3b8;
+    }
+    [data-bs-theme-mode="dark"] .trend-point.active {
+        background: linear-gradient(135deg, #0f766e, #0369a1);
+        color: #fff;
+    }
+    [data-bs-theme-mode="dark"] .trend-point.active strong {
+        color: #fff;
+    }
+    [data-bs-theme-mode="dark"] .trend-chart-card {
+        background: #1e293b;
+    }
+    [data-bs-theme-mode="dark"] .trend-chart-badge {
+        background: rgba(6, 78, 59, 0.45);
+        color: #6ee7b7;
+    }
+    [data-bs-theme-mode="dark"] .trend-svg-wrap {
+        background:
+            linear-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(148, 163, 184, 0.07) 1px, transparent 1px),
+            linear-gradient(180deg, #172032, #1a2540);
+        background-size: 100% 25%, 25% 100%, 100% 100%;
+    }
+    <div id="kt_app_content" class="app-content flex-column-fluid py-3 py-lg-6">
+        <div id="kt_app_content_container" class="app-container container-fluid">
+            <div class="trend-shell">
+                <div class="trend-hero">
+                    <div>
+                        <span class="trend-kicker">TREND DASHBOARD</span>
+                        <h1>首页概况趋势</h1>
+                        <p>不同数据不再铺多个窗口，统一放进一个趋势分析面板。选择指标和时间口径，就能快速看今天、本月、历史之间的变化。</p>
+                    </div>
+                    <div class="trend-balance">
+                        <span>所有账户总余额</span>
+                        <strong>{{$total_user_balance|default='0'}}</strong>
+                        <small>USDT available balance</small>
+                    </div>
+                </div>
+
+                <div class="trend-board">
+                    <div class="trend-summary">
+                        <div class="trend-summary-head">
+                            <div>
+                                <h2>经营概览</h2>
+                                <p>先看核心指标，再做趋势分析，减少来回切换。</p>
+                            </div>
+                        </div>
+                        <div class="trend-summary-grid">
+                            <article class="trend-summary-card">
+                                <b>今日充值金额</b>
+                                <strong>{{$balance_zc_jr|default='0'}}</strong>
+                                <span>USDT</span>
+                            </article>
+                            <article class="trend-summary-card">
+                                <b>今日提现金额</b>
+                                <strong>{{$withdrawal_jr|default='0'}}</strong>
+                                <span>USDT</span>
+                            </article>
+                            <article class="trend-summary-card">
+                                <b>今日订单充值笔数</b>
+                                <strong>{{$order_jr|default='0'}}</strong>
+                                <span>笔</span>
+                            </article>
+                            <article class="trend-summary-card">
+                                <b>今日 USDT 交易金额</b>
+                                <strong>{{$transaction_order_amount_jr|default='0'}}</strong>
+                                <span>USDT</span>
+                            </article>
+                        </div>
+                    </div>
+
+                    <div class="trend-toolbar">
+                        <div class="trend-field">
+                            <label for="overviewMetricSelect">选择指标</label>
+                            <select id="overviewMetricSelect" class="trend-select">
+                                <option value="balanceRecharge">余额充值金额</option>
+                                <option value="withdrawal">提现金额</option>
+                                <option value="balanceDeduct">后台扣款金额</option>
+                                <option value="orderCount">订单充值笔数</option>
+                                <option value="rebate">代理返佣金额</option>
+                                <option value="tradeCount">USDT 交易订单数</option>
+                                <option value="tradeAmount">USDT 交易金额</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <span class="trend-range-label">选择时间</span>
+                            <div class="trend-range" id="overviewRangeButtons">
+                                <button type="button" class="active" data-range="today">今日</button>
+                                <button type="button" data-range="month">本月</button>
+                                <button type="button" data-range="total">历史</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="trend-window">
+                        <div class="trend-current">
+                            <span class="trend-current-tag" id="overviewCurrentRange">今日</span>
+                            <h2 id="overviewCurrentTitle">余额充值金额</h2>
+                            <span class="trend-current-value" id="overviewCurrentValue">0</span>
+                            <span class="trend-current-unit" id="overviewCurrentUnit">USDT</span>
+                            <div class="trend-insight" id="overviewInsight"></div>
+                            <div class="trend-point-list" id="overviewPointList"></div>
+                        </div>
+
+                        <div class="trend-chart-card">
+                            <div class="trend-chart-head">
+                                <div>
+                                    <h3 id="overviewChartTitle">余额充值金额趋势图</h3>
+                                    <p>本月按当月每日展示，历史按今年每日展示。</p>
+                                </div>
+                                <span class="trend-chart-badge" id="overviewChartBadge">USDT</span>
+                            </div>
+                            <div class="trend-svg-wrap">
+                                <svg id="overviewTrendSvg" viewBox="0 0 720 250" preserveAspectRatio="none" role="img" aria-label="趋势图"></svg>
+                            </div>
+                            <div class="trend-axis" id="overviewTrendAxis">
+                                <span>今日</span>
+                                <span>本月</span>
+                                <span>历史</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var ranges = [
+        { key: 'today', label: '今日' },
+        { key: 'month', label: '本月' },
+        { key: 'total', label: '历史(今年)' }
+    ];
+
+    function parseMetricValue(value) {
+        var normalized = String(value || '0').replace(/,/g, '').trim();
+        var number = Number(normalized);
+        return Number.isFinite(number) ? number : 0;
+    }
+
+    function makeMetric(label, unit, today, month, total, color) {
+        return {
+            label: label,
+            unit: unit,
+            color: color,
+            values: {
+                today: parseMetricValue(today),
+                month: parseMetricValue(month),
+                total: parseMetricValue(total)
+            },
+            display: {
+                today: String(today || '0'),
+                month: String(month || '0'),
+                total: String(total || '0')
+            }
+        };
+    }
+
+    var metrics = {
+        balanceRecharge: makeMetric('余额充值金额', 'USDT', "{{$balance_zc_jr|default='0'}}", "{{$balance_zc_by|default='0'}}", "{{$balance_zc_s|default='0'}}", '#10b981'),
+        withdrawal: makeMetric('提现金额', 'USDT', "{{$withdrawal_jr|default='0'}}", "{{$withdrawal_by|default='0'}}", "{{$withdrawal_s|default='0'}}", '#ef4444'),
+        balanceDeduct: makeMetric('后台扣款金额', 'USDT', "{{$balance_dk_jr|default='0'}}", "{{$balance_dk_by|default='0'}}", "{{$balance_dk_s|default='0'}}", '#f97316'),
+        orderCount: makeMetric('订单充值笔数', '笔', "{{$order_jr|default='0'}}", "{{$order_by|default='0'}}", "{{$order_s|default='0'}}", '#2563eb'),
+        rebate: makeMetric('代理返佣金额', 'USDT', "{{$rebate_record_jr|default='0'}}", "{{$rebate_record_by|default='0'}}", "{{$rebate_record_s|default='0'}}", '#8b5cf6'),
+        tradeCount: makeMetric('USDT 交易订单数', '笔', "{{$transaction_order_jr|default='0'}}", "{{$transaction_order_by|default='0'}}", "{{$transaction_order_s|default='0'}}", '#0ea5e9'),
+        tradeAmount: makeMetric('USDT 交易金额', 'USDT', "{{$transaction_order_amount_jr|default='0'}}", "{{$transaction_order_amount_by|default='0'}}", "{{$transaction_order_amount_s|default='0'}}", '#f59e0b')
+    };
+    var trendData = <?php echo $overview_trend_json ?? '{}'; ?>;
+
+    var metricSelect = document.getElementById('overviewMetricSelect');
+    var rangeButtons = document.getElementById('overviewRangeButtons');
+    var currentRange = document.getElementById('overviewCurrentRange');
+    var currentTitle = document.getElementById('overviewCurrentTitle');
+    var currentValue = document.getElementById('overviewCurrentValue');
+    var currentUnit = document.getElementById('overviewCurrentUnit');
+    var pointList = document.getElementById('overviewPointList');
+    var chartTitle = document.getElementById('overviewChartTitle');
+    var chartBadge = document.getElementById('overviewChartBadge');
+    var trendAxis = document.getElementById('overviewTrendAxis');
+    var svg = document.getElementById('overviewTrendSvg');
+    var insight = document.getElementById('overviewInsight');
+    var selectedRange = 'today';
+
+    if (!metricSelect || !rangeButtons || !currentRange || !currentTitle || !currentValue || !currentUnit || !pointList || !chartTitle || !chartBadge || !trendAxis || !svg || !insight) {
+        return;
+    }
+
+    function formatNumber(value, unit) {
+        if (unit === '笔') {
+            return String(Math.round(value));
+        }
+        return Number(value || 0).toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    function buildPath(points, command) {
+        return points.map(function (point, index) {
+            return (index === 0 ? command.start : command.next) + point.x + ',' + point.y;
+        }).join(' ');
+    }
+
+    function sumSeries(series) {
+        return (series || []).reduce(function (total, value) {
+            return total + parseMetricValue(value);
+        }, 0);
+    }
+
+    function getRangeValue(metric, metricKey, rangeKey) {
+        if (rangeKey === 'month' || rangeKey === 'total') {
+            var rangeData = trendData[rangeKey] || {};
+            var dailySeries = rangeData.series && rangeData.series[metricKey];
+            if (Array.isArray(dailySeries)) {
+                return sumSeries(dailySeries);
+            }
+        }
+        return metric.values[rangeKey] || 0;
+    }
+
+    function getChartPayload(metric, metricKey) {
+        if (selectedRange === 'month' || selectedRange === 'total') {
+            var rangeData = trendData[selectedRange] || {};
+            var dailySeries = rangeData.series && rangeData.series[metricKey];
+            if (Array.isArray(dailySeries) && dailySeries.length) {
+                return {
+                    values: dailySeries.map(parseMetricValue),
+                    labels: Array.isArray(rangeData.labels) ? rangeData.labels : [],
+                    fullLabels: Array.isArray(rangeData.fullLabels) ? rangeData.fullLabels : []
+                };
+            }
+        }
+
+        return {
+            values: ranges.map(function (range) {
+                return getRangeValue(metric, metricKey, range.key);
+            }),
+            labels: ranges.map(function (range) { return range.label; }),
+            fullLabels: ranges.map(function (range) { return range.label; })
+        };
+    }
+
+    function renderAxis(labels) {
+        if (!labels.length) {
+            trendAxis.innerHTML = '<span>开始</span><span>趋势</span><span>结束</span>';
+            return;
+        }
+        var middle = labels[Math.floor(labels.length / 2)] || labels[0];
+        trendAxis.innerHTML = '<span>' + labels[0] + '</span><span>' + middle + '</span><span>' + labels[labels.length - 1] + '</span>';
+    }
+
+    function renderChart(metric, metricKey) {
+        var width = 720;
+        var height = 250;
+        var paddingX = 52;
+        var paddingY = 34;
+        var payload = getChartPayload(metric, metricKey);
+        var values = payload.values.length ? payload.values : [0];
+        var max = Math.max.apply(null, values.concat([1]));
+        var min = Math.min.apply(null, values.concat([0]));
+        var span = Math.max(1, max - min);
+        var points = values.map(function (value, index) {
+            var denominator = Math.max(1, values.length - 1);
+            return {
+                x: paddingX + index * ((width - paddingX * 2) / denominator),
+                y: height - paddingY - ((value - min) / span) * (height - paddingY * 2),
+                value: value,
+                label: payload.labels[index] || ''
+            };
+        });
+        var linePath = buildPath(points, { start: 'M', next: ' L' });
+        var areaPath = linePath + ' L' + points[points.length - 1].x + ',' + (height - paddingY) + ' L' + points[0].x + ',' + (height - paddingY) + ' Z';
+        var dots = points.map(function (point, index) {
+            var shouldLabel = points.length <= 12 || index === 0 || index === points.length - 1 || point.value === max;
+            return '<circle cx="' + point.x + '" cy="' + point.y + '" r="' + (points.length > 40 ? 3 : 5) + '" fill="#fff" stroke="' + metric.color + '" stroke-width="' + (points.length > 40 ? 2 : 3) + '"></circle>' +
+                (shouldLabel ? '<text x="' + point.x + '" y="' + Math.max(18, point.y - 16) + '" text-anchor="middle" fill="#526179" font-size="12" font-weight="800">' + formatNumber(point.value, metric.unit) + '</text>' : '');
+        }).join('');
+
+        svg.innerHTML =
+            '<defs>' +
+            '<linearGradient id="overviewTrendArea" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0%" stop-color="' + metric.color + '" stop-opacity="0.28"></stop>' +
+            '<stop offset="100%" stop-color="' + metric.color + '" stop-opacity="0.02"></stop>' +
+            '</linearGradient>' +
+            '</defs>' +
+            '<path d="' + areaPath + '" fill="url(#overviewTrendArea)"></path>' +
+            '<path d="' + linePath + '" fill="none" stroke="' + metric.color + '" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"></path>' +
+            dots;
+        renderAxis(payload.labels);
+    }
+
+    function render() {
+        var metricKey = metricSelect.value;
+        var metric = metrics[metricKey] || metrics.balanceRecharge;
+        var range = ranges.find(function (item) { return item.key === selectedRange; }) || ranges[0];
+        var rangeValue = getRangeValue(metric, metricKey, selectedRange);
+        var rechargeValue = getRangeValue(metrics.balanceRecharge, 'balanceRecharge', selectedRange);
+        var withdrawalValue = getRangeValue(metrics.withdrawal, 'withdrawal', selectedRange);
+        var deductValue = getRangeValue(metrics.balanceDeduct, 'balanceDeduct', selectedRange);
+        var netFlow = rechargeValue - withdrawalValue - deductValue;
+        var orderValue = getRangeValue(metrics.orderCount, 'orderCount', selectedRange);
+        var tradeCountValue = getRangeValue(metrics.tradeCount, 'tradeCount', selectedRange);
+        currentRange.textContent = range.label;
+        currentTitle.textContent = metric.label;
+        currentValue.textContent = formatNumber(rangeValue, metric.unit);
+        currentUnit.textContent = metric.unit;
+        chartTitle.textContent = metric.label + (selectedRange === 'month' ? '本月每日趋势' : (selectedRange === 'total' ? '今年每日趋势' : '趋势图'));
+        chartBadge.textContent = metric.unit;
+        insight.classList.toggle('negative', netFlow < 0);
+        insight.innerHTML = '经营净流入：<strong>' + formatNumber(Math.abs(netFlow), 'USDT') + ' USDT</strong>' +
+            (netFlow < 0 ? '（净流出）' : '（净流入）') +
+            ' · 订单充值：<strong>' + formatNumber(orderValue, '笔') + '</strong> 笔' +
+            ' · USDT订单：<strong>' + formatNumber(tradeCountValue, '笔') + '</strong> 笔';
+        pointList.innerHTML = ranges.map(function (item) {
+            var active = item.key === selectedRange ? ' active' : '';
+            return '<div class="trend-point' + active + '"><span>' + (item.key === 'total' ? '今年' : item.label) + '</span><strong>' + formatNumber(getRangeValue(metric, metricKey, item.key), metric.unit) + '</strong></div>';
+        }).join('');
+        Array.prototype.forEach.call(rangeButtons.querySelectorAll('button'), function (button) {
+            button.classList.toggle('active', button.getAttribute('data-range') === selectedRange);
+        });
+        document.documentElement.style.setProperty('--trend-primary', metric.color);
+        renderChart(metric, metricKey);
+    }
+
+    metricSelect.addEventListener('change', render);
+    rangeButtons.addEventListener('click', function (event) {
+        var button = event.target.closest('button[data-range]');
+        if (!button) return;
+        selectedRange = button.getAttribute('data-range') || 'today';
+        render();
+    });
+    render();
+})();
+</script>
+
+{{include file="layout/admin_footer"/}}

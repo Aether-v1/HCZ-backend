@@ -1,0 +1,183 @@
+{{include file="layout/admin_header" web_title="兑换设置"/}}
+<div id="kt_content_container" class="app-container container-fluid">
+    <div class="card mb-6">
+        <div class="card-header">
+            <div class="card-title">
+                <h3 class="fw-bold m-0">积分兑换设置</h3>
+            </div>
+        </div>
+        <div class="card-body">
+            <form id="points_exchange_form" class="row g-6">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">兑换说明</label>
+                    <textarea class="form-control" name="points_exchange_notice" rows="3" placeholder="请输入兑换说明">{{$points_exchange_notice|default='兑换申请提交后，客服会尽快处理。'}}</textarea>
+                </div>
+                <div class="col-12">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+                        <div>
+                            <label class="form-label fw-semibold mb-1">兑换模块设置</label>
+                            <div class="text-muted">按模块逐项维护，不再需要手填 JSON。</div>
+                        </div>
+                        <button class="btn btn-light-primary" type="button" id="add_exchange_item_btn">新增兑换项</button>
+                    </div>
+                    <div id="points_exchange_items_wrap" class="d-grid gap-4">
+                        {{foreach $points_exchange_items as $item}}
+                        <div class="card border exchange-item-card">
+                            <div class="card-header py-4 d-flex align-items-center justify-content-between">
+                                <h4 class="card-title m-0 fs-6 fw-bold">兑换项</h4>
+                                <button class="btn btn-sm btn-light-danger remove-exchange-item" type="button">删除</button>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-4">
+                                    <div class="col-md-3">
+                                        <label class="form-label">唯一标识</label>
+                                        <input class="form-control" name="exchange_id[]" type="text" placeholder="例如 coupon_10" value="{{$item.id|default=''}}">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">兑换类型</label>
+                                        <select class="form-select" name="exchange_type[]">
+                                            <option value="coupon" {{if condition="($item.type|default='coupon') == 'coupon'"}}selected{{/if}}>优惠券</option>
+                                            <option value="physical" {{if condition="($item.type|default='coupon') == 'physical'"}}selected{{/if}}>实物</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">状态</label>
+                                        <select class="form-select" name="exchange_enabled[]">
+                                            <option value="1" {{if condition="intval($item.enabled|default=0) === 1"}}selected{{/if}}>启用</option>
+                                            <option value="0" {{if condition="intval($item.enabled|default=0) !== 1"}}selected{{/if}}>停用</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">所需积分</label>
+                                        <input class="form-control" name="exchange_points[]" type="number" min="1" step="1" placeholder="例如 300" value="{{$item.points|default='1'}}">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">兑换标题</label>
+                                        <input class="form-control" name="exchange_title[]" type="text" placeholder="例如 10元优惠券" value="{{$item.title|default=''}}">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">库存</label>
+                                        <input class="form-control" name="exchange_stock[]" type="number" min="0" step="1" placeholder="0 表示不限" value="{{$item.stock|default='0'}}">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">券金额</label>
+                                        <input class="form-control" name="exchange_coupon_amount[]" type="number" min="0" step="1" placeholder="优惠券填" value="{{$item.coupon_amount|default='0'}}">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">SKU / 备注编号</label>
+                                        <input class="form-control" name="exchange_sku[]" type="text" placeholder="实物可填写 SKU" value="{{$item.sku|default=''}}">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">图片地址</label>
+                                        <input class="form-control" name="exchange_image[]" type="text" placeholder="可选，填写图片 URL" value="{{$item.image|default=''}}">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">说明</label>
+                                        <input class="form-control" name="exchange_description[]" type="text" placeholder="例如 兑换后由客服联系收货信息" value="{{$item.description|default=''}}">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {{/foreach}}
+                    </div>
+                    <div class="text-muted mt-3">提示：库存填 0 表示不限库存；优惠券可填写券金额，实物可填写 SKU。</div>
+                </div>
+                <div class="col-12">
+                    <button class="btn btn-primary" type="submit">保存兑换设置</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{{include file="layout/admin_footer"/}}
+<script>
+const exchangeItemTemplate = `
+    <div class="card border exchange-item-card">
+        <div class="card-header py-4 d-flex align-items-center justify-content-between">
+            <h4 class="card-title m-0 fs-6 fw-bold">兑换项</h4>
+            <button class="btn btn-sm btn-light-danger remove-exchange-item" type="button">删除</button>
+        </div>
+        <div class="card-body">
+            <div class="row g-4">
+                <div class="col-md-3">
+                    <label class="form-label">唯一标识</label>
+                    <input class="form-control" name="exchange_id[]" type="text" placeholder="例如 coupon_10">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">兑换类型</label>
+                    <select class="form-select" name="exchange_type[]">
+                        <option value="coupon">优惠券</option>
+                        <option value="physical">实物</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">状态</label>
+                    <select class="form-select" name="exchange_enabled[]">
+                        <option value="1" selected>启用</option>
+                        <option value="0">停用</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">所需积分</label>
+                    <input class="form-control" name="exchange_points[]" type="number" min="1" step="1" value="1">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">兑换标题</label>
+                    <input class="form-control" name="exchange_title[]" type="text" placeholder="例如 10元优惠券">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">库存</label>
+                    <input class="form-control" name="exchange_stock[]" type="number" min="0" step="1" value="0">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">券金额</label>
+                    <input class="form-control" name="exchange_coupon_amount[]" type="number" min="0" step="1" value="0">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">SKU / 备注编号</label>
+                    <input class="form-control" name="exchange_sku[]" type="text" placeholder="实物可填写 SKU">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">图片地址</label>
+                    <input class="form-control" name="exchange_image[]" type="text" placeholder="可选，填写图片 URL">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">说明</label>
+                    <input class="form-control" name="exchange_description[]" type="text" placeholder="例如 兑换后由客服联系收货信息">
+                </div>
+            </div>
+        </div>
+    </div>`;
+
+const exchangeItemsWrap = $('#points_exchange_items_wrap');
+
+function appendExchangeItem() {
+    exchangeItemsWrap.append(exchangeItemTemplate);
+}
+
+if (exchangeItemsWrap.children().length === 0) {
+    appendExchangeItem();
+}
+
+$('#add_exchange_item_btn').on('click', function () {
+    appendExchangeItem();
+});
+
+exchangeItemsWrap.on('click', '.remove-exchange-item', function () {
+    $(this).closest('.exchange-item-card').remove();
+    if (exchangeItemsWrap.children().length === 0) {
+        appendExchangeItem();
+    }
+});
+
+$('#points_exchange_form').on('submit', function (event) {
+    event.preventDefault();
+    $.post("{{:getConfig('backstage_entrance')}}/points_post/exchange_save", $(this).serialize(), function (res) {
+        if (res.code === 200) {
+            toastr.success(res.message || '保存成功');
+        } else {
+            toastr.error(res.message || '保存失败');
+        }
+    }, 'json');
+});
+</script>

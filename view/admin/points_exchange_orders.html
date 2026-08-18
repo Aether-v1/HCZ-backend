@@ -1,0 +1,131 @@
+{{include file="layout/admin_header" web_title="兑换订单"/}}
+<div id="kt_content_container" class="app-container container-fluid">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title gap-3">
+                <input id="exo_keyword" class="form-control form-control-solid w-250px" placeholder="搜索用户/商品名称">
+                <select id="exo_status" class="form-select form-select-solid w-150px">
+                    <option value="">全部状态</option>
+                    <option value="0">待处理</option>
+                    <option value="1">已发放</option>
+                    <option value="2">已拒绝</option>
+                </select>
+                <button class="btn btn-light-primary" type="button" onclick="loadOrders(1)">筛选</button>
+            </div>
+        </div>
+        <div class="card-body">
+            <table class="table align-middle table-row-dashed fs-6 gy-4">
+                <thead>
+                    <tr class="text-start text-gray-400 fw-bold fs-7 text-uppercase">
+                        <th>ID</th>
+                        <th>用户</th>
+                        <th>兑换商品</th>
+                        <th>类型</th>
+                        <th>积分</th>
+                        <th>状态</th>
+                        <th>备注</th>
+                        <th>时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="exo_body" class="text-gray-700 fw-semibold"></tbody>
+            </table>
+            <div class="d-flex justify-content-between align-items-center pt-4">
+                <div id="exo_total" class="text-muted"></div>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-light" type="button" onclick="loadOrders(currentPage - 1)">上一页</button>
+                    <button class="btn btn-sm btn-light" type="button" onclick="loadOrders(currentPage + 1)">下一页</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{include file="layout/admin_footer"/}}
+<script>
+let currentPage = 1;
+let totalPages = 1;
+const limit = 20;
+
+function loadOrders(page) {
+    page = Math.max(1, Number(page || 1));
+    if (page > totalPages && totalPages > 0) page = totalPages;
+    currentPage = page;
+    $.get("{{:getConfig('backstage_entrance')}}/points_exchange_orders_json", {
+        page: currentPage,
+        limit: limit,
+        keyword: $('#exo_keyword').val(),
+        status: $('#exo_status').val()
+    }, function (res) {
+        const data = res.data || {};
+        const list = Array.isArray(data.list) ? data.list : [];
+        const total = Number(data.total || 0);
+        totalPages = Math.max(1, Math.ceil(total / limit));
+        $('#exo_total').text('共 ' + total + ' 条，第 ' + currentPage + ' / ' + totalPages + ' 页');
+
+        const statusMap = { 0: ['待处理', 'badge-light-warning'], 1: ['已发放', 'badge-light-success'], 2: ['已拒绝', 'badge-light-danger'] };
+        const typeMap = { coupon: '优惠券', physical: '实物' };
+
+        $('#exo_body').html(list.length ? list.map(function (row) {
+            const [statusText, statusClass] = statusMap[row.status] || ['未知', 'badge-light-secondary'];
+            const typeText = typeMap[row.item_type] || row.item_type;
+            const user = escapeHtml(row.mobile || row.nickname || '-') + '<div class="text-muted fs-7">UID：' + escapeHtml(row.uid || '') + '</div>';
+            const actions = row.status == 0 ? `
+                <button class="btn btn-sm btn-light-success me-1" onclick="fulfillOrder(${escapeHtml(row.id)})">发放</button>
+                <button class="btn btn-sm btn-light-danger" onclick="rejectOrder(${escapeHtml(row.id)})">拒绝</button>` : '-';
+            return `<tr>
+                <td>${escapeHtml(row.id)}</td>
+                <td>${user}</td>
+                <td>${escapeHtml(row.item_title || '-')}</td>
+                <td>${escapeHtml(typeText)}</td>
+                <td>${escapeHtml(row.points)}</td>
+                <td><span class="badge ${statusClass}">${statusText}</span></td>
+                <td>${escapeHtml(row.remark || '-')}</td>
+                <td>${escapeHtml(row.create_time || '-')}</td>
+                <td>${actions}</td>
+            </tr>`;
+        }).join('') : '<tr><td colspan="9" class="text-center text-muted py-10">暂无兑换订单</td></tr>');
+    }, 'json');
+}
+
+function fulfillOrder(id) {
+    Swal.fire({
+        title: '确认发放',
+        text: '请确认该兑换申请已完成发放',
+        input: 'text',
+        inputLabel: '备注（可选）',
+        showCancelButton: true,
+        reverseButtons: true,
+        confirmButtonText: '确认发放',
+        cancelButtonText: '取消',
+        customClass: { confirmButton: 'btn btn-success', cancelButton: 'btn btn-light' }
+    }).then(function (result) {
+        if (!result.isConfirmed) return;
+        $.post("{{:getConfig('backstage_entrance')}}/points_exchange_order_post/fulfill", { id: id, remark: result.value || '' }, function (res) {
+            if (res.code === 200) { toastr.success(res.message || '操作成功'); loadOrders(currentPage); }
+            else { toastr.error(res.message || '操作失败'); }
+        }, 'json');
+    });
+}
+
+function rejectOrder(id) {
+    Swal.fire({
+        title: '拒绝兑换',
+        text: '拒绝后将自动退还积分',
+        input: 'text',
+        inputLabel: '拒绝原因（可选）',
+        showCancelButton: true,
+        reverseButtons: true,
+        confirmButtonText: '确认拒绝',
+        cancelButtonText: '取消',
+        customClass: { confirmButton: 'btn btn-danger', cancelButton: 'btn btn-light' }
+    }).then(function (result) {
+        if (!result.isConfirmed) return;
+        $.post("{{:getConfig('backstage_entrance')}}/points_exchange_order_post/reject", { id: id, remark: result.value || '' }, function (res) {
+            if (res.code === 200) { toastr.success(res.message || '操作成功'); loadOrders(currentPage); }
+            else { toastr.error(res.message || '操作失败'); }
+        }, 'json');
+    });
+}
+
+loadOrders(1);
+</script>

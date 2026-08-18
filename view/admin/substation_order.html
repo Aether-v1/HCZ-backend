@@ -1,0 +1,91 @@
+{{include file="layout/admin_header" web_title="分站订单"}}
+<div id="kt_content_container" class="app-container container-fluid">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <div class="d-flex flex-wrap gap-3 align-items-center">
+          <input type="text" id="keyword" class="form-control form-control-solid w-250px" placeholder="搜索订单号 / 商品 / 下单信息">
+          <select id="status" class="form-select form-select-solid w-140px">
+            <option value="">订单状态</option>
+            <option value="0">待充值</option>
+            <option value="1">充值中</option>
+            <option value="2">已完成</option>
+            <option value="3">已取消</option>
+          </select>
+          <select id="confirm_status" class="form-select form-select-solid w-140px">
+            <option value="">确认状态</option>
+            <option value="0">未完成</option>
+            <option value="1">待确认</option>
+            <option value="2">已确认</option>
+            <option value="3">未收到</option>
+          </select>
+          <select id="limit" class="form-select form-select-solid w-125px">
+            <option value="10">10条/页</option>
+            <option value="20" selected>20条/页</option>
+            <option value="50">50条/页</option>
+            <option value="100">100条/页</option>
+          </select>
+          <button class="btn btn-primary" type="button" onclick="reloadList(1)">查询</button>
+        </div>
+      </div>
+      <div class="card-toolbar">
+        <div class="d-flex gap-2 align-items-center">
+          <button class="btn btn-sm btn-light" type="button" onclick="batchAudit(0)">批量待充值</button>
+          <button class="btn btn-sm btn-light-warning" type="button" onclick="batchAudit(1)">批量充值中</button>
+          <button class="btn btn-sm btn-light-success" type="button" onclick="batchAudit(2)">批量已完成</button>
+          <button class="btn btn-sm btn-light-danger" type="button" onclick="batchAudit(3)">批量已取消</button>
+          <button class="btn btn-sm btn-primary" type="button" onclick="batchSetAmountReceived()">批量实际到账</button>
+        </div>
+      </div>
+    </div>
+    <div class="card-body pb-5">
+      <table class="table align-middle table-row-dashed fs-6 gy-5">
+        <thead>
+          <tr class="text-start text-gray-400 fw-bold fs-7 text-uppercase gs-0">
+            <th class="w-10px pe-2"><label class="form-check form-check-sm form-check-custom form-check-solid"><input class="form-check-input" type="checkbox" id="check_all" onclick="toggleAll(this.checked)"></label></th>
+            <th>订单编号</th>
+            <th>归属用户</th>
+            <th>下单信息</th>
+            <th>当前费率</th>
+            <th>订单状态</th>
+            <th>确认状态</th>
+            <th>创建时间</th>
+            <th class="text-end">操作</th>
+          </tr>
+        </thead>
+        <tbody id="table_body"></tbody>
+      </table>
+      <div class="d-flex justify-content-between align-items-center mt-5 flex-wrap gap-3">
+        <div class="text-muted" id="pager_text">--</div>
+        <div class="d-flex gap-2 align-items-center">
+          <button class="btn btn-sm btn-light" type="button" id="prev_btn" onclick="changePage(-1)">上一页</button>
+          <span class="badge badge-light-primary" id="page_no">1 / 1</span>
+          <button class="btn btn-sm btn-light" type="button" id="next_btn" onclick="changePage(1)">下一页</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{{include file="layout/admin_footer"/}}
+<script>
+const base='{{:getConfig("backstage_entrance")}}';
+const substationId='{{$_GET["substation_id"]|default=""}}';
+let page=1,total=0;
+function esc(v){return String(v??'').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));}
+function toggleAll(checked){$('.row-check').prop('checked',checked)}
+function checkedIds(){return $('.row-check:checked').map((_,el)=>$(el).val()).get()}
+function statusBadge(v){v=Number(v||0); if(v===1) return '<span class="badge badge-outline badge-warning">充值中</span>'; if(v===2) return '<span class="badge badge-outline badge-success">已完成</span>'; if(v===3) return '<span class="badge badge-outline badge-danger">已取消</span>'; return '<span class="badge badge-outline badge-primary">待充值</span>';}
+function confirmBadge(v){v=Number(v||0); if(v===1) return '<span class="badge badge-outline badge-warning">待确认</span>'; if(v===2) return '<span class="badge badge-outline badge-success">已确认</span>'; if(v===3) return '<span class="badge badge-outline badge-danger">未收到</span>'; return '<span class="badge badge-outline badge-dark">未完成</span>';}
+function parseRechargeInfo(orderInfo){ const lines=[]; const push=(label,val)=>{ const v=String(val??'').trim(); if(!v) return; lines.push(`<div class="text-muted fs-7">${esc(label)}：${esc(v)}</div>`); }; if(Array.isArray(orderInfo)){ orderInfo.forEach(item=>{ const str=String(item??'').trim(); const m=str.match(/^\[(.*?)\](.*)$/); if(m){ push(m[1],m[2]); } else if(str){ lines.push(`<div class=\"text-muted fs-7\">${esc(str)}</div>`); } }); return lines.join(''); } if(orderInfo && typeof orderInfo==='object'){ Object.keys(orderInfo).forEach(key=>push(key, orderInfo[key])); return lines.join(''); } const str=String(orderInfo??'').trim(); if(str){ lines.push(`<div class="text-muted fs-7">${esc(str)}</div>`); } return lines.join(''); }
+function orderInfo(row){ const name = row.product_info?.name || row.product_info?.['name'] || ''; const rechargeInfo = parseRechargeInfo(row.order_info); return `<div class="fw-bold">${esc(name) || '充值订单'}</div>${rechargeInfo}<div class="text-muted fs-7">金额：${esc(row.amount_money||'0')}</div><div class="text-muted fs-7">实际到账：${esc(row.amount_received||'0')}</div>`; }
+function actionMenu(row){ let actions=`<a class="dropdown-item" href="javascript:void(0)" onclick="setAmountReceived(${row.id})">设置实际到账</a>`; if(Number(row.status)===0){ actions+=`<a class="dropdown-item" href="javascript:void(0)" onclick="audit(1,${row.id})">充值中</a><a class="dropdown-item" href="javascript:void(0)" onclick="audit(2,${row.id})">已完成</a><a class="dropdown-item" href="javascript:void(0)" onclick="audit(3,${row.id})">已取消</a>`;} else if(Number(row.status)===1){ actions+=`<a class="dropdown-item" href="javascript:void(0)" onclick="audit(2,${row.id})">已完成</a><a class="dropdown-item" href="javascript:void(0)" onclick="audit(3,${row.id})">已取消</a><a class="dropdown-item" href="javascript:void(0)" onclick="audit(0,${row.id})">待充值</a>`;} else if(Number(row.status)===2 && Number(row.confirm_status)===3){ actions+=`<a class="dropdown-item" href="javascript:void(0)" onclick="audit(2,${row.id},'confirm_status')">已收到</a><a class="dropdown-item" href="javascript:void(0)" onclick="audit(3,${row.id},'confirm_status')">已取消</a>`;} return `<div class="dropdown"><button class="btn btn-sm btn-light-primary dropdown-toggle" data-bs-toggle="dropdown" type="button">操作</button><div class="dropdown-menu dropdown-menu-end">${actions}</div></div>`; }
+async function reloadList(targetPage){ page=targetPage||1; const params={page,limit:$('#limit').val(),keyword:$('#keyword').val(),status:$('#status').val(),confirm_status:$('#confirm_status').val(),substation_id:substationId}; const res=await $.get(base+'/substation/orders',params); if(res.code!==200){toastr.error(res.message||'加载失败'); return;} const data=res.data||{}; total=Number(data.total||0); const list=Array.isArray(data.list)?data.list:[]; const totalPages=Math.max(1,Math.ceil(total/Number(params.limit||20))); $('#pager_text').text(`共 ${total} 条`); $('#page_no').text(`${page} / ${totalPages}`); $('#prev_btn').prop('disabled',page<=1); $('#next_btn').prop('disabled',page>=totalPages); $('#check_all').prop('checked',false); $('#table_body').html(list.length?list.map(row=>`<tr><td><label class="form-check form-check-sm form-check-custom form-check-solid"><input class="form-check-input row-check" type="checkbox" value="${row.id}"></label></td><td><div class="fw-bold">${esc(row.order_number||'')}</div><div class="text-muted fs-7">分站ID：${row.substation_id||0}</div></td><td><div>${esc(row.user_mobile||'--')}</div><div class="text-muted fs-7">UID：${row.uid}</div></td><td>${orderInfo(row)}</td><td>${esc(row.rate||'--')}</td><td>${statusBadge(row.status)}</td><td>${confirmBadge(row.confirm_status)}</td><td>${esc(row.create_time||'--')}</td><td class="text-end">${actionMenu(row)}</td></tr>`).join(''):`<tr><td colspan="9" class="text-center text-muted py-10">暂无数据</td></tr>`); }
+function changePage(offset){ const limit=Number($('#limit').val()||20); const totalPages=Math.max(1,Math.ceil(total/limit)); const next=Math.min(totalPages,Math.max(1,page+offset)); if(next!==page) reloadList(next); }
+async function audit(status,id,type='status'){ const url=base+'/order_post/audit'; const payload=type==='confirm_status'?{id,status,type:'confirm_status'}:{id,status,type:'status'}; const res=await $.post(url,payload); if(res.code===200){toastr.success(res.message||'操作成功'); reloadList(page);}else{toastr.error(res.message||'操作失败');} }
+async function batchAudit(status){ const ids=checkedIds(); if(!ids.length){toastr.warning('请先选择订单'); return;} const res=await $.post(base+'/order_post/audit_s',{ids:ids.join(','),status}); if(res.code===200){toastr.success(res.message||'处理成功'); reloadList(page);} else {toastr.error(res.message||'处理失败');} }
+async function setAmountReceived(id){ const value=prompt('请输入实际到账金额',''); if(value===null) return; const res=await $.post(base+'/order_post/set_amount_received',{id,amount_received:value}); if(res.code===200){toastr.success(res.message||'设置成功'); reloadList(page);} else {toastr.error(res.message||'设置失败');} }
+async function batchSetAmountReceived(){ const ids=checkedIds(); if(!ids.length){toastr.warning('请先选择订单'); return;} const value=prompt('请输入批量实际到账金额',''); if(value===null) return; const res=await $.post(base+'/order_post/batch_set_amount_received',{ids:ids.join(','),amount_received:value}); if(res.code===200){toastr.success(res.message||'设置成功'); reloadList(page);} else {toastr.error(res.message||'设置失败');} }
+$('#limit,#status,#confirm_status').on('change',()=>reloadList(1));
+$('#keyword').on('keydown',e=>{if(e.key==='Enter') reloadList(1)});
+reloadList(1);
+</script>

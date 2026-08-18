@@ -1,0 +1,2 @@
+Legacy frontend static assets were moved to public/static/index_legacy_disabled.
+Only 100.svg is kept here for API default avatar compatibility.

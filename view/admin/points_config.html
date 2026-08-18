@@ -1,0 +1,58 @@
+{{include file="layout/admin_header" web_title="积分配置"/}}
+<div id="kt_content_container" class="app-container container-fluid">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">
+                <h3 class="fw-bold m-0">积分配置</h3>
+            </div>
+        </div>
+        <div class="card-body">
+            <form id="points_config_form" class="row g-6">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">每日签到奖励</label>
+                    <div class="input-group">
+                        <input class="form-control" name="points_daily_checkin" type="number" min="1" step="1" value="{{$points_config.daily_checkin|default='1'}}">
+                        <span class="input-group-text">积分</span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">每日完成订单奖励</label>
+                    <div class="input-group">
+                        <input class="form-control" name="points_daily_order_completed" type="number" min="1" step="1" value="{{$points_config.daily_order_completed|default='2'}}">
+                        <span class="input-group-text">积分</span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">绑定 2FA 奖励</label>
+                    <div class="input-group">
+                        <input class="form-control" name="points_bind_2fa" type="number" min="1" step="1" value="{{$points_config.bind_2fa|default='3'}}">
+                        <span class="input-group-text">积分</span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">绑定 Telegram 奖励</label>
+                    <div class="input-group">
+                        <input class="form-control" name="points_bind_telegram" type="number" min="1" step="1" value="{{$points_config.bind_telegram|default='3'}}">
+                        <span class="input-group-text">积分</span>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <button class="btn btn-primary" type="submit">保存配置</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{{include file="layout/admin_footer"/}}
+<script>
+$('#points_config_form').on('submit', function (event) {
+    event.preventDefault();
+    $.post("{{:getConfig('backstage_entrance')}}/points_post/config_save", $(this).serialize(), function (res) {
+        if (res.code === 200) {
+            toastr.success(res.message || '保存成功');
+        } else {
+            toastr.error(res.message || '保存失败');
+        }
+    }, 'json');
+});
+</script>

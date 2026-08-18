@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>后台登录</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self';">
+		<script>
+			(function () {
+				var theme = 'light';
+				var themeMode = 'light';
+
+				try {
+					var storedThemeMode = localStorage.getItem('data-bs-theme-mode');
+					var storedTheme = localStorage.getItem('data-bs-theme');
+					var prefersDark = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+					if (storedThemeMode === 'system') {
+						themeMode = 'system';
+						theme = prefersDark ? 'dark' : 'light';
+					} else if (storedThemeMode === 'dark' || storedThemeMode === 'light') {
+						themeMode = storedThemeMode;
+						theme = storedThemeMode;
+					} else if (storedTheme === 'dark' || storedTheme === 'light') {
+						theme = storedTheme;
+						themeMode = storedTheme;
+					}
+				} catch (error) {
+				}
+
+				document.documentElement.setAttribute('data-bs-theme', theme);
+				document.documentElement.setAttribute('data-bs-theme-mode', themeMode);
+			})();
+		</script>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,400,500,600,700" />
+		<link href="__ADMIN__/plugins/global/plugins.bundle.css" rel="stylesheet" type="text/css" />
+		<link href="__ADMIN__/css/style.bundle.css" rel="stylesheet" type="text/css" />
+	</head>
+	<body id="kt_body" class="auth-bg" style="background-image: url(__ADMIN__/media/auth/bg10.jpeg);">
+		<div class="d-flex flex-column flex-root" >
+			<div class="d-flex flex-column flex-column-fluid bgi-position-y-bottom position-x-center bgi-no-repeat bgi-size-contain bgi-attachment-fixed">
+				<div class="d-flex flex-center flex-column flex-column-fluid p-10 pb-lg-20">
+					<div class="w-lg-550px bg-white rounded shadow-sm p-10 p-lg-15 mx-auto">
+						<div class="text-center mb-10">
+							<h1 class="text-dark mb-3">
+								管理员登录
+							</h1>
+						</div>
+						<div id="login_no" style="display: none;" class="alert alert-dismissible bg-light-danger flex-column flex-sm-row p-5 mb-8">
+							<div class="row">
+								<div class="col-md-1">
+									<span class="svg-icon svg-icon-1 svg-icon-danger">
+										<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="https://www.w3.org/2000/svg">
+											<rect opacity="0.3" x="2" y="2" width="20" height="20" rx="10" fill="currentColor"></rect>
+											<rect x="11" y="14" width="7" height="2" rx="1" transform="rotate(-90 11 14)" fill="currentColor"></rect>
+											<rect x="11" y="17" width="2" height="2" rx="1" transform="rotate(-90 11 17)" fill="currentColor"></rect>
+										</svg>
+									</span>
+								</div>
+								<div class="col-md-11 mt-1">
+									<div class="d-flex flex-column pe-0 pe-sm-10">
+										<h4 class="mb-1 text-danger">
+											<span id="message_no"></span>
+										</h4>
+									</div>
+								</div>
+							</div>
+						</div>
+						<div id="login_ok" style="display: none;" class="alert alert-dismissible bg-light-primary flex-column flex-sm-row p-5 mb-8">
+							<div class="row">
+								<div class="col-md-1">
+									<span class="svg-icon svg-icon-1 svg-icon-primary">
+										<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="https://www.w3.org/2000/svg">
+											<rect opacity="0.3" x="2" y="2" width="20" height="20" rx="10" fill="currentColor" />
+											<path d="M10.4343 12.4343L8.75 10.75C8.33579 10.3358 7.66421 10.3358 7.25 10.75C6.83579 11.1642 6.83579 11.8358 7.25 12.25L10.2929 15.2929C10.6834 15.6834 11.3166 15.6834 11.7071 15.2929L17.25 9.75C17.6642 9.33579 17.6642 8.66421 17.25 8.25C16.8358 7.83579 16.1642 7.83579 15.75 8.25L11.5657 12.4343C11.2533 12.7467 10.7467 12.7467 10.4343 12.4343Z" fill="currentColor" />
+										</svg>
+									</span>
+								</div>
+								<div class="col-md-11 mt-1">
+									<div class="d-flex flex-column pe-0 pe-sm-10">
+										<h4 class="mb-1 text-primary">
+											<span id="message_ok"></span>
+										</h4>
+									</div>
+								</div>
+							</div>
+						</div>
+						<div class="fv-row mb-3">
+							<label class="form-label fw-bolder text-dark fs-6">管理员账号</label>
+							<input class="form-control form-control-lg form-control-solid" type="text" placeholder="请输入管理员账号或绑定手机号" name="account" autocomplete="off"/>
+						</div>
+						<div class="fv-row mb-10" data-kt-password-meter="true">
+							<div class="mb-1">
+								<label class="form-label fw-bolder text-dark fs-6">
+								</label>
+								<div class="position-relative">
+									<label class="form-label fw-bolder text-dark fs-6">登录密码</label>
+									<input class="form-control form-control-lg form-control-solid" type="password" placeholder="请输入登录密码" name="password" autocomplete="off"/>
+								</div>
+							</div>
+						</div>
+						<div class="d-grid">
+							<button type="button" id="kt_sign_in_submit" class="btn btn-primary" onclick="Accountlogin()">
+								<span class="indicator-label">登 录</span>
+								<span class="indicator-progress">登录中 请稍等...
+									<span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+								</span>
+							</button>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<script src="__ADMIN__/plugins/global/plugins.bundle.js"></script>
+		<script src="__ADMIN__/js/scripts.bundle.js"></script>
+		<script>
+			(function () {
+				var submitButton = document.querySelector('#kt_sign_in_submit');
+				var accountInput = document.querySelector('[name="account"]');
+				var passwordInput = document.querySelector('[name="password"]');
+				var loginErrorBox = document.querySelector('#login_no');
+				var loginSuccessBox = document.querySelector('#login_ok');
+				var loginErrorText = document.querySelector('#message_no');
+				var loginSuccessText = document.querySelector('#message_ok');
+				var redirectTimer = null;
+
+				function getMessage(response, fallback) {
+					if (response && typeof response.message === 'string' && response.message !== '') {
+						return response.message;
+					}
+					if (response && typeof response.msg === 'string' && response.msg !== '') {
+						return response.msg;
+					}
+					return fallback || '';
+				}
+
+				function setLoading(loading) {
+					if (!submitButton) {
+						return;
+					}
+					if (loading) {
+						submitButton.setAttribute('data-kt-indicator', 'on');
+					} else {
+						submitButton.removeAttribute('data-kt-indicator');
+					}
+					submitButton.disabled = !!loading;
+				}
+
+				function clearRedirectTimer() {
+					if (redirectTimer) {
+						window.clearTimeout(redirectTimer);
+						redirectTimer = null;
+					}
+				}
+
+				function setFeedback(type, message) {
+					if (loginErrorBox) {
+						loginErrorBox.style.display = type === 'error' && message ? 'block' : 'none';
+					}
+					if (loginSuccessBox) {
+						loginSuccessBox.style.display = type === 'success' && message ? 'block' : 'none';
+					}
+					if (loginErrorText) {
+						loginErrorText.textContent = type === 'error' ? message || '' : '';
+					}
+					if (loginSuccessText) {
+						loginSuccessText.textContent = type === 'success' ? message || '' : '';
+					}
+				}
+
+				function isTwofaRequired(response) {
+					return Number(response && response.data && response.data.twofa_required || 0) === 1;
+				}
+
+				function buildPayload(twofaCode) {
+					return {
+						account: accountInput ? $.trim(accountInput.value) : '',
+						password: passwordInput ? passwordInput.value : '',
+						twofa_code: twofaCode || ''
+					};
+				}
+
+				function parseErrorResponse(xhr) {
+					if (xhr && xhr.responseJSON && typeof xhr.responseJSON === 'object') {
+						return xhr.responseJSON;
+					}
+					if (!xhr || typeof xhr.responseText !== 'string' || xhr.responseText === '') {
+						return {};
+					}
+					try {
+						return JSON.parse(xhr.responseText);
+					} catch (error) {
+						return {};
+					}
+				}
+
+				function validateAccountPassword(payload) {
+					if (!payload.account || !payload.password) {
+						setFeedback('error', '账号或密码不得为空');
+						return false;
+					}
+					return true;
+				}
+
+				function validateTwofaCode(code) {
+					return /^\d{6}$/.test(String(code || ''));
+				}
+
+				function requestLogin(payload) {
+					return new Promise(function (resolve) {
+						$.ajax({
+							type: 'POST',
+							dataType: 'json',
+							url: "{{:getConfig('backstage_entrance')}}/login_check",
+							timeout: 10000,
+							data: payload
+						}).done(function (response) {
+							resolve(response || {});
+						}).fail(function (xhr) {
+							resolve(parseErrorResponse(xhr));
+						});
+					});
+				}
+
+				function handleResponse(response) {
+					var message = getMessage(response, '登录失败，请稍后重试');
+
+					if (response && (response.success === true || response.status === 'success' || Number(response.code || 0) === 200)) {
+						setFeedback('success', message || '登录成功');
+						clearRedirectTimer();
+						redirectTimer = window.setTimeout(function () {
+							if (response && typeof response.data === 'string' && response.data !== '') {
+								window.location.href = response.data;
+							}
+						}, 1200);
+						return {
+							type: 'success',
+							message: message
+						};
+					}
+
+					if (isTwofaRequired(response)) {
+						return {
+							type: 'twofa',
+							message: message || '请输入 6 位动态码'
+						};
+					}
+
+					setFeedback('error', message);
+					return {
+						type: 'error',
+						message: message
+					};
+				}
+
+				function openTwofaDialog(message) {
+					if (typeof Swal === 'undefined' || !Swal || typeof Swal.fire !== 'function') {
+						setFeedback('error', message || '请输入 6 位动态码后重试');
+						return;
+					}
+
+					Swal.fire({
+						title: '请输入动态码',
+						text: message || '请输入 Google Authenticator 6 位验证码',
+						input: 'text',
+						inputValue: '',
+						inputPlaceholder: '请输入 6 位动态码',
+						showCancelButton: true,
+						confirmButtonText: '确认登录',
+						cancelButtonText: '取消',
+						showLoaderOnConfirm: true,
+						allowOutsideClick: function () {
+							return !Swal.isLoading();
+						},
+						allowEscapeKey: function () {
+							return !Swal.isLoading();
+						},
+						inputAttributes: {
+							autocomplete: 'one-time-code',
+							inputmode: 'numeric',
+							maxlength: '6'
+						},
+						didOpen: function () {
+							var input = Swal.getInput();
+							if (!input) {
+								return;
+							}
+							input.focus();
+							if (typeof input.select === 'function') {
+								input.select();
+							}
+							input.addEventListener('input', function () {
+								this.value = this.value.replace(/\D/g, '').slice(0, 6);
+							});
+						},
+						preConfirm: function (value) {
+							var twofaCode = String(value || '').replace(/\D/g, '').slice(0, 6);
+							var payload = buildPayload(twofaCode);
+
+							if (!validateAccountPassword(payload)) {
+								Swal.showValidationMessage('账号或密码不得为空');
+								return false;
+							}
+
+							if (!validateTwofaCode(twofaCode)) {
+								Swal.showValidationMessage('请输入 6 位动态码');
+								return false;
+							}
+
+							setLoading(true);
+							return requestLogin(payload).then(function (response) {
+								var result = handleResponse(response);
+								setLoading(false);
+
+								if (result.type === 'success') {
+									return true;
+								}
+
+								if (typeof Swal.showValidationMessage === 'function') {
+									Swal.showValidationMessage(result.message || '动态码错误，请重新输入');
+								}
+								return false;
+							});
+						}
+					}).then(function (result) {
+						setLoading(false);
+						if (result && result.dismiss) {
+							setFeedback('error', '已取消二次验证，请输入 6 位动态码后重试');
+						}
+					});
+				}
+
+				window.Accountlogin = function () {
+					var payload = buildPayload('');
+					clearRedirectTimer();
+					setFeedback('', '');
+
+					if (!validateAccountPassword(payload)) {
+						setLoading(false);
+						return false;
+					}
+
+					setLoading(true);
+					requestLogin(payload).then(function (response) {
+						var result = handleResponse(response);
+						setLoading(false);
+
+						if (result.type === 'twofa') {
+							openTwofaDialog(result.message);
+						}
+					});
+					return false;
+				};
+
+				function bindEnterSubmit(input) {
+					if (!input) {
+						return;
+					}
+					input.addEventListener('keydown', function (event) {
+						if (event.key !== 'Enter') {
+							return;
+						}
+						event.preventDefault();
+						if (submitButton && !submitButton.disabled) {
+							window.Accountlogin();
+						}
+					});
+				}
+
+				bindEnterSubmit(accountInput);
+				bindEnterSubmit(passwordInput);
+			})();
+		</script>
+	</body>
+</html>

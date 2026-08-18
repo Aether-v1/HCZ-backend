@@ -1,0 +1,69 @@
+{{include file="layout/admin_header" web_title="任务设置"/}}
+<?php
+$taskSettings = [];
+if (!empty($points_tasks)) {
+    $decoded = json_decode($points_tasks, true);
+    if (is_array($decoded)) {
+        $taskSettings = $decoded;
+    }
+}
+$taskDefaults = ['daily_checkin' => 1, 'daily_order_completed' => 1, 'bind_2fa' => 1, 'bind_telegram' => 1];
+$taskSettings = array_merge($taskDefaults, $taskSettings);
+?>
+<div id="kt_content_container" class="app-container container-fluid">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">
+                <h3 class="fw-bold m-0">任务设置</h3>
+            </div>
+        </div>
+        <div class="card-body">
+            <form id="points_tasks_form" class="row g-5">
+                <div class="col-md-6">
+                    <label class="form-check form-switch form-check-custom form-check-solid">
+                        <input class="form-check-input" type="checkbox" name="daily_checkin_enabled" value="1" <?php echo !empty($taskSettings['daily_checkin']) ? 'checked' : ''; ?>>
+                        <span class="form-check-label fw-semibold">每日签到</span>
+                    </label>
+                    <div class="text-muted mt-2">每日一次，按 UID + 日期限制。</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-check form-switch form-check-custom form-check-solid">
+                        <input class="form-check-input" type="checkbox" name="daily_order_completed_enabled" value="1" <?php echo !empty($taskSettings['daily_order_completed']) ? 'checked' : ''; ?>>
+                        <span class="form-check-label fw-semibold">每日完成订单</span>
+                    </label>
+                    <div class="text-muted mt-2">订单当天完成后可领取一次。</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-check form-switch form-check-custom form-check-solid">
+                        <input class="form-check-input" type="checkbox" name="bind_2fa_enabled" value="1" <?php echo !empty($taskSettings['bind_2fa']) ? 'checked' : ''; ?>>
+                        <span class="form-check-label fw-semibold">绑定 2FA</span>
+                    </label>
+                    <div class="text-muted mt-2">账号仅一次，按 UID + task_key 限制。</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-check form-switch form-check-custom form-check-solid">
+                        <input class="form-check-input" type="checkbox" name="bind_telegram_enabled" value="1" <?php echo !empty($taskSettings['bind_telegram']) ? 'checked' : ''; ?>>
+                        <span class="form-check-label fw-semibold">绑定 Telegram</span>
+                    </label>
+                    <div class="text-muted mt-2">账号仅一次，绑定 TG 后可领取。</div>
+                </div>
+                <div class="col-12">
+                    <button class="btn btn-primary" type="submit">保存任务设置</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{{include file="layout/admin_footer"/}}
+<script>
+$('#points_tasks_form').on('submit', function (event) {
+    event.preventDefault();
+    $.post("{{:getConfig('backstage_entrance')}}/points_post/tasks_save", $(this).serialize(), function (res) {
+        if (res.code === 200) {
+            toastr.success(res.message || '保存成功');
+        } else {
+            toastr.error(res.message || '保存失败');
+        }
+    }, 'json');
+});
+</script>

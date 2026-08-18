@@ -1,0 +1,373 @@
+{{include file="layout/admin_header" web_title="账户资料修改"/}}
+
+<div id="kt_content_container" class="app-container container-fluid">
+    <div class="card mb-5 mb-xl-10">
+        <div class="card-header border-0 cursor-pointer" role="button" data-bs-toggle="collapse" data-bs-target="#kt_account_profile_details" aria-expanded="true" aria-controls="kt_account_profile_details">
+            <div class="card-title m-0">
+                <h3 class="fw-bold m-0">账户资料修改</h3>
+            </div>
+        </div>
+        <div class="card-body border-top p-9">
+            <div class="row mb-6">
+                <label class="col-lg-4 col-form-label fw-semibold fs-6">用户头像</label>
+                <div class="col-lg-8">
+                    <div class="image-input image-input-outline" data-kt-image-input="true" style="background-image: url('/static/assets/media/svg/avatars/blank.svg')">
+                        <div class="image-input-wrapper w-125px h-125px" style="background-image: url({{$admin_info.avatar|default='__USER__/media/avatars/blank.png'}})"></div>
+                        <label class="btn btn-icon btn-circle btn-active-color-primary w-25px h-25px bg-body shadow" data-kt-image-input-action="change" data-bs-toggle="tooltip" title="点击上传">
+                            <i class="bi bi-pencil-fill fs-7"></i>
+                            <input type="file" id="avatar_upload" accept=".png, .jpg, .jpeg" />
+                        </label>
+                        <span class="btn btn-icon btn-circle btn-active-color-primary w-25px h-25px bg-body shadow" data-kt-image-input-action="cancel" data-bs-toggle="tooltip" title="点击上传">
+                            <i class="bi bi-x fs-2"></i>
+                        </span>
+                    </div>
+                    <div class="form-text">允许的文件类型：png、jpg、jpeg。</div>
+                </div>
+            </div>
+            <div class="row mb-6">
+                <label class="col-lg-4 col-form-label fw-semibold fs-6">登录账号</label>
+                <div class="col-lg-8 fv-row fv-plugins-icon-container">
+                    <input type="text" id="account" class="form-control form-control-lg" value="{{$admin_info['account']}}">
+                </div>
+            </div>
+            <div class="row mb-6">
+                <label class="col-lg-4 col-form-label fw-semibold fs-6">登录密码</label>
+                <div class="col-lg-8 fv-row fv-plugins-icon-container">
+                    <input type="password" id="password" class="form-control form-control-lg" placeholder="请输入登录密码（留空则不修改）">
+                <div class="fv-plugins-message-container invalid-feedback"></div></div>
+            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-end py-6 px-9">
+            <button type="submit" class="btn btn-primary"  onclick="account()">确认修改</button>
+        </div>
+    </div>
+
+    <div class="card mb-5 mb-xl-10">
+        <div class="card-header border-0">
+            <div class="card-title m-0 d-flex align-items-center gap-3">
+                <h3 class="fw-bold m-0">管理员 2FA 安全绑定</h3>
+                {{if !empty($admin_info['twofa_enabled'])}}
+                <span class="badge badge-light-success">已启用</span>
+                {{else}}
+                <span class="badge badge-light-warning">未启用</span>
+                {{/if}}
+            </div>
+        </div>
+        <div class="card-body border-top p-9">
+            <div class="row mb-6">
+                <div class="col-lg-8">
+                    <div class="fs-6 fw-semibold text-gray-900 mb-2">使用 Google Authenticator、Microsoft Authenticator 或任何支持 TOTP 的身份验证器完成绑定。</div>
+                    <div class="text-muted" id="admin_twofa_status_text">
+                        {{if !empty($admin_info['twofa_enabled'])}}
+                        当前管理员已启用 2FA。登录后台、敏感操作校验将优先使用动态验证码。
+                        {{else}}
+                        当前管理员尚未启用 2FA。启用后，后台登录需要额外输入一次动态验证码或恢复码。
+                        {{/if}}
+                    </div>
+                    <div class="alert alert-warning d-flex flex-column flex-sm-row align-items-sm-center p-5 mt-6 mb-0">
+                        <div class="me-4 mb-3 mb-sm-0">
+                            <i class="bi bi-shield-lock fs-2 text-warning"></i>
+                        </div>
+                        <div class="text-gray-800">恢复码只会在启用成功或重新生成时展示一次，请务必离线保存。</div>
+                    </div>
+                </div>
+                <div class="col-lg-4 d-flex flex-wrap justify-content-lg-end align-items-start gap-3 mt-6 mt-lg-0">
+                    {{if !empty($admin_info['twofa_enabled'])}}
+                    <button type="button" class="btn btn-light-primary" onclick="resetAdminTwofa()">重新绑定</button>
+                    <button type="button" class="btn btn-light-info" onclick="regenerateAdminRecoveryCodes()">恢复码</button>
+                    <button type="button" class="btn btn-light-danger" onclick="disableAdminTwofa()">解绑2FA</button>
+                    {{else}}
+                    <button type="button" class="btn btn-primary" onclick="startAdminTwofaSetup('generate')">开始绑定</button>
+                    {{/if}}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+{{include file="layout/admin_footer"/}}
+<script type="text/javascript">
+    const adminTwofaAccountId = Number("{{$admin_info['id']|default=0}}");
+    const adminTwofaPostBase = "{{:getConfig('backstage_entrance')}}/twofa_post/";
+
+    function account() {
+        withAdminSensitiveAuth('请完成管理员资料修改安全验证', function (authPayload) {
+            $.ajax({
+                url: "{{:getConfig('backstage_entrance')}}/account_post/account",
+                method: 'POST',
+                data: Object.assign({
+                    account: $('#account').val(),
+                    password: $('#password').val(),
+                }, authPayload || {}),
+                dataType: 'json',
+                success: function(res) {
+                    if (res.code === 200) {
+                        toastr.success(
+                            res.message,
+                            {closeButton :!0, timeOut : "3000"}
+                        );
+                        setTimeout(function (){
+                            window.location.reload();
+                        },1500);
+                    } else {
+                        toastr.error(
+                            res.message,
+                            {closeButton :!0, timeOut : "3000"}
+                        );
+                    }
+                }
+            });
+        });
+    }
+
+    function adminTwofaRequest(action, data) {
+        return $.ajax({
+            url: adminTwofaPostBase + action,
+            method: 'POST',
+            dataType: 'json',
+            data: Object.assign({
+                id: adminTwofaAccountId
+            }, data || {})
+        });
+    }
+
+    function showAdminTwofaRecoveryCodes(codes, titleText) {
+        const rows = Array.isArray(codes) ? codes : [];
+        const content = rows.map(function (code) {
+            return '<div class="border border-gray-300 rounded px-4 py-3 fw-bold text-gray-900 bg-light mb-2">' + escapeHtml(code) + '</div>';
+        }).join('');
+
+        return Swal.fire({
+            title: titleText || '请保存恢复码',
+            html: '<div class="text-start text-muted mb-4">以下恢复码只会显示一次。请截图或离线保存，遗失后只能重新生成。</div>' + content,
+            width: 560,
+            confirmButtonText: '我已保存',
+            customClass: {
+                confirmButton: 'btn btn-primary'
+            }
+        }).then(function () {
+            window.location.reload();
+        });
+    }
+
+    function showTwofaToast(res) {
+        if (res.code === 200) {
+            toastr.success(res.message || '操作成功', {closeButton: true, timeOut: '3000'});
+            return;
+        }
+
+        toastr.error(res.message || '操作失败', {closeButton: true, timeOut: '3000'});
+    }
+
+    function promptAdminTwofaChallenge(titleText, messageText) {
+        return Swal.fire({
+            title: titleText,
+            text: messageText,
+            input: 'text',
+            inputLabel: '动态验证码或恢复码',
+            inputAttributes: {
+                autocomplete: 'one-time-code'
+            },
+            showCancelButton: true,
+            reverseButtons: true,
+            confirmButtonText: '验证并继续',
+            cancelButtonText: '取消',
+            customClass: {
+                confirmButton: 'btn btn-primary',
+                cancelButton: 'btn btn-light'
+            },
+            preConfirm: function (value) {
+                const inputValue = String(value || '').trim();
+                if (!inputValue) {
+                    Swal.showValidationMessage('请输入动态验证码或恢复码');
+                    return false;
+                }
+
+                return inputValue;
+            }
+        }).then(function (result) {
+            if (!result.isConfirmed) {
+                return null;
+            }
+
+            return String(result.value || '').trim();
+        });
+    }
+
+    function openAdminTwofaBindDialog(action, payload) {
+        const qrCode = payload && payload.qr_code ? String(payload.qr_code) : '';
+        const secret = payload && payload.secret ? String(payload.secret) : '';
+
+        return Swal.fire({
+            title: action === 'reset' ? '重新绑定管理员 2FA' : '绑定管理员 2FA',
+            width: 620,
+            html: '' +
+                '<div class="text-start">' +
+                    '<div class="text-muted mb-4">请先使用身份验证器扫描二维码，或手动录入密钥后再输入当前 6 位动态验证码。</div>' +
+                    '<div class="d-flex justify-content-center mb-4">' +
+                        '<img src="' + escapeHtml(qrCode) + '" alt="2FA QR" style="max-width: 260px; width: 100%; height: auto;">' +
+                    '</div>' +
+                    '<div class="mb-4">' +
+                        '<div class="fs-7 text-muted mb-2">手动录入密钥</div>' +
+                        '<div class="border border-dashed border-gray-300 rounded px-4 py-3 fw-bold text-gray-900 bg-light">' + escapeHtml(secret) + '</div>' +
+                    '</div>' +
+                    '<div>' +
+                        '<label class="form-label fw-semibold">当前 6 位动态验证码</label>' +
+                        '<input id="admin_twofa_bind_code" class="form-control" maxlength="6" autocomplete="one-time-code" inputmode="numeric" placeholder="请输入身份验证器中的验证码">' +
+                    '</div>' +
+                '</div>',
+            focusConfirm: false,
+            showCancelButton: true,
+            reverseButtons: true,
+            confirmButtonText: '验证并启用',
+            cancelButtonText: '取消',
+            customClass: {
+                confirmButton: 'btn btn-primary',
+                cancelButton: 'btn btn-light'
+            },
+            preConfirm: function () {
+                const code = String($('#admin_twofa_bind_code').val() || '').trim();
+                if (!/^\d{6}$/.test(code)) {
+                    Swal.showValidationMessage('请输入6位动态验证码');
+                    return false;
+                }
+
+                return code;
+            }
+        }).then(function (result) {
+            if (!result.isConfirmed) {
+                return null;
+            }
+
+            return adminTwofaRequest('enable', {
+                code: result.value
+            }).then(function (res) {
+                if (res.code !== 200) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '绑定失败',
+                        text: res.message || '2FA绑定失败',
+                        confirmButtonText: '知道了',
+                        customClass: {
+                            confirmButton: 'btn btn-primary'
+                        }
+                    });
+                    return null;
+                }
+
+                return showAdminTwofaRecoveryCodes(res.data && res.data.recovery_codes ? res.data.recovery_codes : [], '2FA绑定成功，请保存恢复码');
+            });
+        });
+    }
+
+    function startAdminTwofaSetup(action) {
+        adminTwofaRequest(action, {}).then(function (res) {
+            if (res.code !== 200) {
+                showTwofaToast(res);
+                return;
+            }
+
+            openAdminTwofaBindDialog(action, res.data || {});
+        });
+    }
+
+    function resetAdminTwofa() {
+        promptAdminTwofaChallenge('重置管理员 2FA', '请输入当前 6 位动态验证码，或输入一枚恢复码继续').then(function (verificationCode) {
+            if (!verificationCode) {
+                return;
+            }
+
+            adminTwofaRequest('reset', {
+                verification_code: verificationCode
+            }).then(function (res) {
+                if (res.code !== 200) {
+                    showTwofaToast(res);
+                    return;
+                }
+
+                openAdminTwofaBindDialog('reset', res.data || {});
+            });
+        });
+    }
+
+    function regenerateAdminRecoveryCodes() {
+        promptAdminTwofaChallenge('重新生成恢复码', '请输入当前 6 位动态验证码，或输入一枚恢复码继续').then(function (verificationCode) {
+            if (!verificationCode) {
+                return;
+            }
+
+            adminTwofaRequest('regenerate_recovery_codes', {
+                verification_code: verificationCode
+            }).then(function (res) {
+                if (res.code !== 200) {
+                    showTwofaToast(res);
+                    return;
+                }
+
+                showAdminTwofaRecoveryCodes(res.data && res.data.recovery_codes ? res.data.recovery_codes : [], '新的恢复码已生成');
+            });
+        });
+    }
+
+    function disableAdminTwofa() {
+        promptAdminTwofaChallenge('解绑管理员 2FA', '请输入当前 6 位动态验证码，或输入一枚恢复码继续').then(function (verificationCode) {
+            if (!verificationCode) {
+                return;
+            }
+
+            adminTwofaRequest('disable', {
+                verification_code: verificationCode
+            }).then(function (res) {
+                showTwofaToast(res);
+                if (res.code === 200) {
+                    setTimeout(function () {
+                        window.location.reload();
+                    }, 1200);
+                }
+            });
+        });
+    }
+
+    
+    let input_2 = document.getElementById("avatar_upload");
+    input_2.addEventListener('change',avatar_upload,false);
+    function avatar_upload(){
+        let file = this.files[0]; 
+        if(!/image\/\w+/.test(file.type)){
+            alert("请确保文件为图像类型"); 
+            return false; 
+        }
+        let reader = new FileReader(); 
+        reader.readAsDataURL(file); 
+        console.log();
+        reader.onload = function(e){ 
+            const uploadResult = this.result;
+            withAdminSensitiveAuth('请完成管理员头像修改安全验证', function (authPayload) {
+                $.ajax({
+                    url: "{{:getConfig('backstage_entrance')}}/account_post/avatar",
+                    method: 'POST',
+                    data: Object.assign({
+                        result: uploadResult,
+                    }, authPayload || {}),
+                    success: function(res) {
+                        if (res.code === 200) {
+                            Swal.fire({
+                                position: 'top-end',
+                                icon: 'success',
+                                title: res.message,
+                                showConfirmButton: false,
+                                timer: 1500
+                            })
+                        } else {
+                            swal.fire({
+                                icon: 'warning',
+                                title: res.message
+                            });
+                        }
+                    }
+                });
+            });
+        }
+    }
+</script>

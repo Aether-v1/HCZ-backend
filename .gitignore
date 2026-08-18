@@ -1,0 +1,43 @@
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+/vendor
+/node_modules
+
+# Runtime / cache
+/runtime/
+/public/session/
+/public/storage/*
+!/public/storage/.gitkeep
+
+# IDE / Editor
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.tmp
+*.bak
+*.backup
+*.tar.gz
+
+# SSL / ACME
+/.well-known/
+
+# Project-specific
+composer.phar
+.settings
+.buildpath
+.project

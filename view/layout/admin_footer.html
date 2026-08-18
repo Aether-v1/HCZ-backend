@@ -1,0 +1,412 @@
+
+                            </div>
+                        </div>
+                        <div id="kt_app_footer" class="app-footer">
+                            <div class="app-container container-fluid d-flex flex-column flex-md-row flex-center flex-md-stack py-3">
+                                <div class="text-gray-900 order-2 order-md-1">
+                                    <span class="text-muted fw-semibold me-1">2024&copy;</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+			</div>
+		</div>
+
+		<script src="__ADMIN__/plugins/global/plugins.bundle.js"></script>
+		<script src="__ADMIN__/js/scripts.bundle.js"></script>
+		<script src="__ADMIN__/plugins/custom/fullcalendar/fullcalendar.bundle.js"></script>
+		<script src="__ADMIN__/plugins/custom/datatables/datatables.bundle.js"></script>
+		<script src="__ADMIN__/js/widgets.bundle.js"></script>
+		<script src="__ADMIN__/js/custom/widgets.js"></script>
+		<script src="__ADMIN__/js/custom/apps/chat/chat.js"></script>
+		<script src="__ADMIN__/js/custom/utilities/modals/users-search.js"></script>
+        <script>
+            const adminCsrfToken = <?php echo json_encode($admin_csrf_token ?? '', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+            const adminSensitiveAuthMode = <?php echo json_encode(!empty($admin_info['twofa_enabled']) ? 'twofa' : 'password', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+            if (window.jQuery && adminCsrfToken) {
+                $.ajaxSetup({
+                    headers: {
+                        'X-CSRF-Token': adminCsrfToken
+                    }
+                });
+            }
+
+            function escapeHtml(value) {
+                if (value === null || value === undefined) {
+                    return '';
+                }
+
+                return String(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function encodeAdminJsString(value) {
+                return encodeURIComponent(value === null || value === undefined ? '' : String(value));
+            }
+
+            function sanitizeAdminUrl(value, options) {
+                const settings = options || {};
+                const fallback = settings.fallback || '';
+                const allowDataImage = settings.allowDataImage === true;
+                const rawValue = value === null || value === undefined ? '' : String(value);
+                const normalized = rawValue.replace(/[\u0000-\u001F\u007F\s]+/g, '').trim();
+
+                if (!normalized) {
+                    return fallback;
+                }
+
+                if (/^(?:javascript|vbscript):/i.test(normalized)) {
+                    return fallback;
+                }
+
+                if (/^data:/i.test(normalized) && !(allowDataImage && /^data:image\//i.test(normalized))) {
+                    return fallback;
+                }
+
+                return escapeHtml(rawValue.trim());
+            }
+
+            function renderAdminAvatarCell(avatar, options) {
+                const settings = options || {};
+                const fallback = settings.fallback || '__ADMIN__/media/avatars/blank.png';
+                const safeAvatar = sanitizeAdminUrl(avatar || fallback, {
+                    fallback: fallback,
+                    allowDataImage: true
+                });
+                const wrapperClass = settings.wrapperClass || 'cursor-pointer symbol symbol-35px';
+                const imgClass = settings.imgClass || 'rounded-3';
+                const altText = escapeHtml(settings.alt || 'user');
+                const extraAttrs = settings.extraAttrs || '';
+
+                return `<div class="${wrapperClass}"${extraAttrs}><img src="${safeAvatar}" class="${imgClass}" alt="${altText}"></div>`;
+            }
+
+            function renderAdminUserBrief(userInfo, options) {
+                const settings = options || {};
+                if (!userInfo) {
+                    return escapeHtml(settings.emptyText || '用户不存在');
+                }
+
+                const text = userInfo[settings.textKey || 'mobile'] || userInfo.nickname || userInfo.account || '-';
+                return `${renderAdminAvatarCell(userInfo.avatar, {
+                    fallback: settings.fallback || '__ADMIN__/media/avatars/blank.png',
+                    wrapperClass: settings.wrapperClass || 'symbol symbol-50px',
+                    imgClass: settings.imgClass || '',
+                    alt: settings.alt || 'user',
+                    extraAttrs: settings.extraAttrs || ''
+                })}<br>${escapeHtml(text)}`;
+            }
+
+            function renderAdminBankCardInfo(bankCardInfo) {
+                const card = bankCardInfo || {};
+                return `姓名：${escapeHtml(card.name || '-')}<br>手机号：${escapeHtml(card.mobile || '-')}<br>微信号：${escapeHtml(card.wx_account || '-')}<br>支付宝号：${escapeHtml(card.zfb_account || '-')}`;
+            }
+
+            function renderAdminImagePreview(image, modalFnName, fallback) {
+                const safeFallback = fallback || '__ADMIN__/media/misc/image.png';
+                const safeImage = sanitizeAdminUrl(image || safeFallback, {
+                    fallback: safeFallback,
+                    allowDataImage: true
+                });
+                const encodedImage = encodeAdminJsString(safeImage);
+                const callbackName = escapeHtml(modalFnName || 'picture_views_modal');
+                return `<div class="symbol symbol-50px" onclick="${callbackName}(decodeURIComponent('${encodedImage}'))"><img src="${safeImage}" alt=""></div>`;
+            }
+
+            function showAdminImagePreview(containerSelector, picture, fallback) {
+                const safeFallback = fallback || '__ADMIN__/media/misc/image.png';
+                const safePicture = sanitizeAdminUrl(picture || safeFallback, {
+                    fallback: safeFallback,
+                    allowDataImage: true
+                });
+                const $container = window.jQuery ? $(containerSelector) : null;
+                if (!$container || !$container.length) {
+                    return;
+                }
+
+                $container.empty().append(
+                    $('<img>', {
+                        src: safePicture,
+                        alt: 'preview',
+                        class: 'rounded-3',
+                        style: 'width: 100%;'
+                    })
+                );
+            }
+
+            function normalizeAdminDtTargets(targets, columnCount) {
+                const rawTargets = Array.isArray(targets) ? targets : [targets];
+                const normalized = [];
+
+                rawTargets.forEach(function (target) {
+                    if (target === '_all') {
+                        for (let index = 0; index < columnCount; index += 1) {
+                            normalized.push(index);
+                        }
+                        return;
+                    }
+
+                    const numericTarget = Number(target);
+                    if (!Number.isInteger(numericTarget)) {
+                        return;
+                    }
+
+                    const resolvedIndex = numericTarget < 0 ? columnCount + numericTarget : numericTarget;
+                    if (resolvedIndex >= 0 && resolvedIndex < columnCount) {
+                        normalized.push(resolvedIndex);
+                    }
+                });
+
+                return normalized;
+            }
+
+            function applyAdminColumnSafety(settings) {
+                if (!settings || settings.__adminColumnSafetyApplied) {
+                    return;
+                }
+
+                const columns = Array.isArray(settings.aoColumns) ? settings.aoColumns : [];
+                const columnDefs = Array.isArray(settings.oInit && settings.oInit.columnDefs) ? settings.oInit.columnDefs : [];
+                const customRenderedTargets = new Set();
+
+                columnDefs.forEach(function (definition) {
+                    if (!definition || typeof definition.render !== 'function') {
+                        return;
+                    }
+
+                    normalizeAdminDtTargets(definition.targets, columns.length).forEach(function (index) {
+                        customRenderedTargets.add(index);
+                    });
+                });
+
+                columns.forEach(function (column, index) {
+                    if (!column || typeof column.mRender === 'function' || customRenderedTargets.has(index)) {
+                        return;
+                    }
+
+                    const dataKey = column.mData;
+                    if (dataKey === null || typeof dataKey === 'function' || (typeof dataKey === 'object' && dataKey !== null)) {
+                        return;
+                    }
+
+                    column.mRender = function (data) {
+                        return escapeHtml(data);
+                    };
+                });
+
+                settings.__adminColumnSafetyApplied = true;
+            }
+
+            function bindAdminDatatableSafety() {
+                if (!window.jQuery || !$.fn || !$.fn.dataTable || window.__adminDatatableSafetyBound) {
+                    return;
+                }
+
+                window.__adminDatatableSafetyBound = true;
+
+                $(document).on('preInit.dt', function (e, settings) {
+                    try {
+                        applyAdminColumnSafety(settings);
+                    } catch (error) {
+                    }
+                });
+            }
+
+            function promptAdminSensitiveAuth(actionLabel) {
+                const isTwoFactorMode = adminSensitiveAuthMode === 'twofa';
+                const promptTitle = actionLabel || '请完成安全验证';
+                const promptMessage = isTwoFactorMode ? '请输入当前管理员 2FA 动态验证码' : '请输入当前管理员登录密码';
+
+                return Swal.fire({
+                    title: promptTitle,
+                    text: promptMessage,
+                    input: isTwoFactorMode ? 'text' : 'password',
+                    inputLabel: isTwoFactorMode ? '二步验证码' : '管理员密码',
+                    inputAttributes: isTwoFactorMode ? { maxlength: 6, autocomplete: 'one-time-code', inputmode: 'numeric' } : { autocomplete: 'current-password' },
+                    showCancelButton: true,
+                    reverseButtons: true,
+                    confirmButtonText: '验证并继续',
+                    cancelButtonText: '取消',
+                    customClass: {
+                        confirmButton: 'btn btn-primary',
+                        cancelButton: 'btn btn-light'
+                    },
+                    preConfirm: function (value) {
+                        const inputValue = String(value || '').trim();
+                        if (!inputValue) {
+                            Swal.showValidationMessage(promptMessage);
+                            return false;
+                        }
+
+                        return inputValue;
+                    }
+                }).then(function (result) {
+                    if (!result.isConfirmed) {
+                        return null;
+                    }
+
+                    return isTwoFactorMode
+                        ? { twofa_code: String(result.value || '').trim() }
+                        : { admin_password: String(result.value || '').trim() };
+                });
+            }
+
+            function withAdminSensitiveAuth(actionLabel, callback) {
+                return promptAdminSensitiveAuth(actionLabel).then(function (authPayload) {
+                    if (!authPayload || typeof callback !== 'function') {
+                        return null;
+                    }
+
+                    return callback(authPayload);
+                });
+            }
+
+            function refreshPage() {
+                location.reload(); // 刷新当前页面
+            }
+
+            function normalizeAdminDatatablePayload(json, settings) {
+                if (!json || typeof json !== 'object') {
+                    return;
+                }
+
+                const rows = Array.isArray(json.data) ? json.data : [];
+                const start = Number.parseInt(settings && settings._iDisplayStart, 10);
+                const length = Number.parseInt(settings && settings._iDisplayLength, 10);
+                const safeStart = Number.isFinite(start) ? start : 0;
+                const safeLength = Number.isFinite(length) && length > 0 ? length : 10;
+
+                let total = Number.parseInt(json.recordsTotal, 10);
+                let filtered = Number.parseInt(json.recordsFiltered, 10);
+
+                if (!Number.isFinite(filtered) && Number.isFinite(total)) {
+                    filtered = total;
+                }
+                if (!Number.isFinite(total) && Number.isFinite(filtered)) {
+                    total = filtered;
+                }
+
+                if (!Number.isFinite(filtered)) {
+                    filtered = rows.length < safeLength ? safeStart + rows.length : 0;
+                }
+                if (!Number.isFinite(total)) {
+                    total = filtered;
+                }
+
+                const pageLoaded = safeStart + rows.length;
+                if (rows.length === safeLength) {
+                    if (filtered <= pageLoaded) {
+                        filtered = pageLoaded + 1;
+                    }
+                    if (total <= pageLoaded) {
+                        total = Math.max(total, filtered);
+                    }
+                }
+
+                if (safeStart > 0 && rows.length < safeLength) {
+                    const actualTotal = safeStart + rows.length;
+                    if (filtered > actualTotal) {
+                        filtered = actualTotal;
+                    }
+                    if (total > actualTotal) {
+                        total = Math.max(filtered, actualTotal);
+                    }
+                }
+
+                if (safeStart === 0 && rows.length === 0) {
+                    filtered = 0;
+                    total = 0;
+                }
+
+                const draw = Number.parseInt(json.draw, 10);
+                json.draw = Number.isFinite(draw) ? draw : (Number.parseInt(settings && settings.iDraw, 10) || 0);
+                json.recordsFiltered = Math.max(0, filtered);
+                json.recordsTotal = Math.max(json.recordsFiltered, total);
+                json.data = rows;
+            }
+
+            function bindAdminDatatableGuard() {
+                if (!window.jQuery || !$.fn || !$.fn.dataTable || window.__adminDatatableGuardBound) {
+                    return;
+                }
+
+                window.__adminDatatableGuardBound = true;
+
+                $.extend(true, $.fn.dataTable.defaults, {
+                    info: false
+                });
+
+                $(document).on('xhr.dt', function (e, settings, json) {
+                    normalizeAdminDatatablePayload(json, settings);
+                });
+
+                $(document).on('draw.dt', function (e, settings) {
+                    try {
+                        const api = new $.fn.dataTable.Api(settings);
+                        const info = api.page.info();
+                        if (info && info.pages > 0 && info.page >= info.pages) {
+                            api.page('last').draw('page');
+                        }
+                    } catch (error) {
+                    }
+                });
+            }
+
+            bindAdminDatatableSafety();
+            bindAdminDatatableGuard();
+
+            out_order();
+            function out_order() {
+                $.ajax({
+                    url: "{{:getConfig('backstage_entrance')}}/admin_footer/out_order",
+                    method: 'POST',
+                    dataType: 'json',
+                    success: function(res) {
+                        if (res.code === 200) {
+                            if(res.data.order_cz != 0){
+                                var utterThis = new window.SpeechSynthesisUtterance('您有'+res.data.order_cz+'笔业务充值订单待处理');
+                                utterThis.pitch=1
+                                utterThis.rate=1.2
+                                utterThis.voiceURI='BaiduMandarinMale'
+                                window.speechSynthesis.speak(utterThis);
+                            }
+                            if(res.data.order_cx != 0){
+                                var utterThis = new window.SpeechSynthesisUtterance('您有'+res.data.order_cx+'笔业务查询信息待处理');
+                                utterThis.pitch=1
+                                utterThis.rate=1.2
+                                utterThis.voiceURI='BaiduMandarinMale'
+                                window.speechSynthesis.speak(utterThis);
+                            }
+                            if(res.data.recharge != 0){
+                                var utterThis = new window.SpeechSynthesisUtterance('您有'+res.data.recharge+'笔余额充值订单待处理');
+                                utterThis.pitch=1
+                                utterThis.rate=1.2
+                                utterThis.voiceURI='BaiduMandarinMale'
+                                window.speechSynthesis.speak(utterThis);
+                            }
+                            if(res.data.withdrawal != 0){
+                                var utterThis = new window.SpeechSynthesisUtterance('您有'+res.data.withdrawal+'笔余额提现订单待处理');
+                                utterThis.pitch=1
+                                utterThis.rate=1.2
+                                utterThis.voiceURI='BaiduMandarinMale'
+                                window.speechSynthesis.speak(utterThis);
+                            }
+                            setTimeout(function (){
+                                out_order();
+                            }, 600000);
+                        }else{
+                            setTimeout(function (){
+                                out_order();
+                            },10000);
+                        }
+                    }
+                });
+            };
+        </script>
+	</body>
+</html>

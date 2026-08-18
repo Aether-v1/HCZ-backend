@@ -1,0 +1,636 @@
+{{include file="layout/admin_header" web_title="系统设置管理"/}}
+<link rel="stylesheet" href="__ADMIN__/css/snippet.css" type="text/css" data-cke="true">
+<div id="kt_app_content_container" class="app-container container-fluid">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">
+                <h2>站点信息配置</h2>
+            </div>
+            <div class="card-toolbar">
+                <ul class="nav nav-stretch fs-5 fw-semibold nav-line-tabs nav-line-tabs-2x border-transparent" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link text-active-primary active" data-bs-toggle="tab" role="tab" href="#setting_1">基本信息配置</a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link text-active-primary" data-bs-toggle="tab" role="tab" href="#setting_2">充值提现配置</a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link text-active-primary" data-bs-toggle="tab" role="tab" href="#setting_3">交易管理配置</a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link text-active-primary" data-bs-toggle="tab" role="tab" href="#setting_4">平台简介</a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link text-active-primary" data-bs-toggle="tab" role="tab" href="#setting_5">隐私政策</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <div class="card-body pb-5">
+            <div id="setting_tab_content" class="tab-content">
+                <div id="setting_1" class="py-0 tab-pane fade show active" role="tabpanel">
+                    <div class="card-body">
+                        <div class="d-flex fs-6 fw-semibold align-items-center mb-10">
+                            <div class="bullet w-8px h-6px rounded-2 bg-primary me-3"></div>
+                            <div class="fs-6 fw-semibold text-gray-400 flex-shrink-0">站点信息设置</div>
+                            <div class="separator separator-dashed min-w-10px flex-grow-1 mx-2"></div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">网站名称</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="name" value="{{$config.name|default=''}}" placeholder="请输入网站名称" class="form-control">
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">后台入口设置</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="backstage_entrance" value="{{$config.backstage_entrance|default=''}}" placeholder="请输入后台入口地址" class="form-control">
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">最新费率</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="rate" value="{{$config.rate|default=''}}" placeholder="请输入最新费率" class="form-control">
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">TG客服</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="mailing_address" value="{{$config.mailing_address|default=''}}" placeholder="请输入TG客服" class="form-control">
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">在线客服</label>
+                            </div>
+                            <div class="col-md-9">
+                                <div class="input-group">
+                                    <span class="input-group-text">客服联系地址</span>
+                                    <div class="w-300px">
+                                        <input type="text" id="contact_service_url" value="{{$config.contact_service_url|default=''}}" placeholder="请到服务器设置" class="form-control">
+                                    </div>
+                                    <span class="input-group-text">logo图片：</span>
+                                    <input type="text" class="form-control contact_service_upload" id="contact_service_image" placeholder="请上传logo图片" value="{{$config.contact_service_image|default=''}}">
+                                    <button class="btn btn-primary dz-clickable" id="contact_service_upload">
+                                        上传图片
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">Chatwoot 接入</label>
+                            </div>
+                            <div class="col-md-9">
+                                <div class="input-group mb-3">
+                                    <span class="input-group-text">启用状态</span>
+                                    <div class="w-150px">
+                                        <select id="chatwoot_enabled" class="form-select" data-control="select2" data-hide-search="true">
+                                            <option value="0" {{if !isset($config.chatwoot_enabled) || $config.chatwoot_enabled != 1}}selected{{/if}}>关闭</option>
+                                            <option value="1" {{if isset($config.chatwoot_enabled) && $config.chatwoot_enabled == 1}}selected{{/if}}>开启</option>
+                                        </select>
+                                    </div>
+                                    <span class="input-group-text">客服域名</span>
+                                    <input type="text" id="chatwoot_base_url" value="{{$config.chatwoot_base_url|default=''}}" placeholder="例如 https://chat.example.com" class="form-control">
+                                </div>
+                                <div class="input-group">
+                                    <span class="input-group-text">网站令牌</span>
+                                    <input type="text" id="chatwoot_token" value="{{$config.chatwoot_token|default=''}}" placeholder="请输入 Chatwoot website token" class="form-control">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex fs-6 fw-semibold align-items-center mb-10">
+                            <div class="bullet w-8px h-6px rounded-2 bg-primary me-3"></div>
+                            <div class="fs-6 fw-semibold text-gray-400 flex-shrink-0">首页信息配置</div>
+                            <div class="separator separator-dashed min-w-10px flex-grow-1 mx-2"></div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">首页顶部公告</label>
+                            </div>
+                            <div class="col-md-9">
+                                <textarea type="text" id="notice" placeholder="请输入首页顶部公告" class="form-control" rows="3">{{$config.notice|default=''}}</textarea>
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">首页推荐一</label>
+                            </div>
+                            <div class="col-md-9">
+                                <div class="input-group">
+                                    <span class="input-group-text">选择充值产品</span>
+                                    <div class="w-300px">
+                                        <select class="form-select" id="a_recommend_id" data-control="select2" data-placeholder="产品筛选" data-kt="product">
+                                            <option></option>
+                                            {{foreach $product_list as $key=>$vo }}
+                                            <option value="{{$vo['id']}}" {{if $config.a_recommend_id == $vo['id']}}selected{{/if}}>{{$vo['name']}}</option>
+                                            {{/foreach}}
+                                        </select>
+                                    </div>
+                                    <span class="input-group-text">上传背景图片：</span>
+                                    <input type="text" class="form-control a_recommend_upload" id="a_recommend_image" placeholder="请上传背景图片" value="{{$config.a_recommend_image|default=''}}">
+                                    <button class="btn btn-primary dz-clickable" id="a_recommend_upload">
+                                        上传图片
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">首页推荐二</label>
+                            </div>
+                            <div class="col-md-9">
+                                <div class="input-group">
+                                    <span class="input-group-text">选择充值产品</span>
+                                    <div class="w-300px">
+                                        <select class="form-select" id="b_recommend_id" data-control="select2" data-placeholder="产品筛选" data-kt="product">
+                                            <option></option>
+                                            {{foreach $product_list as $key=>$vo }}
+                                            <option value="{{$vo['id']}}" {{if $config.b_recommend_id == $vo['id']}}selected{{/if}}>{{$vo['name']}}</option>
+                                            {{/foreach}}
+                                        </select>
+                                    </div>
+                                    <span class="input-group-text">上传背景图片：</span>
+                                    <input type="text" class="form-control b_recommend_upload" id="b_recommend_image" placeholder="请上传背景图片" value="{{$config.b_recommend_image|default=''}}">
+                                    <button class="btn btn-primary dz-clickable" id="b_recommend_upload">
+                                        上传图片
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex fs-6 fw-semibold align-items-center mb-10">
+                            <div class="bullet w-8px h-6px rounded-2 bg-primary me-3"></div>
+                            <div class="fs-6 fw-semibold text-gray-400 flex-shrink-0">默认用户信息配置</div>
+                            <div class="separator separator-dashed min-w-10px flex-grow-1 mx-2"></div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">默认注册头像</label>
+                            </div>
+                            <div class="col-md-9">
+                                <div class="input-group">
+                                    <input type="text" class="form-control user_avatar_upload" id="user_avatar_image" placeholder="请上传logo图片" value="{{$config.user_avatar_image|default=''}}">
+                                    <button class="btn btn-primary dz-clickable" id="user_avatar_upload">
+                                        上传图片
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex fs-6 fw-semibold align-items-center mb-10">
+                            <div class="bullet w-8px h-6px rounded-2 bg-primary me-3"></div>
+                            <div class="fs-6 fw-semibold text-gray-400 flex-shrink-0">代理开通配置</div>
+                            <div class="separator separator-dashed min-w-10px flex-grow-1 mx-2"></div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">代理开通价格</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="agent_money" value="{{$config.agent_money|default=''}}" placeholder="请输入代理开通价格" class="form-control">
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">代理开通介绍</label>
+                            </div>
+                            <div class="col-md-9">
+                                <textarea type="text" id="agent_jieshao" placeholder="请输入代理开通介绍" class="form-control" rows="3">{{$config.agent_jieshao|raw|default=''}}</textarea>
+                            </div>
+                        </div>
+                        <div class="d-flex fs-6 fw-semibold align-items-center mb-10">
+                            <div class="bullet w-8px h-6px rounded-2 bg-primary me-3"></div>
+                            <div class="fs-6 fw-semibold text-gray-400 flex-shrink-0">分站开通配置</div>
+                            <div class="separator separator-dashed min-w-10px flex-grow-1 mx-2"></div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">分站开通价格</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="substation_open_price" value="{{$config.substation_open_price|default=''}}" placeholder="请输入分站开通价格(U)" class="form-control">
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">分站开通介绍</label>
+                            </div>
+                            <div class="col-md-9">
+                                <textarea type="text" id="substation_open_intro" placeholder="请输入分站开通介绍" class="form-control" rows="4">{{$config.substation_open_intro|raw|default=''}}</textarea>
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">分站基础域名</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="substation_base_domain" value="{{$config.substation_base_domain|default='example.com'}}" placeholder="例如 example.com" class="form-control">
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">禁用二级域名前缀</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="substation_blocked_subdomains" value="{{$config.substation_blocked_subdomains|default=''}}" placeholder="多个前缀用 , 分隔，例如 www,my,user" class="form-control">
+                                <div class="form-text">配置后这些二级域名前缀将禁止用于分站申请。</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="setting_2" class="py-0 tab-pane fade" role="tabpanel">
+                    <div class="card-body">
+                        <div class="d-flex fs-6 fw-semibold align-items-center mb-10">
+                            <div class="bullet w-8px h-6px rounded-2 bg-primary me-3"></div>
+                            <div class="fs-6 fw-semibold text-gray-400 flex-shrink-0">充值信息配置</div>
+                            <div class="separator separator-dashed min-w-10px flex-grow-1 mx-2"></div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">最低充值金额</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="mini_recharge_amount" value="{{$config.mini_recharge_amount|default=''}}" placeholder="请输入最低充值金额" class="form-control">
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">收款地址</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="payment_address" value="{{$config.payment_address|default=''}}" placeholder="请输入收款地址" class="form-control">
+                            </div>
+                        </div>
+                        <div class="d-flex fs-6 fw-semibold align-items-center mb-10">
+                            <div class="bullet w-8px h-6px rounded-2 bg-primary me-3"></div>
+                            <div class="fs-6 fw-semibold text-gray-400 flex-shrink-0">Bepusdt 配置</div>
+                            <div class="separator separator-dashed min-w-10px flex-grow-1 mx-2"></div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">Bepusdt接口地址</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="bepusdt_base_url" value="{{$config.bepusdt_base_url|default=''}}" placeholder="例如 https://pay.example.com" class="form-control">
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">Bepusdt秘钥</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="bepusdt_api_token" value="{{$config.bepusdt_api_token|default=''}}" placeholder="请输入 Bepusdt API Token" class="form-control">
+                            </div>
+                        </div>
+                        <div class="d-flex fs-6 fw-semibold align-items-center mb-10">
+                            <div class="bullet w-8px h-6px rounded-2 bg-primary me-3"></div>
+                            <div class="fs-6 fw-semibold text-gray-400 flex-shrink-0">提现信息配置</div>
+                            <div class="separator separator-dashed min-w-10px flex-grow-1 mx-2"></div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">最低提现金额</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="mini_withdrawal_amount" value="{{$config.mini_withdrawal_amount|default=''}}" placeholder="请输入最低提现金额" class="form-control">
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">提现手续费</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="withdrawal_fee" value="{{$config.withdrawal_fee|default=''}}" placeholder="请输入提现手续费" class="form-control">
+                            </div>
+                        </div>
+                        
+                        
+                        
+                        
+                        <div class="d-flex fs-6 fw-semibold align-items-center mb-10">
+                            <div class="bullet w-8px h-6px rounded-2 bg-primary me-3"></div>
+                            <div class="fs-6 fw-semibold text-gray-400 flex-shrink-0">易支付充值信息配置</div>
+                            <div class="separator separator-dashed min-w-10px flex-grow-1 mx-2"></div>
+                        </div>
+                        
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">易支付接口地址</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="epay_url" value="{{$config.epay_url|default=''}}" placeholder="请输入易支付接口地址" class="form-control">
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">易支付ID</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="epay_id" value="{{$config.epay_id|default=''}}" placeholder="请输入易支付ID" class="form-control">
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">易支付秘钥</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="epay_key" value="{{$config.epay_key|default=''}}" placeholder="请输入易支付秘钥" class="form-control">
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">支付宝充值开关</label>
+                            </div>
+                            <div class="col-md-9">
+                                <select id="epay_alipay_enabled" class="form-select" data-control="select2" data-hide-search="true">
+                                    <option value="1" {{if !isset($config.epay_alipay_enabled) || $config.epay_alipay_enabled != '0'}}selected{{/if}}>开启</option>
+                                    <option value="0" {{if isset($config.epay_alipay_enabled) && $config.epay_alipay_enabled == '0'}}selected{{/if}}>关闭</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">微信支付充值开关</label>
+                            </div>
+                            <div class="col-md-9">
+                                <select id="epay_wechat_enabled" class="form-select" data-control="select2" data-hide-search="true">
+                                    <option value="1" {{if !isset($config.epay_wechat_enabled) || $config.epay_wechat_enabled != '0'}}selected{{/if}}>开启</option>
+                                    <option value="0" {{if isset($config.epay_wechat_enabled) && $config.epay_wechat_enabled == '0'}}selected{{/if}}>关闭</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="setting_3" class="py-0 tab-pane fade" role="tabpanel">
+                    <div class="card-body">
+                        <div class="d-flex fs-6 fw-semibold align-items-center mb-10">
+                            <div class="bullet w-8px h-6px rounded-2 bg-primary me-3"></div>
+                            <div class="fs-6 fw-semibold text-gray-400 flex-shrink-0">交易管理配置</div>
+                            <div class="separator separator-dashed min-w-10px flex-grow-1 mx-2"></div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">最低挂单数量</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="transaction_mini_quantity" value="{{$config.transaction_mini_quantity|default=''}}" placeholder="请输入收款地址" class="form-control">
+                            </div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="col-md-3 d-flex align-items-center">
+                                <label class="fs-6 fw-semibold">交易手续费</label>
+                            </div>
+                            <div class="col-md-9">
+                                <input type="text" id="transaction_fees" value="{{$config.transaction_fees|default=''}}" placeholder="请输入提现手续费" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="setting_4" class="py-0 tab-pane fade" role="tabpanel">
+                    <div class="card-body">
+                        <div class="d-flex fs-6 fw-semibold align-items-center mb-10">
+                            <div class="bullet w-8px h-6px rounded-2 bg-primary me-3"></div>
+                            <div class="fs-6 fw-semibold text-gray-400 flex-shrink-0">用户协议</div>
+                            <div class="separator separator-dashed min-w-10px flex-grow-1 mx-2"></div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="tab-pane fade active show">
+                                <textarea id="agreement">
+                                    {{$config.agreement|raw|default=''}}
+                                </textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="setting_5" class="py-0 tab-pane fade" role="tabpanel">
+                    <div class="card-body">
+                        <div class="d-flex fs-6 fw-semibold align-items-center mb-10">
+                            <div class="bullet w-8px h-6px rounded-2 bg-primary me-3"></div>
+                            <div class="fs-6 fw-semibold text-gray-400 flex-shrink-0">隐私政策</div>
+                            <div class="separator separator-dashed min-w-10px flex-grow-1 mx-2"></div>
+                        </div>
+                        <div class="fv-row row mb-9">
+                            <div class="tab-pane fade active show">
+                                <textarea id="privacy_policy">
+                                    {{$config.privacy_policy|raw|default=''}}
+                                </textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="card-footer d-flex justify-content-end py-6 px-9">
+                    <button type="button" class="btn btn-primary" onclick="setting()">保存设置</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="__ADMIN__/js/snippet.js"></script>
+{{include file="layout/admin_footer"/}}
+<script>
+    Inputmask({
+        mask: "/*{1,20}[.*{1,20}][.*{1,20}][.*{1,20}]",
+    }).mask("#backstage_entrance");
+
+    function setting() {
+        const payload = {
+            name: $('#name').val(),
+            backstage_entrance: $('#backstage_entrance').val(),
+            rate: $('#rate').val(),
+            mailing_address: $('#mailing_address').val(),
+            agreement: agreements.getData(),
+            privacy_policy: privacy_policys.getData(),
+            mini_recharge_amount: $('#mini_recharge_amount').val(),
+            payment_address: $('#payment_address').val(),
+            bepusdt_base_url: $('#bepusdt_base_url').val(),
+            bepusdt_api_token: $('#bepusdt_api_token').val(),
+            mini_withdrawal_amount: $('#mini_withdrawal_amount').val(),
+            withdrawal_fee: $('#withdrawal_fee').val(),
+            notice: $('#notice').val(),
+            a_recommend_id: $('#a_recommend_id').val(),
+            b_recommend_id: $('#b_recommend_id').val(),
+            a_recommend_image: $('#a_recommend_image').val(),
+            b_recommend_image: $('#b_recommend_image').val(),
+            contact_service_url: $('#contact_service_url').val(),
+            contact_service_image: $('#contact_service_image').val(),
+            chatwoot_enabled: $('#chatwoot_enabled').val(),
+            chatwoot_base_url: $('#chatwoot_base_url').val(),
+            chatwoot_token: $('#chatwoot_token').val(),
+            transaction_mini_quantity: $('#transaction_mini_quantity').val(),
+            transaction_fees: $('#transaction_fees').val(),
+            user_avatar_image: $('#user_avatar_image').val(),
+            agent_money: $('#agent_money').val(),
+            agent_jieshao: $('#agent_jieshao').val(),
+            substation_open_price: $('#substation_open_price').val(),
+            substation_open_intro: $('#substation_open_intro').val(),
+            substation_base_domain: $('#substation_base_domain').val(),
+            substation_blocked_subdomains: $('#substation_blocked_subdomains').val(),
+            epay_url: $('#epay_url').val(),
+            epay_id: $('#epay_id').val(),
+            epay_key: $('#epay_key').val(),
+            epay_alipay_enabled: $('#epay_alipay_enabled').val(),
+            epay_wechat_enabled: $('#epay_wechat_enabled').val(),
+        };
+
+        withAdminSensitiveAuth('请完成系统配置安全验证', function (authPayload) {
+            $.ajax({
+                url: "{{:getConfig('backstage_entrance')}}/setting_post/setting",
+                method: 'POST',
+                data: Object.assign(payload, authPayload || {}),
+                dataType: 'json',
+                success: function(res) {
+                    if (res.code === 200) {
+                        toastr.success(
+                            res.message,
+                            {closeButton :!0, timeOut : "3000"}
+                        );
+                    } else {
+                        toastr.error(
+                            res.message,
+                            {closeButton :!0, timeOut : "3000"}
+                        );
+                    }
+                }
+            });
+        });
+    }
+
+    function upload(name) {
+        new Dropzone("#" + name, {
+            url: "{{:getConfig('backstage_entrance')}}/upload_post",
+            paramName: name,
+            maxFiles: 1,
+            maxFilesize: 5, // MB
+            uploadMultiple: false,
+            addRemoveLinks: true,
+            success: function (file, res) {
+                $('.' + name ).val(res.data);
+            }
+        })
+    }
+    window.onload = function() {
+        upload('a_recommend_upload');
+        upload('b_recommend_upload');
+        upload('contact_service_upload');
+        upload('user_avatar_upload');
+    }
+    
+    
+
+    function MyCustomUploadAdapterPlugin( editor ) {
+        editor.plugins.get( 'FileRepository' ).createUploadAdapter = ( loader ) => {
+            return new MyUploadAdapter( loader );
+        };
+    }
+    ClassicEditor
+    .create( document.querySelector( '#agreement' ), {
+        
+        toolbar: {
+            items: [
+                'heading','|','fontColor', 'fontBackgroundColor','|','bold', 'italic', 'underline','|','specialCharacters', 'horizontalLine', 'pageBreak','|','link', 'insertImage', 'ckbox', 'insertTable', 'tableOfContents', 'insertTemplate','|','alignment:left', 'alignment:right', 'alignment:center', 
+            ],
+            shouldNotGroupWhenFull: true
+        },
+        table: {
+            contentToolbar: [
+                'tableColumn', 'tableRow', 'mergeTableCells', 'tableProperties', 'tableCellProperties', 'toggleTableCaption'
+            ]
+        },
+        extraPlugins: [ MyCustomUploadAdapterPlugin ],
+    } )
+    .then( newEditor => {
+        agreements = newEditor;
+    } )
+
+
+    ClassicEditor
+    .create( document.querySelector( '#privacy_policy' ), {
+        
+        toolbar: {
+            items: [
+                'heading','|','fontColor', 'fontBackgroundColor','|','bold', 'italic', 'underline','|','specialCharacters', 'horizontalLine', 'pageBreak','|','link', 'insertImage', 'ckbox', 'insertTable', 'tableOfContents', 'insertTemplate','|','alignment:left', 'alignment:right', 'alignment:center', 
+            ],
+            shouldNotGroupWhenFull: true
+        },
+        table: {
+            contentToolbar: [
+                'tableColumn', 'tableRow', 'mergeTableCells', 'tableProperties', 'tableCellProperties', 'toggleTableCaption'
+            ]
+        },
+        extraPlugins: [ MyCustomUploadAdapterPlugin ],
+    } )
+    .then( newEditor => {
+        privacy_policys = newEditor;
+    } )
+
+
+    .catch( error => {
+        console.log( error );
+    } );
+    class MyUploadAdapter {
+        constructor( loader ) {
+            this.loader = loader;
+        }
+        upload() {
+            return this.loader.file
+                .then( file => new Promise( ( resolve, reject ) => {
+                    this._initRequest();
+                    this._initListeners( resolve, reject, file );
+                    this._sendRequest( file );
+                } ) );
+        }
+        abort() {
+            if ( this.xhr ) {
+                this.xhr.abort();
+            }
+        }
+        _initRequest() {
+            const xhr = this.xhr = new XMLHttpRequest();
+            xhr.open( 'POST', "{{:getConfig('backstage_entrance')}}/setting_post/upload", true );
+            xhr.responseType = 'json';
+        }
+        _initListeners( resolve, reject, file ) {
+            const xhr = this.xhr;
+            const loader = this.loader;
+            const genericErrorText = `Couldn't upload file: ${ file.name }.`;
+    
+            xhr.addEventListener( 'error', () => reject( genericErrorText ) );
+            xhr.addEventListener( 'abort', () => reject() );
+            xhr.addEventListener( 'load', () => {
+                const response = xhr.response;
+                if ( !response || response.error ) {
+                    return reject( response && response.error ? response.error.message : genericErrorText );
+                }
+                resolve( {
+                    default: response.default
+                } );
+            } );
+            if ( xhr.upload ) {
+                xhr.upload.addEventListener( 'progress', evt => {
+                    if ( evt.lengthComputable ) {
+                        loader.uploadTotal = evt.total;
+                        loader.uploaded = evt.loaded;
+                    }
+                } );
+            }
+        }
+        _sendRequest( file ) {
+            const data = new FormData();
+            data.append( 'upload', file );
+            this.xhr.send( data );
+        }
+    }
+
+
+
+</script>

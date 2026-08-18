@@ -1,0 +1,226 @@
+﻿{{include file="layout/admin_header" web_title="支付管理"/}}
+<div id="kt_content_container" class="app-container container-fluid">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">
+                <div class="d-flex align-items-center position-relative my-1 me-3">
+                    <span class="svg-icon svg-icon-1 position-absolute ms-4">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect opacity="0.5" x="17.0365" y="15.1223" width="8.15546" height="2" rx="1" transform="rotate(45 17.0365 15.1223)" fill="currentColor" />
+                            <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17 14.4667 17 11C17 7.53333 14.4667 5 11 5Z" fill="currentColor" />
+                        </svg>
+                    </span>
+                    <input type="text" data-kt="search" class="form-control form-control-solid w-250px ps-15 search" placeholder="模糊搜索 - 请输入内容"/>
+                </div>
+            </div>
+            <div class="card-toolbar flex-row-fluid justify-content-end gap-5">
+                <div class="card-toolbar flex-row-fluid justify-content-end gap-5" data-kt-docs-table-toolbar="base"></div>
+                <div class="card-toolbar flex-row-fluid justify-content-end gap-5 d-none" data-kt-docs-table-toolbar="selected">
+                    <div class="fw-bold me-5">已选择 <span class="me-2" data-kt-docs-table-select="selected_count"></span>条</div>
+                    <button type="button" class="btn btn-sm btn-light btn-active-danger" onclick="dels()">选择删除</button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body pb-5">
+            <table id="kt_datatable_example_1" class="table align-middle table-row-dashed fs-6 gy-5">
+                <thead>
+                    <tr class="text-start text-gray-400 fw-bold fs-7 text-uppercase gs-0">
+                        <th class="w-10px pe-2">
+                            <div class="form-check form-check-sm form-check-custom form-check-solid me-3">
+                                <input class="form-check-input form-check-del" type="checkbox" data-kt-check="true" data-kt-check-target="#kt_datatable_example_1 .form-check-del" value="1"/>
+                            </div>
+                        </th>
+                        <th class="min-w-100px">归属用户</th>
+                        <th class="min-w-100px">姓名</th>
+                        <th class="min-w-100px">手机号</th>
+                        <th class="min-w-100px">微信账号</th>
+                        <th class="min-w-100px">支付宝账号</th>
+                        <th class="min-w-100px">创建时间</th>
+                    </tr>
+                </thead>
+                <tbody class="text-gray-600 fw-semibold">
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{{include file="layout/admin_footer"/}}
+<script src="__ADMIN__/js/highlight.min.js"></script>
+<script src="__ADMIN__/js/quill.min.js"></script>
+<script type="text/javascript">
+    var KTDatatablesServerSide = function () {
+        var table;
+        var dt;
+        var filterPayment;
+        var initDatatable = function () {
+            dt = $("#kt_datatable_example_1").DataTable({
+                searchDelay: 500,
+                processing: true,
+                serverSide: true,
+                order: [[6, 'desc']],
+                stateSave: false,
+                pagingType: 'simple_numbers',
+                ajax: {
+                    url: "{{:getConfig('backstage_entrance')}}/bank_card_list?uid={{$_REQUEST['uid']|default=''}}",
+                },
+                columns: [
+                    { data: 'id' },
+                    { data: null },
+                    { data: 'name' },
+                    { data: 'mobile' },
+                    { data: 'wx_account' },
+                    { data: 'zfb_account' },
+                    { data: 'create_time' },
+                ],
+                columnDefs: [
+                    {
+                        targets: 0,
+                        orderable: false,
+                        render: function (data) {
+                            return `
+                            <div class="form-check form-check-sm form-check-custom form-check-solid">
+                                <input class="form-check-input form-check-del" type="checkbox" del="del" name="batch_selection" value="${data}" />
+                            </div>`;
+                        }
+                    },
+                    {
+                        targets: 1,
+                        orderable: false,
+                        render: function (data, type, row) {
+                            if(row.user_info){
+                                return renderAdminUserBrief(row.user_info, {
+                                    fallback: '__ADMIN__/media/avatars/blank.png'
+                                });
+                            }else{
+                                return `用户不存在`;
+                            }
+                        },
+                    },
+                    {
+                        targets: 2,
+                        orderable: false,
+                    },
+                    {
+                        targets: 3,
+                        orderable: false,
+                    },
+                    {
+                        targets: 4,
+                        orderable: false,
+                    },
+                    {
+                        targets: 5,
+                        orderable: false,
+                    }
+                ],
+            });
+            table = dt.$;
+            dt.on('draw', function () {
+                initToggleToolbar();
+                KTMenu.createInstances();
+            });
+        }
+        
+        var search = function () {
+            const filterSearch = document.querySelector('[data-kt="search"]');
+            filterSearch.addEventListener('keyup', function (e) {
+                dt.search(e.target.value).draw();
+            });
+        }
+        
+        var getSavedSearchContent = function () {
+            var state = dt.state.loaded();
+            $(".search").val(state && state.search ? (state.search.search || "") : "");
+        };
+        var initToggleToolbar = function () {
+            const container = document.querySelector('#kt_datatable_example_1');
+            const checkboxes = container.querySelectorAll('[type="checkbox"]');
+            checkboxes.forEach(c => {
+                c.addEventListener('click', function () {
+                    setTimeout(function () {
+                        toggleToolbars();
+                    }, 50);
+                });
+            });
+        }
+        var toggleToolbars = function () {
+            const container = document.querySelector('#kt_datatable_example_1');
+            const toolbarBase = document.querySelector('[data-kt-docs-table-toolbar="base"]');
+            const toolbarSelected = document.querySelector('[data-kt-docs-table-toolbar="selected"]');
+            const selectedCount = document.querySelector('[data-kt-docs-table-select="selected_count"]');
+            const allCheckboxes = container.querySelectorAll('[del="del"]');
+            let checkedState = false;
+            let count = 0;
+            allCheckboxes.forEach(c => {
+                if (c.checked) {
+                    checkedState = true;
+                    count++;
+                }
+            });
+            if (checkedState) {
+                selectedCount.innerHTML = count;
+                toolbarBase.classList.add('d-none');
+                toolbarSelected.classList.remove('d-none');
+            } else {
+                toolbarBase.classList.remove('d-none');
+                toolbarSelected.classList.add('d-none');
+            }
+        }
+        return {
+            init: function (id) {
+                initDatatable();
+                search();
+            }
+        }
+    }();
+    KTUtil.onDOMContentLoaded(function () {
+        KTDatatablesServerSide.init();
+    });
+    
+    
+    function dels() {
+        Swal.fire({
+            html: '<h2>是否确认批量删除？</h2>',
+            showDenyButton: true,
+            reverseButtons: true,
+            denyButtonText: '取消',
+            confirmButtonText: '确定',
+            customClass: {
+                denyButton: "btn btn-danger me-6",
+                confirmButton: 'btn btn-primary'
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                var ids = '';
+                $(":checkbox[name='batch_selection']:checked").each(function() {
+                    ids += $(this).val() + ",";
+                });
+                $.ajax({
+                    url: "{{:getConfig('backstage_entrance')}}/bank_card_post/dels",
+                    method: 'POST',
+                    data: {
+                        ids:ids,
+                    },
+                    success: function(res) {
+                        if (res.code === 200) {
+                            toastr.success(
+                                res.message,
+                                {closeButton :!0, timeOut : "3000"}
+                            );
+                            
+                            setTimeout(function() {
+                                window.location.reload();
+                            }, 1500);
+                        } else {
+                            swal.fire({
+                                icon: 'warning',
+                                title: res.message
+                            });
+                        }
+                    }
+                });
+            }
+        })
+    }
+</script>
+

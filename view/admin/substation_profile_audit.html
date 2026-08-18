@@ -1,0 +1,70 @@
+{{include file="layout/admin_header" web_title="分站资料修改记录"}}
+<div id="kt_content_container" class="app-container container-fluid">
+  <div class="card mb-6">
+    <div class="card-header border-0 pt-6">
+      <div class="card-title"><h3 class="mb-0">分站资料修改记录</h3></div>
+    </div>
+    <div class="card-body pt-0">
+      <div class="alert alert-light-info mb-5">本页用于查看分站资料修改记录，含待审核与历史处理结果。</div>
+
+      <div class="d-flex flex-wrap gap-3 align-items-center mb-4">
+        <input type="text" id="keyword" class="form-control form-control-solid w-250px" placeholder="搜索分站ID / UID / 域名 / 网站名">
+        <select id="status" class="form-select form-select-solid w-150px">
+          <option value="">全部状态</option>
+          <option value="0" selected>待审核</option>
+          <option value="1">已通过</option>
+          <option value="2">已驳回</option>
+        </select>
+        <button class="btn btn-primary" type="button" onclick="reloadList(1)">查询</button>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table align-middle table-row-dashed fs-6 gy-4">
+          <thead>
+            <tr class="text-start text-gray-400 fw-bold fs-7 text-uppercase gs-0">
+              <th>ID</th>
+              <th>分站信息</th>
+              <th>用户ID</th>
+              <th>站点资料</th>
+              <th>域名</th>
+              <th>状态</th>
+              <th>提交时间</th>
+              <th class="text-end">操作</th>
+            </tr>
+          </thead>
+          <tbody id="table_body"></tbody>
+        </table>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center mt-5 flex-wrap gap-3">
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+          <select id="limit" class="form-select form-select-solid w-125px">
+            <option value="10">10条/页</option>
+            <option value="20" selected>20条/页</option>
+            <option value="50">50条/页</option>
+            <option value="100">100条/页</option>
+          </select>
+          <div class="text-muted" id="pager_text">--</div>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <button class="btn btn-sm btn-light" type="button" id="prev_btn" onclick="changePage(-1)">上一页</button>
+          <span class="badge badge-light-primary" id="page_no">1 / 1</span>
+          <button class="btn btn-sm btn-light" type="button" id="next_btn" onclick="changePage(1)">下一页</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{{include file="layout/admin_footer"/}}
+<script>
+const base='{{:getConfig("backstage_entrance")}}';
+let page=1,total=0;
+function esc(v){return String(v??'').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));}
+function statusBadge(v){v=Number(v||0); if(v===1) return '<span class="badge badge-light-success">已通过</span>'; if(v===2) return '<span class="badge badge-light-danger">已驳回</span>'; return '<span class="badge badge-light-warning">待审核</span>'}
+async function auditItem(id,status){ let reject_reason=''; if(Number(status)===2){ reject_reason=prompt('请输入驳回原因','')||''; } const res=await $.post(base+'/substation/audit',{audit_id:id,status,reject_reason}); if(res.code===200){ toastr.success(res.message||'审核成功'); reloadList(page); } else { toastr.error(res.message||'审核失败'); } }
+async function reloadList(targetPage){ page=targetPage||1; const params={page,limit:$('#limit').val(),keyword:$('#keyword').val(),status:$('#status').val()}; const res=await $.get(base+'/substation/profile-audit-list',params); if(res.code!==200){toastr.error(res.message||'加载失败'); return;} const data=res.data||{}; total=Number(data.total||0); const list=Array.isArray(data.list)?data.list:[]; const totalPages=Math.max(1,Math.ceil(total/Number(params.limit||20))); $('#page_no').text(`${page} / ${totalPages}`); $('#pager_text').text(`共 ${total} 条`); $('#prev_btn').prop('disabled',page<=1); $('#next_btn').prop('disabled',page>=totalPages); $('#table_body').html(list.length?list.map(row=>`<tr><td>${row.id}</td><td><div class="fw-bold">分站ID：${row.substation_id}</div><div class="text-muted fs-7">分站状态：${Number(row.substation_status||0)===2?'已开通':(Number(row.substation_status||0)===4?'已冻结':'处理中')}</div></td><td>${row.uid}</td><td><div class="fw-bold">${esc(row.site_name||'--')}</div><div class="text-muted fs-7">公告：${esc(row.notice||'--')}</div></td><td><div>${esc(row.full_domain||row.subdomain||'--')}</div>${row.logo?`<div class="text-muted fs-7 text-truncate mw-250px">${esc(row.logo)}</div>`:''}</td><td>${statusBadge(row.status)}</td><td>${esc(row.create_time||'--')}</td><td class="text-end">${Number(row.status)===0?`<button class="btn btn-sm btn-light-success me-2" onclick="auditItem(${row.id},1)">通过</button><button class="btn btn-sm btn-light-danger" onclick="auditItem(${row.id},2)">驳回</button>`:(row.reject_reason?`<span class="text-muted">${esc(row.reject_reason)}</span>`:'-')}</td></tr>`).join(''):`<tr><td colspan="8" class="text-center text-muted py-10">暂无数据</td></tr>`); }
+function changePage(offset){ const limit=Number($('#limit').val()||20); const totalPages=Math.max(1,Math.ceil(total/limit)); const next=Math.min(totalPages,Math.max(1,page+offset)); if(next!==page) reloadList(next); }
+$('#limit,#status').on('change',()=>reloadList(1));
+$('#keyword').on('keydown',e=>{if(e.key==='Enter') reloadList(1)});
+reloadList(1);
+</script>

@@ -1,0 +1,328 @@
+﻿{{include file="layout/admin_header" web_title="管理员列表"/}}
+<div id="kt_content_container" class="app-container container-fluid">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">
+                <div class="d-flex align-items-center position-relative my-1 me-3">
+                    <span class="svg-icon svg-icon-1 position-absolute ms-4">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect opacity="0.5" x="17.0365" y="15.1223" width="8.15546" height="2" rx="1" transform="rotate(45 17.0365 15.1223)" fill="currentColor" />
+                            <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17 14.4667 17 11C17 7.53333 14.4667 5 11 5Z" fill="currentColor" />
+                        </svg>
+                    </span>
+                    <input type="text" data-kt="search" class="form-control form-control-solid w-250px ps-15 search" placeholder="模糊搜索 - 请输入内容"/>
+                </div>
+
+            </div>
+            <div class="card-toolbar flex-row-fluid justify-content-end gap-5" data-kt-docs-table-toolbar="base">
+                <a class="btn btn-sm btn-light btn-light-primary" onclick="admin_modal(0)">
+                    添加管理员
+                </a>
+            </div>
+        </div>
+        <div class="card-body pb-5">
+            <table id="kt_datatable_example_1" class="table align-middle table-row-dashed fs-6 gy-5">
+                <thead>
+                    <tr class="text-start text-gray-400 fw-bold fs-7 text-uppercase gs-0">
+                        <th class="min-w-100px">ID</th>
+                        <th class="min-w-100px">管理员名称</th>
+                        <th class="min-w-100px">登录账号</th>
+                        <th class="min-w-100px">头像</th>
+                        <th class="min-w-70px">权限</th>
+                        <th class="min-w-70px">创建时间</th>
+                        <th class="text-end min-w-125px">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="text-gray-600 fw-semibold">
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="admin_modal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered mw-400px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="name"></h2>
+                <div class="btn btn-sm btn-icon btn-active-color-primary" data-bs-dismiss="modal">
+                    <span class="svg-icon svg-icon-1">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect opacity="0.5" x="6" y="17.3137" width="16" height="2" rx="1" transform="rotate(-45 6 17.3137)" fill="currentColor" />
+                            <rect x="7.41422" y="6" width="16" height="2" rx="1" transform="rotate(45 7.41422 6)" fill="currentColor" />
+                        </svg>
+                    </span>
+                </div>
+            </div>
+            <div class="modal-body py-lg-10 px-lg-10">
+                <input type="hidden" id="admin_id">
+                <div class="fv-row mb-6">
+                    <label class="required form-label">管理员账号</label>
+                    <input class="form-control" type="text" id="account" placeholder="请输入管理员账号">
+                </div>
+                <div class="fv-row mb-6">
+                    <label class="required form-label">管理员密码</label>
+                    <input class="form-control" type="text" id="password" placeholder="请输入管理员密码">
+                </div>
+                <div class="fv-row mb-6">
+                    <label class="required form-label">管理员名称</label>
+                    <input class="form-control" type="text" id="name" placeholder="请输入管理员名称">
+                </div>
+                <div class="fv-row mb-6">
+                    <label class="required form-label">权限设置</label>
+                    <select class="form-select" id="power" data-control="select2" data-close-on-select="false" data-placeholder="请选择权限设置" data-allow-clear="false" multiple="multiple">
+                        <option></option>
+                        <option value="用户列表">用户列表</option>
+                        <option value="支付管理">支付管理</option>
+                        <option value="充值业务 - 产品列表">充值业务 - 产品列表</option>
+                        <option value="查询业务 - 产品列表">查询业务 - 产品列表</option>
+                        <option value="充值业务 - 订单列表">充值业务 - 订单列表</option>
+                        <option value="查询业务 - 订单列表">查询业务 - 订单列表</option>
+                        <option value="交易挂单数据">交易挂单数据</option>
+                        <option value="交易订单数据">交易订单数据</option>
+                        <option value="充值订单记录">充值订单记录</option>
+                        <option value="提现订单记录">提现订单记录</option>
+                        <option value="返佣记录">返佣记录</option>
+                        <option value="首页轮播图">首页轮播图</option>
+                        <option value="管理员列表">管理员列表</option>
+                        <option value="操作记录">操作记录</option>
+                        <option value="系统设置管理">系统设置管理</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer d-flex justify-content-end py-6 px-9">
+                <button type="button" class="btn btn-primary button_name" onclick="add_modify()">保存设置</button>
+            </div>
+        </div>
+    </div>
+</div>
+{{include file="layout/admin_footer"/}}
+<script type="text/javascript">
+    var KTDatatablesServerSide = function () {
+        var table;
+        var dt;
+        var filterPayment;
+        var initDatatable = function () {
+            dt = $("#kt_datatable_example_1").DataTable({
+                searchDelay: 500,
+                processing: true,
+                serverSide: true,
+                order: [[0, 'desc']],
+                stateSave: false,
+                pagingType: 'simple_numbers',
+                ajax: {
+                    url: "{{:getConfig('backstage_entrance')}}/admin_list",
+                },
+                columns: [
+                    { data: 'id' },
+                    { data: 'name' },
+                    { data: 'account' },
+                    { data: 'avatar' },
+                    { data: 'power' },
+                    { data: 'create_time' },
+                    { data: null },
+                ],
+                columnDefs: [
+                    {
+                        targets: 0,
+                    },
+                    {
+                        targets: 1,
+                        orderable: false,
+                    },
+                    {
+                        targets: 2,
+                        orderable: false,
+                    },
+                    {
+                        targets: 3,
+                        orderable: false,
+                        render: function (avatar) {
+                            return renderAdminAvatarCell(avatar, {
+                                fallback: '__ADMIN__/media/avatars/blank.png'
+                            });
+                        },
+                    },
+                    {
+                        targets: 4,
+                        orderable: false,
+                    },
+                    {
+                        targets: -1,
+                        orderable: false,
+                        className: 'text-end',
+                        render: function (data, type, row) {
+                            return `
+                            <a class="btn btn-sm btn-primary fw-bold" onclick="admin_modal(1, ${row.id})">编 辑</a>
+                            <a class="btn btn-sm btn-danger fw-bold" onclick="del(${row.id})">删 除</a>`;
+                        },
+                    },
+                ],
+            });
+            table = dt.$;
+            dt.on('draw', function () {
+                KTMenu.createInstances();
+            });
+        }
+        
+        var search = function () {
+            const filterSearch = document.querySelector('[data-kt="search"]');
+            filterSearch.addEventListener('keyup', function (e) {
+                dt.search(e.target.value).draw();
+            });
+        }
+        var getSavedSearchContent = function () {
+            var state = dt.state.loaded();
+            $(".search").val(state && state.search ? (state.search.search || "") : "");
+        };
+        return {
+            init: function (id) {
+                initDatatable();
+                search();
+            }
+        }
+    }();
+    KTUtil.onDOMContentLoaded(function () {
+        KTDatatablesServerSide.init();
+    });
+
+    function admin_modal(type, id) {
+        if (String(type) === '1') {
+            if (!id) {
+                toastr.error('参数错误', {closeButton: !0, timeOut: "3000"});
+                return;
+            }
+
+            $.ajax({
+                url: "{{:getConfig('backstage_entrance')}}/admin_post/info",
+                method: 'POST',
+                data: {
+                    id: id,
+                },
+                dataType: 'json',
+                success: function(res) {
+                    if (!res || typeof res !== 'object') {
+                        toastr.error('管理员信息加载失败', {closeButton: !0, timeOut: "3000"});
+                        return;
+                    }
+
+                    if (Number(res.code) !== 200) {
+                        toastr.error(res.message || '管理员信息加载失败', {closeButton: !0, timeOut: "3000"});
+                        return;
+                    }
+
+                    if (!res.data || typeof res.data !== 'object') {
+                        toastr.error('管理员信息数据异常', {closeButton: !0, timeOut: "3000"});
+                        return;
+                    }
+
+                    $("#password").val('');
+                    $("#admin_id").val(res.data.id || '');
+                    $("#account").val(res.data.account || '');
+                    $("#name").val(res.data.name || '');
+                    $("#power").html(res.data.power_selected || '');
+
+                    $(".button_name").html('确定修改');
+                    $(".name").html('修改管理员');
+
+                    $('#admin_modal').modal('show');
+                },
+                error: function() {
+                    toastr.error('管理员信息加载失败', {closeButton: !0, timeOut: "3000"});
+                }
+            });
+
+            return;
+        }
+
+            $("#admin_id").val('');
+            $("#account").val('');
+            $("#password").val('');
+            $("#name").val('');
+            $("#power").val(null).trigger('change');
+
+            $(".button_name").html('确定添加');
+            $(".name").html('添加管理员');
+
+        $('#admin_modal').modal('show');
+    }
+    
+
+    function add_modify() {
+        $.ajax({
+            url: "{{:getConfig('backstage_entrance')}}/admin_post/add_modify",
+            method: 'POST',
+            data: {
+                id: $('#admin_id').val(),
+                account: $('#account').val(),
+                password: $('#password').val(),
+                name: $('#name').val(),
+                power: (($('#power').val() || []).join(',')),
+            },
+            dataType: 'json',
+            success: function(res) {
+                if (res.code === 200) {
+                    toastr.success(
+                        res.message,
+                        {closeButton :!0, timeOut : "3000"}
+                    );
+                    setTimeout(function (){
+                        window.location.reload();
+                    },1500);
+                } else {
+                    toastr.error(
+                        res.message,
+                        {closeButton :!0, timeOut : "3000"}
+                    );
+                }
+            },
+            error: function() {
+                toastr.error(
+                    '保存失败',
+                    {closeButton :!0, timeOut : "3000"}
+                );
+            }
+        });
+    }
+
+    function del(id) {
+        Swal.fire({
+            title: '确定删除吗？', 
+            showDenyButton: true,
+            confirmButtonText: '确定删除',
+            denyButtonText: '取消删除',
+            customClass: {
+                confirmButton: "btn btn-danger",
+                denyButton: 'btn btn-light'
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: "{{:getConfig('backstage_entrance')}}/admin_post/del",
+                    method: 'POST',
+                    data: {
+                        id: id,
+                    },
+                    dataType: 'json',
+                    success: function(res) {
+                        if (res.code === 200) {
+                            toastr.success(
+                                res.message,
+                                {closeButton :!0, timeOut : "3000"}
+                            );
+                        } else {
+                            toastr.error(
+                                res.message,
+                                {closeButton :!0, timeOut : "3000"}
+                            );
+                        }
+                        setTimeout(function (){
+                            window.location.reload();
+                        },1500);
+                    }
+                });
+            }
+        })
+    }
+
+</script>
+

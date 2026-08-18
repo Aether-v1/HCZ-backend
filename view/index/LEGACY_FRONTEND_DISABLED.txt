@@ -1,0 +1,2 @@
+Legacy frontend templates were moved to view/index_legacy_disabled.
+Requests should now be blocked by LegacyUserFrontendDisabled middleware.

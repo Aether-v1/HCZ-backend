@@ -1,0 +1,605 @@
+﻿{{include file="layout/admin_header" web_title="用户列表"/}}
+<div id="kt_content_container" class="app-container container-fluid">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">
+                <div class="d-flex align-items-center position-relative my-1 me-3">
+                    <span class="svg-icon svg-icon-1 position-absolute ms-4">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect opacity="0.5" x="17.0365" y="15.1223" width="8.15546" height="2" rx="1" transform="rotate(45 17.0365 15.1223)" fill="currentColor" />
+                            <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.53333 5 5 7.53333 5 11C5 14.4667 7.53333 17 11 17C14.4667 17 17 14.4667 17 11C17 7.53333 14.4667 5 11 5Z" fill="currentColor" />
+                        </svg>
+                    </span>
+                    <input type="text" data-kt="search" class="form-control form-control-solid w-250px ps-15 search" placeholder="模糊搜索 - 请输入内容"/>
+                </div>
+            </div>
+        </div>
+        <div class="card-body pb-5">
+            <table id="kt_datatable_example_1" class="table align-middle table-row-dashed fs-6 gy-5">
+                <thead>
+                    <tr class="text-start text-gray-400 fw-bold fs-7 text-uppercase gs-0">
+                        <th class="min-w-25px">ID</th>
+                        <th class="min-w-100px">上级</th>
+                        <th class="min-w-100px">头像</th>
+                        <th class="min-w-100px">昵称</th>
+                        <th class="min-w-100px">手机号</th>
+                        <th class="min-w-100px">账户余额</th>
+                        <th class="min-w-100px">USDT地址</th>
+                        <th class="min-w-100px">账户状态</th>
+                        <th class="min-w-100px">创建时间</th>
+                        <th class="min-w-100px">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="text-gray-600 fw-semibold">
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<div class="modal fade" tabindex="-1" id="balance_modal">
+    <div class="modal-dialog modal-dialog-centered mw-400px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">账户余额增减 （账户：<span class="mobile"></span>）</h3>
+                <div class="btn btn-icon btn-sm btn-active-light-primary ms-2" data-bs-dismiss="modal" aria-label="Close">
+                    <span class="svg-icon svg-icon-1">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path opacity="0.3" d="M6.7 19.4L5.3 18C4.9 17.6 4.9 17 5.3 16.6L16.6 5.3C17 4.9 17.6 4.9 18 5.3L19.4 6.7C19.8 7.1 19.8 7.7 19.4 8.1L8.1 19.4C7.8 19.8 7.1 19.8 6.7 19.4Z" fill="currentColor"/>
+                            <path d="M19.5 18L18.1 19.4C17.7 19.8 17.1 19.8 16.7 19.4L5.40001 8.1C5.00001 7.7 5.00001 7.1 5.40001 6.7L6.80001 5.3C7.20001 4.9 7.80001 4.9 8.20001 5.3L19.5 16.6C19.9 16.9 19.9 17.6 19.5 18Z" fill="currentColor"/>
+                        </svg>
+                    </span>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="flex-row-fluid px-lg-8">
+                    <div class="row mb-6">
+                        <label class="col-lg-3 col-form-label">变更金额</label>
+                        <div class="col-lg-9">
+                            <div class="row">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="balance_cz" placeholder="请输入变更金额">
+                                    <span class="input-group-text">USDT</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mb-6">
+                        <div class="col-xl-3">
+                            <div class="fs-6 fw-semibold mt-2 mb-3">变更类型</div>
+                        </div>
+                        <div class="col-xl-9 row">
+                            <div class="col-xl-6 mt-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" value="add" id="increase" name="add_minus" checked>
+                                    <label class="form-check-label" for="increase">
+                                        增加
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-xl-6 mt-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" value="minus" id="reduce" name="add_minus">
+                                    <label class="form-check-label" for="reduce">
+                                        减少
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="balance_submit()">提交</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" tabindex="-1" id="password_modal">
+    <div class="modal-dialog modal-dialog-centered mw-400px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">密码修改 （账户：<span class="mobile"></span>）</h3>
+                <div class="btn btn-icon btn-sm btn-active-light-primary ms-2" data-bs-dismiss="modal" aria-label="Close">
+                    <span class="svg-icon svg-icon-1">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path opacity="0.3" d="M6.7 19.4L5.3 18C4.9 17.6 4.9 17 5.3 16.6L16.6 5.3C17 4.9 17.6 4.9 18 5.3L19.4 6.7C19.8 7.1 19.8 7.7 19.4 8.1L8.1 19.4C7.8 19.8 7.1 19.8 6.7 19.4Z" fill="currentColor"/>
+                            <path d="M19.5 18L18.1 19.4C17.7 19.8 17.1 19.8 16.7 19.4L5.40001 8.1C5.00001 7.7 5.00001 7.1 5.40001 6.7L6.80001 5.3C7.20001 4.9 7.80001 4.9 8.20001 5.3L19.5 16.6C19.9 16.9 19.9 17.6 19.5 18Z" fill="currentColor"/>
+                        </svg>
+                    </span>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="flex-row-fluid px-lg-8">
+                    <div class="row mb-6">
+                        <label class="col-lg-3 col-form-label">新密码</label>
+                        <div class="col-lg-9">
+                            <input type="text" class="form-control" id="password" placeholder="请输入新密码">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="password_submit()">提交</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<input type="hidden" id="uid" value="0">
+{{include file="layout/admin_footer"/}}
+<script src="__ADMIN__/js/highlight.min.js"></script>
+<script src="__ADMIN__/js/quill.min.js"></script>
+<script type="text/javascript">
+    function escapeHtml(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    var KTDatatablesServerSide = function () {
+        var table;
+        var dt;
+        var filterPayment;
+        var initDatatable = function () {
+            dt = $("#kt_datatable_example_1").DataTable({
+                searchDelay: 500,
+                processing: true,
+                serverSide: true,
+                order: [[8, 'desc']],
+                stateSave: false,
+                pagingType: 'simple_numbers',
+                ajax: {
+                    url: "{{:getConfig('backstage_entrance')}}/user_list",
+                },
+                columns: [
+                    { data: 'id' },
+                    { data: null },
+                    { data: 'avatar' },
+                    { data: 'nickname' },
+                    { data: 'mobile' },
+                    { data: 'balance' },
+                    { data: 'trc20' },
+                    { data: null },
+                    { data: 'create_time' },
+                    { data: null },
+                ],
+                columnDefs: [
+                    {
+                        targets: 0,
+                        orderable: false,
+                    },
+                    {
+                        targets: 1,
+                        orderable: false,
+                        render: function (data, type, row) {
+                            const parentAvatar = escapeHtml(row.t_user_info?.avatar || '__ADMIN__/media/avatars/blank.png');
+                            const parentNickname = escapeHtml(row.t_user_info?.nickname || '');
+                            if(row.t_user_info){
+                                return `
+                                <div class="cursor-pointer symbol symbol-35px" data-kt-menu-trigger="{default: 'click', lg: 'hover'}" data-kt-menu-attach="parent" data-kt-menu-placement="bottom-end">
+                                    <img src="${parentAvatar}" class="rounded-3" alt="user">
+                                </div>
+                                ${parentNickname}`;
+                            }else{
+                                return `无上级`;
+                            }
+                        },
+                    },
+                    {
+                        targets: 2,
+                        orderable: false,
+                        render: function (avatar) {
+                            const safeAvatar = escapeHtml(avatar || '__ADMIN__/media/avatars/blank.png');
+                            return `
+                            <div class="cursor-pointer symbol symbol-35px" data-kt-menu-trigger="{default: 'click', lg: 'hover'}" data-kt-menu-attach="parent" data-kt-menu-placement="bottom-end">
+                                <img src="${safeAvatar}" class="rounded-3" alt="user">
+                            </div>`;
+                        },
+                    },
+                    {
+                        targets: 3,
+                        orderable: false,
+                        render: function (data) {
+                            return escapeHtml(data);
+                        },
+                    },
+                    {
+                        targets: 4,
+                        orderable: false,
+                        render: function (data) {
+                            return escapeHtml(data);
+                        },
+                    },
+                    {
+                        targets: 5,
+                        orderable: false,
+                        render: function (data, type, row) {
+                            const safeMobile = encodeURIComponent(String(row.mobile || ''));
+                            return `
+                            <div class="flex-grow-1 me-2">
+                                <a class="text-gray-800 text-hover-primary">
+                                    <span class="text-primary-200 fs-4 fw-bold me-1">${escapeHtml(row.balance)}</span> / USDT
+                                </a>
+                                <a href="#" class="d-block text-gray-500 text-hover-primary fs-6" onclick="balance(${Number(row.id) || 0}, decodeURIComponent('${safeMobile}'))">余额增减</a>
+                            </div>`;
+                        },
+                    },
+                    {
+                        targets: 6,
+                        orderable: false,
+                        render: function (data) {
+                            return escapeHtml(data);
+                        },
+                    },
+                    {
+                        targets: 7,
+                        orderable: false,
+                        render: function (data, type, row) {
+                            return `
+                                <div class="card-toolbar">
+                                    <label class="form-check form-switch form-switch-sm form-check-custom form-check-solid">
+                                        <input class="form-check-input" type="checkbox" ${row.status ? 'checked="checked"' : ''}  onclick="status_switch(${row.id})"/>
+                                    </label>
+                                </div>`;
+                        },
+                    },
+                    {
+                        targets: -1,
+                        orderable: false,
+                        className: 'text-end',
+                        render: function (data, type, row) {
+                            const safeMobile = encodeURIComponent(String(row.mobile || ''));
+                            return `
+                            <a href="#" class="btn btn-light btn-active-light-primary btn-sm" data-kt-menu-trigger="click" data-kt-menu-placement="bottom-end">更多操作
+                                <span class="svg-icon svg-icon-5 m-0">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M11.4343 12.7344L7.25 8.55005C6.83579 8.13583 6.16421 8.13584 5.75 8.55005C5.33579 8.96426 5.33579 9.63583 5.75 10.05L11.2929 15.5929C11.6834 15.9835 12.3166 15.9835 12.7071 15.5929L18.25 10.05C18.6642 9.63584 18.6642 8.96426 18.25 8.55005C17.8358 8.13584 17.1642 8.13584 16.75 8.55005L12.5657 12.7344C12.2533 13.0468 11.7467 13.0468 11.4343 12.7344Z" fill="currentColor"></path>
+                                    </svg>
+                                </span>
+                            </a>
+                            <div class="menu menu-sub menu-sub-dropdown menu-column menu-rounded menu-gray-600 menu-state-bg-light-primary fw-semibold fs-7 w-100px py-4" data-kt-menu="true">
+                                <div class="menu-item px-3">
+                                    <a class="menu-link" href="{{:getConfig('backstage_entrance')}}/bank_card?uid=${row.id}">支付管理</a>
+                                </div>
+                                <div class="menu-item px-3">
+                                    <a class="menu-link" href="{{:getConfig('backstage_entrance')}}/user_t?uid=${row.id}">下级用户</a>
+                                </div>
+                                <div class="menu-item px-3" data-kt-menu-trigger="{default: 'click', lg: 'hover'}" data-kt-menu-placement="right-start" data-kt-menu-offset="-15px, 0">
+                                    <a class="menu-link" href="#">交易明细</a>
+                                    <div class="menu-sub menu-sub-dropdown w-150px py-4" style="">
+                                        <div class="menu-item px-3">
+                                            <a href="{{:getConfig('backstage_entrance')}}/order_cz?uid=${row.id}" class="menu-link d-flex px-5">充值订单数据</a>
+                                        </div>
+                                        <div class="menu-item px-3">
+                                            <a href="{{:getConfig('backstage_entrance')}}/order_cx?uid=${row.id}" class="menu-link d-flex px-5">查询订单数据</a>
+                                        </div>
+                                        <div class="menu-item px-3">
+                                            <a href="{{:getConfig('backstage_entrance')}}/recharge?uid=${row.id}" class="menu-link d-flex px-5">余额充值数据</a>
+                                        </div>
+                                        <div class="menu-item px-3">
+                                            <a href="{{:getConfig('backstage_entrance')}}/withdrawal?uid=${row.id}" class="menu-link d-flex px-5">余额提现数据</a>
+                                        </div>
+                                        <div class="menu-item px-3">
+                                            <a href="{{:getConfig('backstage_entrance')}}/transaction_order?uid=${row.id}" class="menu-link d-flex px-5">交易订单数据</a>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="menu-item px-3">
+                                    <a class="menu-link" href="{{:getConfig('backstage_entrance')}}/message?uid=${row.id}&account=${encodeURIComponent(row.mobile || '')}">发送消息</a>
+                                </div>
+                                <div class="menu-item px-3">
+                                    <a class="menu-link" onclick="password_modal(${Number(row.id) || 0}, decodeURIComponent('${safeMobile}'))">修改密码</a>
+                                </div>
+                                <div class="menu-item px-3" data-kt-menu-trigger="{default: 'click', lg: 'hover'}" data-kt-menu-placement="right-start" data-kt-menu-offset="-15px, 0">
+                                    <a class="menu-link" href="#">权益设置</a>
+                                    <div class="menu-sub menu-sub-dropdown w-170px py-4" style="">
+                                        <div class="menu-item px-3">
+                                            <a class="menu-link d-flex px-5" onclick="rights_action(${Number(row.id) || 0}, decodeURIComponent('${safeMobile}'), 'vip_open')">开通VIP</a>
+                                        </div>
+                                        <div class="menu-item px-3">
+                                            <a class="menu-link d-flex px-5" onclick="rights_action(${Number(row.id) || 0}, decodeURIComponent('${safeMobile}'), 'vip_close')">关闭VIP</a>
+                                        </div>
+                                        <div class="menu-item px-3">
+                                            <a class="menu-link d-flex px-5" onclick="rights_action(${Number(row.id) || 0}, decodeURIComponent('${safeMobile}'), 'svip_open')">开通SVIP</a>
+                                        </div>
+                                        <div class="menu-item px-3">
+                                            <a class="menu-link d-flex px-5" onclick="rights_action(${Number(row.id) || 0}, decodeURIComponent('${safeMobile}'), 'svip_close')">关闭SVIP</a>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="menu-item px-3">
+                                    <a class="menu-link ${Number(row.twofa_enabled || 0) === 1 ? 'text-danger' : 'text-muted'}" onclick="unbind_user_twofa(${Number(row.id) || 0}, decodeURIComponent('${safeMobile}'), ${Number(row.twofa_enabled || 0)})">
+                                        ${Number(row.twofa_enabled || 0) === 1 ? '解绑2FA' : '2FA未启用'}
+                                    </a>
+                                </div>
+                                <div class="menu-item px-3">
+                                    <a class="menu-link" onclick="del(${row.id})">删除用户</a>
+                                </div>
+
+                                </div>
+                            </div>`;
+                        },
+                    }
+                ],
+            });
+            table = dt.$;
+            dt.on('draw', function () {
+                KTMenu.createInstances();
+            });
+        }
+        
+        var search = function () {
+            const filterSearch = document.querySelector('[data-kt="search"]');
+            filterSearch.addEventListener('keyup', function (e) {
+                dt.search(e.target.value).draw();
+            });
+        }
+
+        var getSavedSearchContent = function () {
+            var state = dt.state.loaded();
+            $(".search").val(state && state.search ? (state.search.search || "") : "");
+        };
+        return {
+            init: function (id) {
+                initDatatable();
+                search();
+            }
+        }
+    }();
+    KTUtil.onDOMContentLoaded(function () {
+        KTDatatablesServerSide.init();
+    });
+
+    function del(id) {
+        Swal.fire({
+            html: '<h2>是否确认删除？</h2>',
+            showDenyButton: true,
+            reverseButtons: true,
+            denyButtonText: '取消',
+            confirmButtonText: '确定',
+            customClass: {
+                denyButton: "btn btn-danger me-6",
+                confirmButton: 'btn btn-primary'
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: "{{:getConfig('backstage_entrance')}}/user_post/del",
+                    method: 'POST',
+                    data: {
+                        id: id,
+                    },
+                    success: function(res) {
+                        if (res.code === 200) {
+                            toastr.success(
+                                res.message,
+                                {closeButton :!0, timeOut : "3000"}
+                            );
+                            
+                            setTimeout(function() {
+                                window.location.reload();
+                            }, 1500);
+                        } else {
+                            swal.fire({
+                                icon: 'warning',
+                                title: res.message
+                            });
+                        }
+                    }
+                });
+            }
+        })
+    }
+    
+    function password_modal(id, mobile) {
+        $("#uid").val(id);
+        $(".mobile").text(mobile);
+        $('#password_modal').modal('show');
+    }
+    function password_submit() {
+        $.ajax({
+            url: "{{:getConfig('backstage_entrance')}}/user_post/password",
+            method: 'POST',
+            data: {
+                uid: $('#uid').val(),
+                password: $('#password').val(),
+            },
+            dataType: 'json',
+            success: function(res) {
+                if (res.code === 200) {
+                    toastr.success(
+                        res.message,
+                        {closeButton :!0, timeOut : "3000"}
+                    );
+                    setTimeout(function (){
+                        window.location.reload();
+                    },1500);
+                } else {
+                    toastr.error(
+                        res.message,
+                        {closeButton :!0, timeOut : "3000"}
+                    );
+                }
+            }
+        });
+    }
+    
+    
+    
+    function balance(id,mobile) {
+        $("#uid").val(id);
+        $(".mobile").text(mobile);
+        $('#balance_modal').modal('show');
+    }
+    
+    function balance_submit() {
+        withAdminSensitiveAuth('请完成余额变更安全验证', function (authPayload) {
+            $.ajax({
+                url: "{{:getConfig('backstage_entrance')}}/user_post/balance",
+                method: 'POST',
+                data: Object.assign({
+                    uid: $('#uid').val(),
+                    balance_cz: $('#balance_cz').val(),
+                    add_minus: $("input[name='add_minus']:checked").val(),
+                }, authPayload || {}),
+                dataType: 'json',
+                success: function(res) {
+                    if (res.code === 200) {
+                        toastr.success(
+                            res.message,
+                            {closeButton :!0, timeOut : "3000"}
+                        );
+                        setTimeout(function (){
+                            window.location.reload();
+                        },1500);
+                    } else {
+                        toastr.error(
+                            res.message,
+                            {closeButton :!0, timeOut : "3000"}
+                        );
+                    }
+                }
+            });
+        });
+    }
+    
+    function status_switch(uid) {
+        $.ajax({
+            url: "{{:getConfig('backstage_entrance')}}/user_post/status_switch",
+            method: 'POST',
+            data: {
+                uid: uid,
+            },
+            dataType: 'json',
+            success: function(res) {
+                if (res.code === 200) {
+                    toastr.success(
+                        res.message,
+                        {closeButton :!0, timeOut : "3000"}
+                    );
+                } else {
+                    toastr.error(
+                        res.message,
+                        {closeButton :!0, timeOut : "3000"}
+                    );
+                }
+            }
+        });
+    }
+
+    function unbind_user_twofa(uid, mobile, twofaEnabled) {
+        if (Number(twofaEnabled || 0) !== 1) {
+            toastr.info(
+                '该用户当前未启用2FA',
+                {closeButton :!0, timeOut : "3000"}
+            );
+            return;
+        }
+
+        Swal.fire({
+            html: `<h2>确认解绑用户 2FA？</h2><div class="text-muted fs-6 mt-2">账户：${escapeHtml(mobile || '')}<br>解绑后该用户需要重新绑定才能恢复2FA保护。</div>`,
+            showDenyButton: true,
+            reverseButtons: true,
+            denyButtonText: '取消',
+            confirmButtonText: '继续解绑',
+            customClass: {
+                denyButton: "btn btn-light me-6",
+                confirmButton: 'btn btn-danger'
+            }
+        }).then((result) => {
+            if (!result.isConfirmed) {
+                return;
+            }
+
+            withAdminSensitiveAuth('请完成用户2FA解绑安全验证', function (authPayload) {
+                $.ajax({
+                    url: "{{:getConfig('backstage_entrance')}}/user_post/twofa_unbind",
+                    method: 'POST',
+                    data: Object.assign({
+                        uid: uid,
+                    }, authPayload || {}),
+                    dataType: 'json',
+                    success: function(res) {
+                        if (res.code === 200) {
+                            toastr.success(
+                                res.message,
+                                {closeButton :!0, timeOut : "3000"}
+                            );
+                            setTimeout(function (){
+                                window.location.reload();
+                            },1500);
+                        } else {
+                            toastr.error(
+                                res.message,
+                                {closeButton :!0, timeOut : "3000"}
+                            );
+                        }
+                    }
+                });
+            });
+        });
+    }
+
+    function rightsActionLabel(action) {
+        return {
+            vip_open: '开通VIP',
+            vip_close: '关闭VIP',
+            svip_open: '开通SVIP',
+            svip_close: '关闭SVIP',
+        }[action] || '权益设置';
+    }
+
+    function rights_action(uid, mobile, action) {
+        const actionLabel = rightsActionLabel(action);
+        Swal.fire({
+            html: `<h2>确认执行 ${escapeHtml(actionLabel)}？</h2><div class="text-muted fs-6 mt-2">账户：${escapeHtml(mobile || '')}</div>`,
+            showDenyButton: true,
+            reverseButtons: true,
+            denyButtonText: '取消',
+            confirmButtonText: '确认',
+            customClass: {
+                denyButton: "btn btn-light me-6",
+                confirmButton: 'btn btn-primary'
+            }
+        }).then((result) => {
+            if (!result.isConfirmed) {
+                return;
+            }
+
+            withAdminSensitiveAuth(`请完成${actionLabel}安全验证`, function (authPayload) {
+                $.ajax({
+                    url: "{{:getConfig('backstage_entrance')}}/user_post/rights",
+                    method: 'POST',
+                    data: Object.assign({
+                        uid: uid,
+                        rights_action: action,
+                    }, authPayload || {}),
+                    dataType: 'json',
+                    success: function(res) {
+                        if (res.code === 200) {
+                            toastr.success(
+                                res.message,
+                                {closeButton :!0, timeOut : "3000"}
+                            );
+                            setTimeout(function (){
+                                window.location.reload();
+                            },1000);
+                        } else {
+                            toastr.error(
+                                res.message,
+                                {closeButton :!0, timeOut : "3000"}
+                            );
+                        }
+                    }
+                });
+            });
+        });
+    }
+</script>
+
