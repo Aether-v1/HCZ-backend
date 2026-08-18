@@ -130,7 +130,25 @@ class TransactionOrderService
                 throw new Exception('买家不存在');
             }
 
-            $releasedAmount = min((float)($product['sell_account'] ?? 0), (float)($order['pay_amount'] ?? 0));
+            // 正常情况下 sell_account 应 >= order.pay_amount
+            // sell_account = 初始挂单量 - 已完成订单量，当前订单为已汇款(1)状态，其金额包含在 sell_account 中
+            // 若 sell_account < pay_amount，说明存在历史超卖数据，禁止静默按不足金额放币
+            $releasedAmount = round((float)($order['pay_amount'] ?? 0), 2);
+            if ($releasedAmount <= 0) {
+                throw new Exception('订单金额无效');
+            }
+            if ((float)($product['sell_account'] ?? 0) + 0.005 < $releasedAmount) {
+                Log::error('transaction release insufficient sell_account', [
+                    'order_id' => (int)($order['id'] ?? 0),
+                    'order_number' => (string)($order['order_number'] ?? ''),
+                    'pid' => (int)($product['id'] ?? 0),
+                    'sell_account' => (float)($product['sell_account'] ?? 0),
+                    'pay_amount' => $releasedAmount,
+                    'seller_uid' => (int)($seller['id'] ?? 0),
+                    'buyer_uid' => (int)($buyer['id'] ?? 0),
+                ]);
+                throw new Exception('挂单剩余数量不足，无法放币，请联系客服');
+            }
 
             $order->status = 3;
             $order->complete_time = date('Y-m-d H:i:s');
@@ -138,7 +156,10 @@ class TransactionOrderService
                 throw new Exception('操作失败');
             }
 
-            $product->sell_account = max(0, (float)($product['sell_account'] ?? 0) - (float)($order['pay_amount'] ?? 0));
+            $product->sell_account = round((float)($product['sell_account'] ?? 0) - $releasedAmount, 2);
+            if ($product->sell_account < -0.005) {
+                throw new Exception('挂单数量异常，放币已终止');
+            }
             if ($product->save() === false) {
                 throw new Exception('操作失败');
             }

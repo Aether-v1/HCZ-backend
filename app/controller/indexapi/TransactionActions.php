@@ -148,37 +148,83 @@ trait TransactionActions
         $user_info = UserModel::where('id', $this->user_info['id'])->find();
         switch ($action) {
             case 'submit':
-                $TransactionProduct_info = TransactionProduct::where('status', 'in', '1')->find($post_info['transact_id']);
                 if (empty($post_info['pay_amount'])) {
                     return show(500, 'error', '请输入购买数量');
                 }
                 if (empty($post_info['remittance_user_name'])) {
                     return show(500, 'error', '请输入您的真实姓名');
                 }
-                if (empty($TransactionProduct_info)) {
-                    return show(500, 'error', '售卖交易已下架或取消');
+                $payAmount = round((float)$post_info['pay_amount'], 2);
+                if ($payAmount <= 0) {
+                    return show(500, 'error', '购买数量无效');
                 }
-                if ($TransactionProduct_info['min_limit'] > $post_info['pay_amount'] || $TransactionProduct_info['max_limit'] < $post_info['pay_amount']) {
-                    return show(500, 'error', '超出购买限制');
+                $pid = (int)($post_info['transact_id'] ?? 0);
+                if ($pid <= 0) {
+                    return show(500, 'error', '挂单不存在');
                 }
-                if ($TransactionProduct_info['sell_account'] < $post_info['pay_amount']) {
-                    return show(500, 'error', '超出最高出售数量');
-                }
-                $order_number = date('Ymd') . randomkeys(6, 'number');
 
-                TransactionOrder::create([
-                    'uid' => $user_info['id'],
-                    'sell_uid' => $TransactionProduct_info['uid'],
-                    'pid' => $TransactionProduct_info['id'],
-                    'order_number' => $order_number,
-                    'pay_amount' => $post_info['pay_amount'],
-                    'payment_amount' => $post_info['pay_amount'] * $TransactionProduct_info['unit_price'],
-                    'remittance_user_name' => $post_info['remittance_user_name'],
-                    'bank_card_info' => $TransactionProduct_info['bank_card_info'],
-                    'unit_price' => $TransactionProduct_info['unit_price'],
-                    'transaction_fees' => getConfig('transaction_fees'),
-                    'usdt_amount' => $post_info['pay_amount'] - (floatval(getConfig('transaction_fees')) ?? 0),
-                ]);
+                $order_number = '';
+                try {
+                    Db::startTrans();
+
+                    // 对挂单行加 FOR UPDATE 锁，串行化同一挂单的并发下单
+                    $product = TransactionProduct::where('id', $pid)->lock(true)->find();
+                    if (!$product || (int)$product['status'] !== 1) {
+                        Db::rollback();
+                        return show(500, 'error', '售卖交易已下架或取消');
+                    }
+                    if ((float)$product['min_limit'] > $payAmount || (float)$product['max_limit'] < $payAmount) {
+                        Db::rollback();
+                        return show(500, 'error', '超出购买限制');
+                    }
+
+                    // sell_account 语义：初始挂单量 - 已完成订单量
+                    // 已占用量：待汇款(0) + 已汇款(1) 的活跃订单 pay_amount 之和
+                    // 剩余可售 = sell_account - 已占用量
+                    // 使用 lock(true) 强制当前读，确保看到已提交的最新活跃订单
+                    $committedAmount = (float)Db::name('transaction_order')
+                        ->where('pid', $pid)
+                        ->whereIn('status', [0, 1])
+                        ->lock(true)
+                        ->sum('pay_amount');
+                    $available = round((float)$product['sell_account'] - $committedAmount, 2);
+                    if ($available + 0.005 < $payAmount) {
+                        Db::rollback();
+                        return show(500, 'error', '超出最高出售数量');
+                    }
+
+                    $order_number = date('Ymd') . randomkeys(6, 'number');
+                    $unitPrice = (float)$product['unit_price'];
+                    $transactionFees = (float)(getConfig('transaction_fees') ?? 0);
+
+                    TransactionOrder::create([
+                        'uid' => $user_info['id'],
+                        'sell_uid' => $product['uid'],
+                        'pid' => $product['id'],
+                        'order_number' => $order_number,
+                        'pay_amount' => $payAmount,
+                        'payment_amount' => round($payAmount * $unitPrice, 2),
+                        'remittance_user_name' => trim((string)$post_info['remittance_user_name']),
+                        'bank_card_info' => $product['bank_card_info'],
+                        'unit_price' => $unitPrice,
+                        'transaction_fees' => $transactionFees,
+                        'usdt_amount' => round(max(0, $payAmount - $transactionFees), 2),
+                    ]);
+
+                    Db::commit();
+                } catch (\Throwable $e) {
+                    Db::rollback();
+                    Log::error('transaction buy submit error', [
+                        'pid' => $pid,
+                        'uid' => (int)($user_info['id'] ?? 0),
+                        'pay_amount' => $payAmount,
+                        'error' => $e->getMessage(),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                    ]);
+                    return show(500, 'error', '下单失败，请重试');
+                }
+
                 return show(200, 'success', '确认成功', [
                     'order_number' => $order_number,
                     'orderNumber' => $order_number,
