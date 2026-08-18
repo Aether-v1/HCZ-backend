@@ -330,6 +330,23 @@ trait TransactionActions
 
                     $targetSellAccount = round((float)$post_info['sell_account'], 2);
                     $currentSellAccount = round((float)($lockedTransactionProduct['sell_account'] ?? 0), 2);
+
+                    // 计算活跃订单占用量（必须在 product 行锁之后，与买家下单使用同一把行锁串行化）
+                    // activeCommitted = SUM(待汇款(0) + 已汇款(1) 订单的 pay_amount)
+                    $activeCommitted = 0.0;
+                    if ($lockedTransactionProduct) {
+                        $activeCommitted = (float)Db::name('transaction_order')
+                            ->where('pid', (int)$lockedTransactionProduct['id'])
+                            ->whereIn('status', [0, 1])
+                            ->lock(true)
+                            ->sum('pay_amount');
+                    }
+
+                    // 目标挂单量不得低于活跃订单占用量，否则退还冻结后活跃订单放币时资金不足
+                    if ($lockedTransactionProduct && $targetSellAccount + 0.005 < $activeCommitted) {
+                        throw new Exception('当前已有交易订单占用 ' . $activeCommitted . ' USDT，无法将挂单数量降低至 ' . $targetSellAccount);
+                    }
+
                     $availableSellAccount = round((float)($lockedUser['balance'] ?? 0) + $currentSellAccount, 2);
                     if ($availableSellAccount < $targetSellAccount) {
                         throw new Exception('可用余额已不足');

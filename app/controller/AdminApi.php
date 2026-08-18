@@ -1284,15 +1284,32 @@ class AdminApi
         try {
             Db::startTrans();
             $TransactionProduct_info = TransactionProduct::where('id', $post_info['id'])->lock(true)->find();
-            if($TransactionProduct_info && (int)$TransactionProduct_info['status'] == 3){
-                $user_info = $this->directLockUser((int)$TransactionProduct_info['uid']);
-                if ($user_info) {
-                    $refundAmount = (float)($TransactionProduct_info['sell_account'] ?? 0);
-                    if ($refundAmount > 0) {
-                        $this->releaseTransactionListingByAdmin($user_info, $TransactionProduct_info, $refundAmount, 0.0);
-                    }
-                }
+            if (!$TransactionProduct_info) {
+                Db::rollback();
+                return show(404, 'error', '挂单不存在');
             }
+
+            // 检查活跃订单：存在待汇款(0)或已汇款(1)订单时禁止删除
+            $activeCommitted = (float)Db::name('transaction_order')
+                ->where('pid', (int)$TransactionProduct_info['id'])
+                ->whereIn('status', [0, 1])
+                ->lock(true)
+                ->sum('pay_amount');
+            if ($activeCommitted > 0.005) {
+                Db::rollback();
+                return show(500, 'error', '该挂单存在进行中的交易订单（占用 ' . $activeCommitted . ' USDT），无法删除');
+            }
+
+            // 退还剩余冻结资金（无论挂单状态，只要 sell_account > 0）
+            $refundAmount = (float)($TransactionProduct_info['sell_account'] ?? 0);
+            if ($refundAmount > 0.005) {
+                $user_info = $this->directLockUser((int)$TransactionProduct_info['uid']);
+                if (!$user_info) {
+                    throw new Exception('卖家用户不存在');
+                }
+                $this->releaseTransactionListingByAdmin($user_info, $TransactionProduct_info, $refundAmount, 0.0);
+            }
+
             TransactionProduct::destroy($post_info['id']);
             Db::commit();
             return show(200, 'success', '删除成功');
@@ -1305,11 +1322,50 @@ class AdminApi
 
     private function handleTransactionProductDeleteBatch(array $post_info)
     {
-        $data = TransactionProduct::where('id', 'in', $post_info['ids'])->select();
-        foreach($data as $key => $vo) {
-            TransactionProduct::destroy($vo['id']);
+        try {
+            Db::startTrans();
+            $ids = is_array($post_info['ids'] ?? null) ? $post_info['ids'] : [];
+            if (empty($ids)) {
+                Db::rollback();
+                return show(500, 'error', '请选择要删除的挂单');
+            }
+
+            foreach ($ids as $id) {
+                $product = TransactionProduct::where('id', (int)$id)->lock(true)->find();
+                if (!$product) {
+                    throw new Exception('挂单不存在: ' . (int)$id);
+                }
+
+                // 检查活跃订单
+                $activeCommitted = (float)Db::name('transaction_order')
+                    ->where('pid', (int)$product['id'])
+                    ->whereIn('status', [0, 1])
+                    ->lock(true)
+                    ->sum('pay_amount');
+                if ($activeCommitted > 0.005) {
+                    throw new Exception('挂单 #' . (int)$product['id'] . ' 存在进行中的交易订单（占用 ' . $activeCommitted . ' USDT），无法删除');
+                }
+
+                // 退还剩余冻结资金
+                $refundAmount = (float)($product['sell_account'] ?? 0);
+                if ($refundAmount > 0.005) {
+                    $user_info = $this->directLockUser((int)$product['uid']);
+                    if (!$user_info) {
+                        throw new Exception('挂单 #' . (int)$product['id'] . ' 卖家用户不存在');
+                    }
+                    $this->releaseTransactionListingByAdmin($user_info, $product, $refundAmount, 0.0);
+                }
+
+                TransactionProduct::destroy((int)$id);
+            }
+
+            Db::commit();
+            return show(200, 'success', '批量删除成功');
+        } catch (\Throwable $e) {
+            Db::rollback();
+            Log::error('admin transaction_product_post batch_del error: ' . $e->getMessage(), ['ids' => $post_info['ids'] ?? []]);
+            return show(500, 'error', $e->getMessage() ?: '批量删除失败');
         }
-        return show(200, 'success', '删除成功');
     }
 
     private function handleBalance(array $post_info)
