@@ -1212,42 +1212,47 @@ class AdminApi
 
     private function handleTransactionProductOperate(array $post_info)
     {
-        $TransactionProduct_info = TransactionProduct::find($post_info['id']);
-        if($TransactionProduct_info['status'] == 1 || $TransactionProduct_info['status'] == 2){
-            try {
-                Db::startTrans();
-                $TransactionProduct_info = TransactionProduct::where('id', $post_info['id'])->lock(true)->find();
-                if (!$TransactionProduct_info || !in_array((int)$TransactionProduct_info['status'], [1, 2], true)) {
+        // 预读（不加锁）获取卖家 uid，用于统一锁顺序 seller → product
+        $preRead = TransactionProduct::find($post_info['id']);
+        if(!$preRead || !in_array((int)$preRead['status'], [1, 2], true)){
+            return show(500, 'error', '操作异常');
+        }
+        try {
+            Db::startTrans();
+            // 统一锁顺序：先锁 seller，再锁 product
+            // 避免与 releaseBySeller(order→seller→product) 形成 product↔seller 循环等待死锁
+            $seller = $this->directLockUser((int)$preRead['uid']);
+            if (!$seller) {
+                throw new Exception('用户不存在');
+            }
+            $TransactionProduct_info = TransactionProduct::where('id', $post_info['id'])->lock(true)->find();
+            if (!$TransactionProduct_info || !in_array((int)$TransactionProduct_info['status'], [1, 2], true)) {
+                Db::rollback();
+                return show(500, 'error', '操作异常');
+            }
+
+            // 关闭挂单(status=3)前必须检查活跃订单：存在待汇款(0)或已汇款(1)订单时禁止关闭
+            if ((int)$post_info['status'] === 3) {
+                $activeCommitted = (float)Db::name('transaction_order')
+                    ->where('pid', (int)$TransactionProduct_info['id'])
+                    ->whereIn('status', [0, 1])
+                    ->lock(true)
+                    ->sum('pay_amount');
+                if ($activeCommitted > 0.005) {
                     Db::rollback();
-                    return show(500, 'error', '操作异常');
+                    return show(500, 'error', '该挂单存在进行中的交易订单（占用 ' . $activeCommitted . ' USDT），无法关闭，请先处理订单');
                 }
+            }
 
-                // 关闭挂单(status=3)前必须检查活跃订单：存在待汇款(0)或已汇款(1)订单时禁止关闭
-                if ((int)$post_info['status'] === 3) {
-                    $activeCommitted = (float)Db::name('transaction_order')
-                        ->where('pid', (int)$TransactionProduct_info['id'])
-                        ->whereIn('status', [0, 1])
-                        ->lock(true)
-                        ->sum('pay_amount');
-                    if ($activeCommitted > 0.005) {
-                        Db::rollback();
-                        return show(500, 'error', '该挂单存在进行中的交易订单（占用 ' . $activeCommitted . ' USDT），无法关闭，请先处理订单');
-                    }
+            $TransactionProduct_info->status = $post_info['status'];
+            $TransactionProduct_info->save();
+
+            if($post_info['status'] == 3){
+                $refundAmount = (float)($TransactionProduct_info['sell_account'] ?? 0);
+                if ($refundAmount > 0) {
+                    $this->releaseTransactionListingByAdmin($seller, $TransactionProduct_info, $refundAmount, 0.0);
                 }
-
-                $TransactionProduct_info->status = $post_info['status'];
-                $TransactionProduct_info->save();
-
-                if($post_info['status'] == 3){
-                    $user_info = $this->directLockUser((int)$TransactionProduct_info['uid']);
-                    if (!$user_info) {
-                        throw new Exception('用户不存在');
-                    }
-                    $refundAmount = (float)($TransactionProduct_info['sell_account'] ?? 0);
-                    if ($refundAmount > 0) {
-                        $this->releaseTransactionListingByAdmin($user_info, $TransactionProduct_info, $refundAmount, 0.0);
-                    }
-                }
+            }
                 Db::commit();
                 return show(200, 'success', '操作成功');
             } catch (\Throwable $e) {
@@ -1255,9 +1260,6 @@ class AdminApi
                 Log::error('admin transaction_product_post operate error: ' . $e->getMessage(), ['id' => (int)($post_info['id'] ?? 0)]);
                 return show(500, 'error', '操作异常');
             }
-        }
-
-        return show(500, 'error', '操作异常');
     }
 
     private function transactionListingBizNo($listing): string
@@ -1296,8 +1298,18 @@ class AdminApi
     }
     private function handleTransactionProductDelete(array $post_info)
     {
+        // 预读（不加锁）获取卖家 uid，用于统一锁顺序 seller → product
+        $preRead = TransactionProduct::find($post_info['id']);
+        if (!$preRead) {
+            return show(404, 'error', '挂单不存在');
+        }
         try {
             Db::startTrans();
+            // 统一锁顺序：先锁 seller，再锁 product
+            $seller = $this->directLockUser((int)$preRead['uid']);
+            if (!$seller) {
+                throw new Exception('卖家用户不存在');
+            }
             $TransactionProduct_info = TransactionProduct::where('id', $post_info['id'])->lock(true)->find();
             if (!$TransactionProduct_info) {
                 Db::rollback();
@@ -1315,14 +1327,10 @@ class AdminApi
                 return show(500, 'error', '该挂单存在进行中的交易订单（占用 ' . $activeCommitted . ' USDT），无法删除');
             }
 
-            // 退还剩余冻结资金（无论挂单状态，只要 sell_account > 0）
+            // 退还剩余冻结资金（seller 已锁定）
             $refundAmount = (float)($TransactionProduct_info['sell_account'] ?? 0);
             if ($refundAmount > 0.005) {
-                $user_info = $this->directLockUser((int)$TransactionProduct_info['uid']);
-                if (!$user_info) {
-                    throw new Exception('卖家用户不存在');
-                }
-                $this->releaseTransactionListingByAdmin($user_info, $TransactionProduct_info, $refundAmount, 0.0);
+                $this->releaseTransactionListingByAdmin($seller, $TransactionProduct_info, $refundAmount, 0.0);
             }
 
             TransactionProduct::destroy($post_info['id']);
@@ -1345,10 +1353,21 @@ class AdminApi
                 return show(500, 'error', '请选择要删除的挂单');
             }
 
-            foreach ($ids as $id) {
-                $product = TransactionProduct::where('id', (int)$id)->lock(true)->find();
+            // 预读所有挂单（不加锁）获取卖家 uid，用于统一锁顺序 seller → product
+            $preReads = TransactionProduct::where('id', 'in', array_map('intval', $ids))->select();
+            if (count($preReads) !== count($ids)) {
+                throw new Exception('部分挂单不存在');
+            }
+
+            foreach ($preReads as $preRead) {
+                // 统一锁顺序：先锁 seller，再锁 product
+                $seller = $this->directLockUser((int)$preRead['uid']);
+                if (!$seller) {
+                    throw new Exception('挂单 #' . (int)$preRead['id'] . ' 卖家用户不存在');
+                }
+                $product = TransactionProduct::where('id', (int)$preRead['id'])->lock(true)->find();
                 if (!$product) {
-                    throw new Exception('挂单不存在: ' . (int)$id);
+                    throw new Exception('挂单不存在: ' . (int)$preRead['id']);
                 }
 
                 // 检查活跃订单
@@ -1361,17 +1380,13 @@ class AdminApi
                     throw new Exception('挂单 #' . (int)$product['id'] . ' 存在进行中的交易订单（占用 ' . $activeCommitted . ' USDT），无法删除');
                 }
 
-                // 退还剩余冻结资金
+                // 退还剩余冻结资金（seller 已锁定）
                 $refundAmount = (float)($product['sell_account'] ?? 0);
                 if ($refundAmount > 0.005) {
-                    $user_info = $this->directLockUser((int)$product['uid']);
-                    if (!$user_info) {
-                        throw new Exception('挂单 #' . (int)$product['id'] . ' 卖家用户不存在');
-                    }
-                    $this->releaseTransactionListingByAdmin($user_info, $product, $refundAmount, 0.0);
+                    $this->releaseTransactionListingByAdmin($seller, $product, $refundAmount, 0.0);
                 }
 
-                TransactionProduct::destroy((int)$id);
+                TransactionProduct::destroy((int)$product['id']);
             }
 
             Db::commit();
