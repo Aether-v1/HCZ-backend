@@ -2558,6 +2558,14 @@ public function order_post(string $action)
                             if (!$user_info) {
                                 throw new Exception('User not found');
                             }
+                            // 手续费校验：fee 必须 >= 0 且 <= amount
+                            $withdrawalFee = round((float)($withdrawal_info['withdrawal_fee'] ?? 0), 2);
+                            if ($withdrawalFee < -0.005) {
+                                throw new Exception('提现手续费异常：负数');
+                            }
+                            if ($withdrawalFee > $amount + 0.005) {
+                                throw new Exception('提现手续费异常：超过提现金额');
+                            }
                             (new UserFundLedgerService())->changeLockedUserWallet(
                                 $user_info,
                                 UserFundLedgerService::WALLET_FROZEN,
@@ -2580,6 +2588,27 @@ public function order_post(string $action)
                                     ],
                                 ]
                             );
+                            // 平台手续费记账（纯流水，与审核同一事务，幂等 request_no）
+                            if ($withdrawalFee > 0.005) {
+                                (new UserFundLedgerService())->recordPlatformIncome($withdrawalFee, [
+                                    'biz_type' => 'withdrawal',
+                                    'biz_id' => (int)($withdrawal_info['id'] ?? 0),
+                                    'biz_no' => (string)($withdrawal_info['order_number'] ?? ''),
+                                    'order_number' => (string)($withdrawal_info['order_number'] ?? ''),
+                                    'change_type' => 'withdrawal_fee_income',
+                                    'operator_type' => 'admin',
+                                    'operator_id' => (int)($this->admin_info['id'] ?? 0),
+                                    'status' => 'done',
+                                    'request_no' => 'withdraw_fee:' . (string)($withdrawal_info['order_number'] ?? ''),
+                                    'remark' => 'withdrawal platform fee',
+                                    'extra' => [
+                                        'source' => 'withdrawal_post_audit',
+                                        'withdraw_amount' => $amount,
+                                        'withdrawal_fee' => $withdrawalFee,
+                                        'actual_payout' => round($amount - $withdrawalFee, 2),
+                                    ],
+                                ]);
+                            }
                         }
 
                         $withdrawal_info->status = $auditStatus;
@@ -2661,15 +2690,54 @@ public function order_post(string $action)
                 }
 
             case 'del':
-                Withdrawal::destroy($post_info['id']);
-                return show(200, 'success', '删除成功');
-                
-            case 'dels':
-                $data = Withdrawal::where('id', 'in', $post_info['ids'])->select();
-                foreach($data as $key => $vo) {
-                    Withdrawal::destroy($vo['id']);
+                try {
+                    Db::startTrans();
+                    $withdrawal_info = Withdrawal::where('id', $post_info['id'])->lock(true)->find();
+                    if (!$withdrawal_info) {
+                        Db::rollback();
+                        return show(404, 'error', '提现记录不存在');
+                    }
+                    // status=0 待审核提现禁止删除：冻结资金尚未处理，删除会导致资金丢失
+                    if ((int)$withdrawal_info['status'] === 0) {
+                        Db::rollback();
+                        return show(500, 'error', '待审核提现不可删除，请先审核拒绝后再删除');
+                    }
+                    // status=1(已通过) / status=2(已拒绝) 资金已处理完毕，允许删除
+                    Withdrawal::destroy((int)$withdrawal_info['id']);
+                    Db::commit();
+                    return show(200, 'success', '删除成功');
+                } catch (\Throwable $e) {
+                    Db::rollback();
+                    Log::error('admin withdrawal_post del error: ' . $e->getMessage(), ['id' => ($post_info['id'] ?? 0)]);
+                    return show(500, 'error', '删除失败');
                 }
-                return show(200, 'success', '删除成功');
+
+            case 'dels':
+                try {
+                    Db::startTrans();
+                    $ids = is_array($post_info['ids'] ?? null) ? $post_info['ids'] : [];
+                    if (empty($ids)) {
+                        Db::rollback();
+                        return show(500, 'error', '请选择要删除的提现记录');
+                    }
+                    foreach ($ids as $id) {
+                        $withdrawal_info = Withdrawal::where('id', (int)$id)->lock(true)->find();
+                        if (!$withdrawal_info) {
+                            throw new Exception('提现记录不存在: ' . (int)$id);
+                        }
+                        // 任何一条 status=0 则整批回滚，一条都不删
+                        if ((int)$withdrawal_info['status'] === 0) {
+                            throw new Exception('提现单号 ' . (string)($withdrawal_info['order_number'] ?? '') . ' 待审核，不可删除');
+                        }
+                        Withdrawal::destroy((int)$withdrawal_info['id']);
+                    }
+                    Db::commit();
+                    return show(200, 'success', '批量删除成功');
+                } catch (\Throwable $e) {
+                    Db::rollback();
+                    Log::error('admin withdrawal_post dels error: ' . $e->getMessage(), ['ids' => ($post_info['ids'] ?? [])]);
+                    return show(500, 'error', $e->getMessage() ?: '批量删除失败');
+                }
             default:
                 return show(500, 'error', '你不对劲');
         }
