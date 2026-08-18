@@ -143,6 +143,62 @@ class UserFundLedgerService
         );
     }
 
+    /**
+     * 记录平台收入（纯流水记账，不更新 cz_user，不依赖真实 UserModel）
+     *
+     * 用于 C2C 手续费、提现手续费等平台收入的内部账务记录。
+     * 通过 uk_uid_wallet_direction_reqno 唯一索引保证幂等。
+     * 调用方需自行管理事务，本方法不开启独立事务。
+     *
+     * @param float $amount 收入金额（>0）
+     * @param array $options 必须包含 biz_type, biz_no, request_no；可选 change_type, order_number, remark, extra, operator_type, operator_id
+     * @return array{log: array, duplicated: bool}
+     * @throws Exception
+     */
+    public function recordPlatformIncome(float $amount, array $options = []): array
+    {
+        $amount = $this->normalizeAmount($amount);
+        if ($amount <= 0) {
+            throw new Exception('Platform income amount must be greater than zero');
+        }
+
+        $platformUid = (int)(getConfig('platform_account_uid') ?? 0);
+        $walletType = self::WALLET_BALANCE;
+        $bizType = $this->requireBizType($options);
+        $bizNo = $this->requireBizNo($options);
+        $direction = self::DIRECTION_IN;
+
+        // 幂等检查：同一 (uid, wallet_type, direction, request_no) 只允许一笔
+        $existing = $this->findExistingLogByRequest($platformUid, $walletType, $bizType, $bizNo, $direction, $options);
+        if ($existing) {
+            $this->assertExistingLogMatches($existing, $amount);
+            return ['log' => $existing->toArray(), 'duplicated' => true];
+        }
+
+        $logResult = $this->createLogWithIdempotentFallback([
+            'uid' => $platformUid,
+            'wallet_type' => $walletType,
+            'change_type' => $this->resolveChangeType($options, $bizType),
+            'direction' => $direction,
+            'amount' => $amount,
+            'before_amount' => 0.0,
+            'after_amount' => 0.0,
+            'biz_type' => $bizType,
+            'biz_id' => (int)($options['biz_id'] ?? 0),
+            'biz_no' => $bizNo,
+            'order_number' => trim((string)($options['order_number'] ?? $bizNo)),
+            'operator_type' => trim((string)($options['operator_type'] ?? 'system')),
+            'operator_id' => (int)($options['operator_id'] ?? 0),
+            'status' => trim((string)($options['status'] ?? 'done')),
+            'request_no' => trim((string)($options['request_no'] ?? '')),
+            'remark' => trim((string)($options['remark'] ?? '')),
+            'extra_json' => $this->buildExtraJson($options),
+            'create_time' => $this->resolveCreateTime($options),
+        ]);
+
+        return ['log' => $logResult['log']->toArray(), 'duplicated' => $logResult['duplicated']];
+    }
+
     public function transferUserWallet(
         int $uid,
         string $fromWalletType,

@@ -150,6 +150,22 @@ class TransactionOrderService
                 throw new Exception('挂单剩余数量不足，无法放币，请联系客服');
             }
 
+            // 手续费金额校验：必须满足 usdt_amount + transaction_fees == pay_amount
+            $transactionFees = round((float)($order['transaction_fees'] ?? 0), 2);
+            $buyerIncomeAmount = round((float)($order['usdt_amount'] ?? 0), 2);
+            if ($transactionFees < -0.005) {
+                throw new Exception('订单手续费异常：不能为负数');
+            }
+            if ($transactionFees > $releasedAmount + 0.005) {
+                throw new Exception('订单手续费异常：不能大于订单金额');
+            }
+            if ($buyerIncomeAmount < -0.005) {
+                throw new Exception('买家到账金额异常：不能为负数');
+            }
+            if (abs($buyerIncomeAmount + $transactionFees - $releasedAmount) > 0.005) {
+                throw new Exception('订单金额不匹配：usdt_amount + transaction_fees != pay_amount');
+            }
+
             $order->status = 3;
             $order->complete_time = date('Y-m-d H:i:s');
             if ($order->save() === false) {
@@ -190,7 +206,6 @@ class TransactionOrderService
                     ]
                 );
             }
-            $buyerIncomeAmount = round((float)($order['usdt_amount'] ?? 0), 2);
             if ($buyerIncomeAmount > 0) {
                 (new UserFundLedgerService())->changeLockedUserWallet(
                     $buyer,
@@ -217,6 +232,29 @@ class TransactionOrderService
                         ],
                     ]
                 );
+            }
+
+            // 平台手续费记账（纯流水，不更新 cz_user，与放币同一事务，幂等 request_no）
+            if ($transactionFees > 0.005) {
+                (new UserFundLedgerService())->recordPlatformIncome($transactionFees, [
+                    'biz_type' => 'transaction_order',
+                    'biz_id' => (int)($order['id'] ?? 0),
+                    'biz_no' => (string)($order['order_number'] ?? ''),
+                    'order_number' => (string)($order['order_number'] ?? ''),
+                    'change_type' => 'transaction_fee_income',
+                    'operator_type' => 'system',
+                    'operator_id' => 0,
+                    'status' => 'done',
+                    'request_no' => 'transaction_fee:' . (string)($order['order_number'] ?? ''),
+                    'remark' => 'C2C transaction fee income',
+                    'extra' => [
+                        'source' => 'transaction_order_release_by_seller',
+                        'listing_id' => (int)($product['id'] ?? 0),
+                        'pay_amount' => $releasedAmount,
+                        'buyer_income' => $buyerIncomeAmount,
+                        'transaction_fees' => $transactionFees,
+                    ],
+                ]);
             }
 
             $orderSnapshot = $order->toArray();

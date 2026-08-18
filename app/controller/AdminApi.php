@@ -116,6 +116,7 @@ class AdminApi
             'chatwoot_token' => 'Chatwoot网站令牌',
             'transaction_mini_quantity' => '最低挂单数量',
             'transaction_fees' => '交易手续费',
+            'platform_account_uid' => '平台账户UID(手续费记账)',
             'user_avatar_image' => '默认注册头像',
             'agent_money' => '代理开通价格',
             'agent_jieshao' => '代理开通介绍',
@@ -1220,6 +1221,20 @@ class AdminApi
                     Db::rollback();
                     return show(500, 'error', '操作异常');
                 }
+
+                // 关闭挂单(status=3)前必须检查活跃订单：存在待汇款(0)或已汇款(1)订单时禁止关闭
+                if ((int)$post_info['status'] === 3) {
+                    $activeCommitted = (float)Db::name('transaction_order')
+                        ->where('pid', (int)$TransactionProduct_info['id'])
+                        ->whereIn('status', [0, 1])
+                        ->lock(true)
+                        ->sum('pay_amount');
+                    if ($activeCommitted > 0.005) {
+                        Db::rollback();
+                        return show(500, 'error', '该挂单存在进行中的交易订单（占用 ' . $activeCommitted . ' USDT），无法关闭，请先处理订单');
+                    }
+                }
+
                 $TransactionProduct_info->status = $post_info['status'];
                 $TransactionProduct_info->save();
 
@@ -1783,6 +1798,7 @@ class AdminApi
             'agent_money' => ['pattern' => '/^\d+(?:\.\d{1,2})?$/', 'scale' => 2, 'min' => 0],
             'transaction_mini_quantity' => ['pattern' => '/^\d+(?:\.\d{1,6})?$/', 'scale' => 6, 'min' => 0],
             'transaction_fees' => ['pattern' => '/^\d+(?:\.\d{1,6})?$/', 'scale' => 6, 'min' => 0],
+            'platform_account_uid' => ['pattern' => '/^\d+$/', 'scale' => 0, 'min' => 0],
         ];
         foreach ($numericRules as $key => $rule) {
             if (!array_key_exists($key, $postData)) {

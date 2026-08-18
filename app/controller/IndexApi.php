@@ -2389,6 +2389,7 @@ public function api_account_password_save()
             'mini_recharge_amount', 'mini_withdrawal_amount',
             'withdrawal_fee', 'transaction_fees',
             'transaction_mini_quantity', 'user_avatar_image',
+            'platform_account_uid',
         ];
     }
 
