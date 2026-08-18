@@ -15,6 +15,7 @@ use app\model\UserBalanceLog;
 use app\model\Withdrawal;
 use app\model\PointsRecord;
 use app\model\Substation;
+use app\service\ActionRateLimiter;
 use app\service\BepusdtService;
 use app\service\UserFundLedgerService;
 use app\service\UserFundLogLabelService;
@@ -759,6 +760,13 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 		$userInfo = UserModel::where('id', $this->user_info['id'])->find();
 		if (!$userInfo) {
 			return show(500, 'error', 'Request error');
+		}
+
+		// SEC-004: 提现提交限流 — 用户维度，60 秒内最多 3 次
+		// 仅为外围防护，不替代 user 行锁、数据库事务和幂等流水
+		$withdrawUid = (int)($userInfo['id'] ?? 0);
+		if ($withdrawUid > 0 && !ActionRateLimiter::check('withdrawal:uid:' . $withdrawUid, 3, 60)) {
+			return show(429, 'error', '提现操作过于频繁，请稍后再试', [], 429);
 		}
 
 		$amount = (float) ($postInfo['amount'] ?? 0);

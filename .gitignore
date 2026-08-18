@@ -41,3 +41,6 @@ composer.phar
 .settings
 .buildpath
 .project
+
+# PHPUnit
+.phpunit.result.cache

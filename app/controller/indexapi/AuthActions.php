@@ -4,6 +4,7 @@ declare (strict_types=1);
 namespace app\controller\indexapi;
 
 use app\model\User as UserModel;
+use app\service\ActionRateLimiter;
 use app\service\LoginRateLimiter;
 use Exception;
 use RobThree\Auth\TwoFactorAuth;
@@ -795,6 +796,13 @@ protected function api_account_password_save()
         $post_info = $this->request->post();
         switch ($action) {
             case 'register':
+                // SEC-004: 注册限流 — IP 维度，10 分钟内最多 5 次
+                // 仅为外围防护，不替代数据库唯一约束和业务校验
+                $registerIp = (string)($this->request->ip() ?: '0.0.0.0');
+                if (!ActionRateLimiter::check('register:ip:' . $registerIp, 5, 600)) {
+                    return show(429, 'error', '注册操作过于频繁，请10分钟后再试', [], 429);
+                }
+
                 $account = trim((string)($post_info['mobile'] ?? ''));
                 if ($account === '') {
                     return show(500, 'error', '请输入账号');
