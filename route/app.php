@@ -351,4 +351,4 @@ Route::group(getConfig('backstage_entrance'), static function () {
     Route::post('admin_footer/:action', 'AdminApi/admin_footer');
     // 图片上传
     Route::post('upload_post', 'AdminApi/upload_post');
-})->middleware(\app\middleware\AdminIpWhitelist::class);
+});

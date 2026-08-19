@@ -1,753 +1,1489 @@
 {{include file="layout/admin_header" web_title="首页概况总览"/}}
 
 <style>
-    .admin-trend-page {
-        --trend-ink: #102033;
-        --trend-muted: #738096;
-        --trend-border: rgba(104, 124, 180, 0.16);
-        --trend-panel: rgba(255, 255, 255, 0.94);
-        --trend-primary: #0f766e;
-        --trend-accent: #0ea5e9;
-        --trend-shadow: 0 24px 70px rgba(48, 69, 124, 0.12);
-    }
-    .trend-shell {
-        overflow: hidden;
-        border: 1px solid var(--trend-border);
-        border-radius: 32px;
-        background:
-            radial-gradient(circle at 10% 8%, rgba(45, 212, 191, 0.18), transparent 28%),
-            radial-gradient(circle at 88% 0%, rgba(14, 165, 233, 0.18), transparent 24%),
-            var(--trend-panel);
-        box-shadow: var(--trend-shadow);
-    }
-    .trend-hero {
-        display: grid;
-        grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
-        gap: 22px;
-        padding: 28px;
-        color: #fff;
-        background:
-            radial-gradient(circle at 20% 18%, rgba(34, 197, 94, 0.32), transparent 28%),
-            linear-gradient(135deg, #0f172a 0%, #134e4a 50%, #0369a1 100%);
-    }
-    .trend-kicker {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 7px 12px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.14);
-        color: rgba(255, 255, 255, 0.78);
-        font-size: 12px;
-        font-weight: 900;
-        letter-spacing: 0.08em;
-    }
-    .trend-hero h1 {
-        margin: 16px 0 8px;
-        color: #fff;
-        font-size: clamp(30px, 4vw, 46px);
-        font-weight: 950;
-        letter-spacing: -0.05em;
-    }
-    .trend-hero p {
-        max-width: 620px;
-        margin: 0;
-        color: rgba(255, 255, 255, 0.72);
-        line-height: 1.8;
-    }
-    .trend-balance {
-        align-self: stretch;
-        padding: 22px;
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        border-radius: 24px;
-        background: rgba(255, 255, 255, 0.14);
-        backdrop-filter: blur(14px);
-    }
-    .trend-balance span {
-        display: block;
-        margin-bottom: 10px;
-        color: rgba(255, 255, 255, 0.72);
-        font-size: 13px;
-        font-weight: 800;
-    }
-    .trend-balance strong {
-        display: block;
-        color: #fff;
-        font-size: clamp(34px, 5vw, 54px);
-        font-weight: 950;
-        line-height: 1;
-        letter-spacing: -0.06em;
-    }
-    .trend-balance small {
-        display: block;
-        margin-top: 12px;
-        color: rgba(255, 255, 255, 0.68);
-        font-weight: 800;
-    }
-    .trend-board {
-        padding: 26px;
-    }
-    .trend-summary {
-        margin-bottom: 18px;
-    }
-    .trend-summary-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 12px;
-    }
-    .trend-summary-head h2 {
-        margin: 0;
-        color: var(--trend-ink);
-        font-size: 18px;
-        font-weight: 900;
-    }
-    .trend-summary-head p {
-        margin: 0;
-        color: var(--trend-muted);
-        font-size: 12px;
-        font-weight: 700;
-    }
-    .trend-summary-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
-    }
-    .trend-summary-card {
-        padding: 14px;
-        border: 1px solid var(--trend-border);
-        border-radius: 16px;
-        background: linear-gradient(180deg, #ffffff, #f8fbff);
-    }
-    .trend-summary-card b {
-        display: block;
-        color: var(--trend-muted);
-        font-size: 12px;
-        font-weight: 800;
-        margin-bottom: 8px;
-    }
-    .trend-summary-card strong {
-        display: block;
-        color: var(--trend-ink);
-        font-size: 22px;
-        line-height: 1.2;
-        font-weight: 900;
-        letter-spacing: -0.02em;
-        word-break: break-word;
-    }
-    .trend-summary-card span {
-        display: block;
-        margin-top: 6px;
-        color: var(--trend-muted);
-        font-size: 12px;
-        font-weight: 700;
-    }
-    .trend-toolbar {
-        display: grid;
-        grid-template-columns: minmax(240px, 0.7fr) minmax(0, 1.3fr);
-        gap: 16px;
-        align-items: end;
-        margin-bottom: 22px;
-    }
-    .trend-field label,
-    .trend-range-label {
-        display: block;
-        margin-bottom: 8px;
-        color: var(--trend-muted);
-        font-size: 12px;
-        font-weight: 900;
-        letter-spacing: 0.04em;
-    }
-    .trend-select {
-        width: 100%;
-        height: 48px;
-        padding: 0 16px;
-        border: 1px solid var(--trend-border);
-        border-radius: 16px;
-        background: #f8fbff;
-        color: var(--trend-ink);
-        font-size: 14px;
-        font-weight: 800;
-        outline: none;
-    }
-    .trend-range {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-    .trend-range button {
-        min-width: 88px;
-        height: 48px;
-        padding: 0 16px;
-        border: 1px solid var(--trend-border);
-        border-radius: 16px;
-        background: #f8fbff;
-        color: #526179;
-        font-weight: 900;
-        transition: all 0.18s ease;
-    }
-    .trend-range button.active {
-        border-color: transparent;
-        color: #fff;
-        background: linear-gradient(135deg, var(--trend-primary), var(--trend-accent));
-        box-shadow: 0 14px 30px rgba(14, 165, 233, 0.2);
-    }
-    .trend-window {
-        display: grid;
-        grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
-        gap: 20px;
-    }
-    .trend-current {
-        min-height: 360px;
-        padding: 24px;
-        border: 1px solid var(--trend-border);
-        border-radius: 26px;
-        background: linear-gradient(180deg, #ffffff, #f8fbff);
-    }
-    .trend-current-tag {
-        display: inline-flex;
-        padding: 7px 11px;
-        border-radius: 999px;
-        background: rgba(14, 165, 233, 0.1);
-        color: #0369a1;
-        font-size: 12px;
-        font-weight: 900;
-    }
-    .trend-current h2 {
-        margin: 16px 0 8px;
-        color: var(--trend-ink);
-        font-size: 22px;
-        font-weight: 950;
-    }
-    .trend-current-value {
-        display: block;
-        margin-top: 18px;
-        color: var(--trend-primary);
-        font-size: clamp(36px, 5vw, 60px);
-        font-weight: 950;
-        line-height: 1;
-        letter-spacing: -0.07em;
-        word-break: break-word;
-    }
-    .trend-current-unit {
-        display: block;
-        margin-top: 10px;
-        color: var(--trend-muted);
-        font-weight: 800;
-    }
-    .trend-insight {
-        margin-top: 16px;
-        padding: 12px 14px;
-        border-radius: 14px;
-        border: 1px solid rgba(16, 185, 129, 0.25);
-        background: rgba(236, 253, 245, 0.8);
-        color: #065f46;
-        font-size: 13px;
-        font-weight: 800;
-        line-height: 1.6;
-    }
-    .trend-insight.negative {
-        border-color: rgba(239, 68, 68, 0.25);
-        background: rgba(254, 242, 242, 0.84);
-        color: #991b1b;
-    }
-    .trend-insight strong {
-        font-weight: 900;
-    }
-    .trend-point-list {
-        display: grid;
-        gap: 10px;
-        margin-top: 26px;
-    }
-    .trend-point {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 12px 14px;
-        border-radius: 16px;
-        background: #f1f7ff;
-        color: #5f6f86;
-        font-weight: 800;
-    }
-    .trend-point strong {
-        color: var(--trend-ink);
-    }
-    .trend-point.active {
-        color: #fff;
-        background: linear-gradient(135deg, var(--trend-primary), var(--trend-accent));
-    }
-    .trend-point.active strong {
-        color: #fff;
-    }
-    .trend-chart-card {
-        min-height: 360px;
-        padding: 22px;
-        border: 1px solid var(--trend-border);
-        border-radius: 26px;
-        background: #fff;
-    }
-    .trend-chart-head {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 12px;
-    }
-    .trend-chart-head h3 {
-        margin: 0;
-        color: var(--trend-ink);
-        font-size: 18px;
-        font-weight: 950;
-    }
-    .trend-chart-head p {
-        margin: 5px 0 0;
-        color: var(--trend-muted);
-        font-size: 12px;
-        font-weight: 700;
-    }
-    .trend-chart-badge {
-        flex: 0 0 auto;
-        padding: 8px 11px;
-        border-radius: 999px;
-        background: #ecfdf5;
-        color: #047857;
-        font-size: 12px;
-        font-weight: 900;
-    }
-    .trend-svg-wrap {
-        position: relative;
-        height: 250px;
-        margin-top: 12px;
-        border-radius: 22px;
-        background:
-            linear-gradient(rgba(15, 23, 42, 0.055) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(15, 23, 42, 0.055) 1px, transparent 1px),
-            linear-gradient(180deg, #f8fbff, #ffffff);
-        background-size: 100% 25%, 25% 100%, 100% 100%;
-        overflow: hidden;
-    }
-    #overviewTrendSvg {
-        width: 100%;
-        height: 100%;
-        display: block;
-    }
-    .trend-axis {
-        display: flex;
-        justify-content: space-between;
-        margin-top: 12px;
-        color: var(--trend-muted);
-        font-size: 12px;
-        font-weight: 900;
-    }
-    @media (max-width: 1199px) {
-        .trend-hero,
-        .trend-toolbar,
-        .trend-window {
-            grid-template-columns: 1fr;
-        }
-        .trend-summary-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-    }
-    @media (max-width: 640px) {
-        .trend-summary-grid {
-            grid-template-columns: 1fr;
-        }
-    }
+/* ═══════════════════════════════════════════════════════════════
+   HCZ Dashboard — Modern Dark SaaS Console
+   Dark-first design. Light mode provided for compatibility.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Design Tokens (Dark = default) ── */
+.hcz-dash {
+    --hcz-bg: #08090B;
+    --hcz-bg-elevated: #0D0F12;
+    --hcz-card: #111318;
+    --hcz-card-hover: #171A20;
+    --hcz-border: rgba(255,255,255,0.07);
+    --hcz-border-strong: rgba(255,255,255,0.12);
+    --hcz-text-1: #F5F7FA;
+    --hcz-text-2: #A1A7B3;
+    --hcz-text-3: #6B7280;
+    --hcz-brand: #8B7CF6;
+    --hcz-brand-soft: rgba(139,124,246,0.15);
+    --hcz-success: #34D399;
+    --hcz-success-soft: rgba(52,211,153,0.12);
+    --hcz-warning: #FBBF24;
+    --hcz-warning-soft: rgba(251,191,36,0.12);
+    --hcz-danger: #F87171;
+    --hcz-danger-soft: rgba(248,113,113,0.12);
+    --hcz-info: #60A5FA;
+    --hcz-info-soft: rgba(96,165,250,0.12);
+    --hcz-radius: 16px;
+    --hcz-radius-sm: 10px;
+    --hcz-radius-lg: 20px;
+    --hcz-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.2);
+    --hcz-glow: radial-gradient(circle at 50% 0%, rgba(139,124,246,0.08), transparent 60%);
+    font-feature-settings: "tnum" 1;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Light mode overrides (covers explicit light + system-resolved-to-light) */
+[data-bs-theme-mode="light"] .hcz-dash,
+[data-bs-theme="light"] .hcz-dash {
+    --hcz-bg: #F7F8FA;
+    --hcz-bg-elevated: #FFFFFF;
+    --hcz-card: #FFFFFF;
+    --hcz-card-hover: #F1F3F5;
+    --hcz-border: rgba(0,0,0,0.08);
+    --hcz-border-strong: rgba(0,0,0,0.14);
+    --hcz-text-1: #1A1D23;
+    --hcz-text-2: #6B7280;
+    --hcz-text-3: #9CA3AF;
+    --hcz-brand: #6D5DF0;
+    --hcz-brand-soft: rgba(109,93,240,0.1);
+    --hcz-success: #059669;
+    --hcz-success-soft: rgba(5,150,105,0.1);
+    --hcz-warning: #D97706;
+    --hcz-warning-soft: rgba(217,119,6,0.1);
+    --hcz-danger: #DC2626;
+    --hcz-danger-soft: rgba(220,38,38,0.1);
+    --hcz-info: #2563EB;
+    --hcz-info-soft: rgba(37,99,235,0.1);
+    --hcz-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+    --hcz-glow: radial-gradient(circle at 50% 0%, rgba(109,93,240,0.05), transparent 60%);
+}
+
+/* ── Page Background (apply to content container too) ── */
+#kt_app_content {
+    background: #08090B !important;
+}
+[data-bs-theme-mode="light"] #kt_app_content,
+[data-bs-theme="light"] #kt_app_content {
+    background: #F7F8FA !important;
+}
+.hcz-dash {
+    background: var(--hcz-bg);
+    min-height: calc(100vh - 120px);
+    padding: 20px 0 40px;
+    color: var(--hcz-text-1);
+}
+.hcz-dash * { box-sizing: border-box; }
+
+/* ── Page Header ── */
+.hcz-page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+.hcz-page-title h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--hcz-text-1);
+    letter-spacing: -0.02em;
+}
+.hcz-page-title p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--hcz-text-3);
+    font-weight: 500;
+}
+.hcz-page-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.hcz-update-time {
+    font-size: 12px;
+    color: var(--hcz-text-3);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.hcz-update-time .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--hcz-success);
+    animation: hcz-pulse 2s ease-in-out infinite;
+}
+@keyframes hcz-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+.hcz-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 14px;
+    border: 1px solid var(--hcz-border);
+    border-radius: var(--hcz-radius-sm);
+    background: var(--hcz-card);
+    color: var(--hcz-text-2);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.hcz-btn:hover {
+    background: var(--hcz-card-hover);
+    border-color: var(--hcz-border-strong);
+    color: var(--hcz-text-1);
+}
+.hcz-btn:active { transform: scale(0.97); }
+.hcz-btn .spin {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--hcz-text-3);
+    border-top-color: var(--hcz-brand);
+    border-radius: 50%;
+    animation: hcz-spin 0.6s linear infinite;
+}
+@keyframes hcz-spin { to { transform: rotate(360deg); } }
+
+.hcz-range-group {
+    display: inline-flex;
+    background: var(--hcz-card);
+    border: 1px solid var(--hcz-border);
+    border-radius: var(--hcz-radius-sm);
+    padding: 3px;
+    gap: 2px;
+}
+.hcz-range-group button {
+    height: 30px;
+    padding: 0 12px;
+    border: none;
+    background: transparent;
+    color: var(--hcz-text-3);
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+.hcz-range-group button:hover { color: var(--hcz-text-2); }
+.hcz-range-group button.active {
+    background: var(--hcz-brand-soft);
+    color: var(--hcz-brand);
+}
+
+/* ── KPI Grid ── */
+.hcz-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+}
+.hcz-kpi-card {
+    position: relative;
+    background: var(--hcz-card);
+    border: 1px solid var(--hcz-border);
+    border-radius: var(--hcz-radius);
+    padding: 18px 18px 16px;
+    transition: all 0.22s ease;
+    overflow: hidden;
+}
+.hcz-kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--hcz-border-strong), transparent);
+    opacity: 0;
+    transition: opacity 0.22s ease;
+}
+.hcz-kpi-card:hover {
+    border-color: var(--hcz-border-strong);
+    background: var(--hcz-card-hover);
+    transform: translateY(-2px);
+    box-shadow: var(--hcz-shadow);
+}
+.hcz-kpi-card:hover::before { opacity: 1; }
+.hcz-kpi-card .kpi-glow {
+    position: absolute;
+    top: -40px; right: -40px;
+    width: 120px; height: 120px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--glow-color, var(--hcz-brand-soft)), transparent 70%);
+    opacity: 0.6;
+    pointer-events: none;
+}
+.hcz-kpi-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.hcz-kpi-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--hcz-text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.hcz-kpi-icon {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--icon-bg, var(--hcz-brand-soft));
+    color: var(--icon-color, var(--hcz-brand));
+    font-size: 14px;
+}
+.hcz-kpi-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--hcz-text-1);
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    word-break: break-all;
+}
+.hcz-kpi-value .unit {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--hcz-text-3);
+    margin-left: 3px;
+}
+.hcz-kpi-foot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.hcz-kpi-trend {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+}
+.hcz-kpi-trend.up { background: var(--hcz-success-soft); color: var(--hcz-success); }
+.hcz-kpi-trend.down { background: var(--hcz-danger-soft); color: var(--hcz-danger); }
+.hcz-kpi-trend.flat { background: rgba(255,255,255,0.05); color: var(--hcz-text-3); }
+.hcz-kpi-sub { color: var(--hcz-text-3); font-size: 11px; }
+
+/* ── Main Content Grid ── */
+.hcz-main-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.8fr);
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+/* ── Card Base ── */
+.hcz-card {
+    background: var(--hcz-card);
+    border: 1px solid var(--hcz-border);
+    border-radius: var(--hcz-radius-lg);
+    overflow: hidden;
+}
+.hcz-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px 14px;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.hcz-card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--hcz-text-1);
+    margin: 0;
+}
+.hcz-card-subtitle {
+    font-size: 12px;
+    color: var(--hcz-text-3);
+    margin: 2px 0 0;
+    font-weight: 500;
+}
+.hcz-card-body { padding: 0 20px 20px; }
+
+/* ── Metric Tabs ── */
+.hcz-metric-tabs {
+    display: inline-flex;
+    gap: 4px;
+    background: var(--hcz-bg-elevated);
+    border-radius: 8px;
+    padding: 3px;
+}
+.hcz-metric-tabs button {
+    border: none;
+    background: transparent;
+    color: var(--hcz-text-3);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+.hcz-metric-tabs button:hover { color: var(--hcz-text-2); }
+.hcz-metric-tabs button.active {
+    background: var(--hcz-card);
+    color: var(--hcz-text-1);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* ── Chart Area ── */
+.hcz-chart-wrap {
+    position: relative;
+    height: 300px;
+    width: 100%;
+}
+.hcz-chart-wrap svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.hcz-chart-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--hcz-text-3);
+    font-size: 13px;
+    gap: 8px;
+}
+.hcz-chart-empty svg { width: 40px; height: 40px; opacity: 0.4; }
+
+/* ── Tooltip ── */
+.hcz-tooltip {
+    position: fixed;
+    z-index: 9999;
+    pointer-events: none;
+    background: rgba(17,19,24,0.96);
+    border: 1px solid var(--hcz-border-strong);
+    border-radius: 10px;
+    padding: 10px 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    backdrop-filter: blur(12px);
+    min-width: 160px;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.hcz-tooltip.show { opacity: 1; transform: translateY(0); }
+.hcz-tooltip-date {
+    font-size: 11px;
+    color: var(--hcz-text-3);
+    font-weight: 600;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.hcz-tooltip-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    font-size: 12px;
+    padding: 2px 0;
+}
+.hcz-tooltip-row .label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--hcz-text-2);
+    font-weight: 500;
+}
+.hcz-tooltip-row .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.hcz-tooltip-row .value {
+    color: var(--hcz-text-1);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Business Status ── */
+.hcz-status-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.hcz-status-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--hcz-border);
+}
+.hcz-status-item:last-child { border-bottom: none; }
+.hcz-status-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--hcz-text-2);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.hcz-status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+}
+.hcz-status-indicator .led {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    position: relative;
+}
+.hcz-status-indicator .led::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    opacity: 0.3;
+    animation: hcz-pulse 2.5s ease-in-out infinite;
+}
+.hcz-status-indicator.normal .led { background: var(--hcz-success); }
+.hcz-status-indicator.normal .led::after { background: var(--hcz-success); }
+.hcz-status-indicator.normal { color: var(--hcz-success); }
+.hcz-status-indicator.warning .led { background: var(--hcz-warning); }
+.hcz-status-indicator.warning .led::after { background: var(--hcz-warning); }
+.hcz-status-indicator.warning { color: var(--hcz-warning); }
+.hcz-status-indicator.down .led { background: var(--hcz-danger); }
+.hcz-status-indicator.down .led::after { background: var(--hcz-danger); }
+.hcz-status-indicator.down { color: var(--hcz-danger); }
+
+/* ── Dual Sparkline Section ── */
+.hcz-spark-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.hcz-spark-card {
+    background: var(--hcz-card);
+    border: 1px solid var(--hcz-border);
+    border-radius: var(--hcz-radius-lg);
+    padding: 18px 20px;
+    transition: all 0.22s ease;
+}
+.hcz-spark-card:hover {
+    border-color: var(--hcz-border-strong);
+    background: var(--hcz-card-hover);
+}
+.hcz-spark-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+.hcz-spark-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--hcz-text-3);
+}
+.hcz-spark-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--hcz-text-1);
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+}
+.hcz-spark-trend {
+    font-size: 12px;
+    font-weight: 700;
+}
+.hcz-spark-svg {
+    width: 100%;
+    height: 60px;
+    margin-top: 8px;
+}
+
+/* ── Exception / Alert Section ── */
+.hcz-alert-section {
+    margin-bottom: 16px;
+}
+.hcz-alert-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+.hcz-alert-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--hcz-card);
+    border: 1px solid var(--hcz-border);
+    border-radius: var(--hcz-radius);
+    padding: 16px 18px;
+    text-decoration: none;
+    transition: all 0.22s ease;
+    cursor: pointer;
+}
+.hcz-alert-card:hover {
+    border-color: var(--hcz-border-strong);
+    background: var(--hcz-card-hover);
+    transform: translateY(-1px);
+}
+.hcz-alert-icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 18px;
+}
+.hcz-alert-icon.warn { background: var(--hcz-warning-soft); color: var(--hcz-warning); }
+.hcz-alert-icon.danger { background: var(--hcz-danger-soft); color: var(--hcz-danger); }
+.hcz-alert-icon.info { background: var(--hcz-info-soft); color: var(--hcz-info); }
+.hcz-alert-icon.success { background: var(--hcz-success-soft); color: var(--hcz-success); }
+.hcz-alert-info { flex: 1; min-width: 0; }
+.hcz-alert-count {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--hcz-text-1);
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+.hcz-alert-label {
+    font-size: 12px;
+    color: var(--hcz-text-3);
+    font-weight: 500;
+    margin-top: 2px;
+}
+.hcz-alert-arrow {
+    color: var(--hcz-text-3);
+    font-size: 16px;
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+.hcz-alert-card:hover .hcz-alert-arrow { transform: translateX(3px); color: var(--hcz-text-1); }
+
+/* ── Recent Orders ── */
+.hcz-orders-card { margin-bottom: 16px; }
+.hcz-orders-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.hcz-orders-table th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--hcz-text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--hcz-border);
+    white-space: nowrap;
+}
+.hcz-orders-table td {
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--hcz-text-2);
+    border-bottom: 1px solid var(--hcz-border);
+    font-variant-numeric: tabular-nums;
+}
+.hcz-orders-table tr:last-child td { border-bottom: none; }
+.hcz-orders-table tr:hover td { background: var(--hcz-card-hover); }
+.hcz-order-num {
+    font-family: 'SF Mono', 'Consolas', monospace;
+    font-size: 12px;
+    color: var(--hcz-text-1);
+    font-weight: 600;
+}
+.hcz-order-user {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.hcz-order-avatar {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--hcz-brand-soft);
+    color: var(--hcz-brand);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+.hcz-order-amount {
+    font-weight: 700;
+    color: var(--hcz-text-1);
+}
+.hcz-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.hcz-badge.success { background: var(--hcz-success-soft); color: var(--hcz-success); }
+.hcz-badge.warning { background: var(--hcz-warning-soft); color: var(--hcz-warning); }
+.hcz-badge.danger { background: var(--hcz-danger-soft); color: var(--hcz-danger); }
+.hcz-badge.info { background: var(--hcz-info-soft); color: var(--hcz-info); }
+.hcz-badge.muted { background: rgba(255,255,255,0.05); color: var(--hcz-text-3); }
+[data-bs-theme-mode="light"] .hcz-badge.muted,
+[data-bs-theme="light"] .hcz-badge.muted { background: rgba(0,0,0,0.05); }
+.hcz-order-time { color: var(--hcz-text-3); font-size: 12px; white-space: nowrap; }
+.hcz-view-all {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--hcz-brand);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: gap 0.2s ease;
+}
+.hcz-view-all:hover { gap: 8px; }
+
+/* ── Skeleton Loading ── */
+.hcz-skeleton {
+    background: linear-gradient(90deg, var(--hcz-card) 25%, var(--hcz-card-hover) 50%, var(--hcz-card) 75%);
+    background-size: 200% 100%;
+    animation: hcz-shimmer 1.5s ease-in-out infinite;
+    border-radius: 6px;
+}
+@keyframes hcz-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+.hcz-skel-kpi { height: 110px; border-radius: var(--hcz-radius); }
+.hcz-skel-chart { height: 300px; border-radius: var(--hcz-radius-lg); }
+.hcz-skel-line { height: 14px; margin-bottom: 10px; border-radius: 4px; }
+.hcz-skel-line.short { width: 40%; }
+.hcz-skel-line.medium { width: 65%; }
+
+/* ── Fade In Animation ── */
+.hcz-fade-in {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: hcz-fade-in 0.4s ease forwards;
+}
+.hcz-fade-in.delay-1 { animation-delay: 0.05s; }
+.hcz-fade-in.delay-2 { animation-delay: 0.1s; }
+.hcz-fade-in.delay-3 { animation-delay: 0.15s; }
+.hcz-fade-in.delay-4 { animation-delay: 0.2s; }
+@keyframes hcz-fade-in {
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Responsive ── */
+@media (max-width: 1400px) {
+    .hcz-kpi-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 1100px) {
+    .hcz-main-grid { grid-template-columns: 1fr; }
+    .hcz-kpi-grid { grid-template-columns: repeat(3, 1fr); }
+    .hcz-alert-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+    .hcz-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .hcz-spark-grid { grid-template-columns: 1fr; }
+    .hcz-alert-grid { grid-template-columns: 1fr; }
+    .hcz-page-header { flex-direction: column; }
+    .hcz-page-actions { width: 100%; justify-content: space-between; }
+    .hcz-chart-wrap { height: 240px; }
+    .hcz-orders-table { display: block; overflow-x: auto; white-space: nowrap; }
+    .hcz-kpi-value { font-size: 22px; }
+}
+@media (max-width: 480px) {
+    .hcz-kpi-grid { grid-template-columns: 1fr; }
+    .hcz-range-group { overflow-x: auto; max-width: 100%; }
+}
 </style>
 
-<div class="d-flex flex-column flex-column-fluid admin-trend-page">
-    /* ── dark theme ── */
-    [data-bs-theme-mode="dark"] .admin-trend-page {
-        --trend-ink: #e2e8f0;
-        --trend-muted: #94a3b8;
-        --trend-border: rgba(148, 163, 184, 0.14);
-        --trend-panel: rgba(15, 23, 42, 0.97);
-        --trend-primary: #2dd4bf;
-        --trend-accent: #38bdf8;
-        --trend-shadow: 0 24px 70px rgba(0, 0, 0, 0.36);
-    }
-    [data-bs-theme-mode="dark"] .trend-shell {
-        background:
-            radial-gradient(circle at 10% 8%, rgba(45, 212, 191, 0.12), transparent 28%),
-            radial-gradient(circle at 88% 0%, rgba(14, 165, 233, 0.12), transparent 24%),
-            rgba(15, 23, 42, 0.97);
-    }
-    [data-bs-theme-mode="dark"] .trend-summary-card {
-        background: linear-gradient(180deg, #1e293b, #172032);
-    }
-    [data-bs-theme-mode="dark"] .trend-select {
-        background: #1e293b;
-        color: var(--trend-ink);
-        border-color: var(--trend-border);
-        color-scheme: dark;
-    }
-    [data-bs-theme-mode="dark"] .trend-range button {
-        background: #1e293b;
-        color: #94a3b8;
-        border-color: var(--trend-border);
-    }
-    [data-bs-theme-mode="dark"] .trend-range button.active {
-        background: linear-gradient(135deg, #0f766e, #0369a1);
-        color: #fff;
-        border-color: transparent;
-    }
-    [data-bs-theme-mode="dark"] .trend-current {
-        background: linear-gradient(180deg, #1e293b, #172032);
-    }
-    [data-bs-theme-mode="dark"] .trend-current-tag {
-        background: rgba(14, 165, 233, 0.15);
-        color: #38bdf8;
-    }
-    [data-bs-theme-mode="dark"] .trend-insight {
-        border-color: rgba(45, 212, 191, 0.2);
-        background: rgba(6, 78, 59, 0.4);
-        color: #6ee7b7;
-    }
-    [data-bs-theme-mode="dark"] .trend-insight.negative {
-        border-color: rgba(239, 68, 68, 0.2);
-        background: rgba(127, 29, 29, 0.4);
-        color: #fca5a5;
-    }
-    [data-bs-theme-mode="dark"] .trend-point {
-        background: #1e293b;
-        color: #94a3b8;
-    }
-    [data-bs-theme-mode="dark"] .trend-point.active {
-        background: linear-gradient(135deg, #0f766e, #0369a1);
-        color: #fff;
-    }
-    [data-bs-theme-mode="dark"] .trend-point.active strong {
-        color: #fff;
-    }
-    [data-bs-theme-mode="dark"] .trend-chart-card {
-        background: #1e293b;
-    }
-    [data-bs-theme-mode="dark"] .trend-chart-badge {
-        background: rgba(6, 78, 59, 0.45);
-        color: #6ee7b7;
-    }
-    [data-bs-theme-mode="dark"] .trend-svg-wrap {
-        background:
-            linear-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(148, 163, 184, 0.07) 1px, transparent 1px),
-            linear-gradient(180deg, #172032, #1a2540);
-        background-size: 100% 25%, 25% 100%, 100% 100%;
-    }
+<div class="d-flex flex-column flex-column-fluid">
     <div id="kt_app_content" class="app-content flex-column-fluid py-3 py-lg-6">
         <div id="kt_app_content_container" class="app-container container-fluid">
-            <div class="trend-shell">
-                <div class="trend-hero">
-                    <div>
-                        <span class="trend-kicker">TREND DASHBOARD</span>
-                        <h1>首页概况趋势</h1>
-                        <p>不同数据不再铺多个窗口，统一放进一个趋势分析面板。选择指标和时间口径，就能快速看今天、本月、历史之间的变化。</p>
+            <div class="hcz-dash">
+
+                <!-- ════════ PAGE HEADER ════════ -->
+                <div class="hcz-page-header hcz-fade-in">
+                    <div class="hcz-page-title">
+                        <h1>首页概况</h1>
+                        <p>实时掌握平台核心经营数据</p>
                     </div>
-                    <div class="trend-balance">
-                        <span>所有账户总余额</span>
-                        <strong>{{$total_user_balance|default='0'}}</strong>
-                        <small>USDT available balance</small>
+                    <div class="hcz-page-actions">
+                        <span class="hcz-update-time">
+                            <span class="dot"></span>
+                            更新于 {{$data_update_time|default=''}}
+                        </span>
+                        <button class="hcz-btn" id="hczRefreshBtn" onclick="hczRefreshPage()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+                            刷新
+                        </button>
+                        <div class="hcz-range-group" id="hczRangeGroup">
+                            <button type="button" data-range="today">今日</button>
+                            <button type="button" data-range="7d" class="active">7天</button>
+                            <button type="button" data-range="30d">30天</button>
+                            <button type="button" data-range="month">本月</button>
+                            <button type="button" data-range="total">历史</button>
+                        </div>
                     </div>
                 </div>
 
-                <div class="trend-board">
-                    <div class="trend-summary">
-                        <div class="trend-summary-head">
+                <!-- ════════ KPI CARDS ════════ -->
+                <div class="hcz-kpi-grid hcz-fade-in delay-1" id="hczKpiGrid">
+                    <!-- Card 1: 今日充值收入 -->
+                    <div class="hcz-kpi-card" style="--glow-color:rgba(139,124,246,0.12);--icon-bg:var(--hcz-brand-soft);--icon-color:var(--hcz-brand);">
+                        <div class="kpi-glow"></div>
+                        <div class="hcz-kpi-head">
+                            <span class="hcz-kpi-label">今日充值收入</span>
+                            <div class="hcz-kpi-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                            </div>
+                        </div>
+                        <div class="hcz-kpi-value">{{$balance_zc_jr|default='0.00'}}<span class="unit">USDT</span></div>
+                        <div class="hcz-kpi-foot">
+                            <span class="hcz-kpi-trend up" id="kpiRechargeTrend">—</span>
+                            <span class="hcz-kpi-sub">较上周期</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: 今日订单 -->
+                    <div class="hcz-kpi-card" style="--glow-color:rgba(96,165,250,0.12);--icon-bg:var(--hcz-info-soft);--icon-color:var(--hcz-info);">
+                        <div class="kpi-glow"></div>
+                        <div class="hcz-kpi-head">
+                            <span class="hcz-kpi-label">今日订单</span>
+                            <div class="hcz-kpi-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                            </div>
+                        </div>
+                        <div class="hcz-kpi-value">{{$order_jr|default='0'}}<span class="unit">笔</span></div>
+                        <div class="hcz-kpi-foot">
+                            <span class="hcz-kpi-trend up" id="kpiOrderTrend">—</span>
+                            <span class="hcz-kpi-sub">较上周期</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: 支付成功率 -->
+                    <div class="hcz-kpi-card" style="--glow-color:rgba(52,211,153,0.12);--icon-bg:var(--hcz-success-soft);--icon-color:var(--hcz-success);">
+                        <div class="kpi-glow"></div>
+                        <div class="hcz-kpi-head">
+                            <span class="hcz-kpi-label">支付成功率</span>
+                            <div class="hcz-kpi-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                            </div>
+                        </div>
+                        <div class="hcz-kpi-value">{{$payment_success_rate|default='0'}}<span class="unit">%</span></div>
+                        <div class="hcz-kpi-foot">
+                            <span class="hcz-kpi-sub">{{$today_order_processed|default='0'}} / {{$today_order_total|default='0'}} 笔已处理</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 4: 用户总数 -->
+                    <div class="hcz-kpi-card" style="--glow-color:rgba(251,191,36,0.1);--icon-bg:var(--hcz-warning-soft);--icon-color:var(--hcz-warning);">
+                        <div class="kpi-glow"></div>
+                        <div class="hcz-kpi-head">
+                            <span class="hcz-kpi-label">用户总数</span>
+                            <div class="hcz-kpi-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                            </div>
+                        </div>
+                        <div class="hcz-kpi-value">{{$user_total|default='0'}}</div>
+                        <div class="hcz-kpi-foot">
+                            <span class="hcz-kpi-trend up">+{{$user_today_new|default='0'}}</span>
+                            <span class="hcz-kpi-sub">今日新增</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 5: 平台资产 -->
+                    <div class="hcz-kpi-card" style="--glow-color:rgba(139,124,246,0.1);--icon-bg:var(--hcz-brand-soft);--icon-color:var(--hcz-brand);">
+                        <div class="kpi-glow"></div>
+                        <div class="hcz-kpi-head">
+                            <span class="hcz-kpi-label">平台总资产</span>
+                            <div class="hcz-kpi-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                            </div>
+                        </div>
+                        <div class="hcz-kpi-value">{{$total_user_balance|default='0.00'}}<span class="unit">USDT</span></div>
+                        <div class="hcz-kpi-foot">
+                            <span class="hcz-kpi-sub">所有账户总余额</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 6: 待处理 -->
+                    <div class="hcz-kpi-card" style="--glow-color:rgba(248,113,113,0.1);--icon-bg:var(--hcz-danger-soft);--icon-color:var(--hcz-danger);">
+                        <div class="kpi-glow"></div>
+                        <div class="hcz-kpi-head">
+                            <span class="hcz-kpi-label">待处理</span>
+                            <div class="hcz-kpi-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            </div>
+                        </div>
+                        <div class="hcz-kpi-value">{{$pending_total|default='0'}}<span class="unit">项</span></div>
+                        <div class="hcz-kpi-foot">
+                            <span class="hcz-kpi-sub">提现 {{$pending_withdrawal|default='0'}} · 充值 {{$pending_recharge|default='0'}}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ════════ MAIN GRID: Trend Chart + Status ════════ -->
+                <div class="hcz-main-grid hcz-fade-in delay-2">
+                    <!-- Trend Chart -->
+                    <div class="hcz-card">
+                        <div class="hcz-card-head">
                             <div>
-                                <h2>经营概览</h2>
-                                <p>先看核心指标，再做趋势分析，减少来回切换。</p>
+                                <h2 class="hcz-card-title">平台经营趋势</h2>
+                                <p class="hcz-card-subtitle" id="hczChartSubtitle">近 7 天数据走势</p>
+                            </div>
+                            <div class="hcz-metric-tabs" id="hczMetricTabs">
+                                <button type="button" data-metric="balanceRecharge" class="active">收入</button>
+                                <button type="button" data-metric="orderCount">订单</button>
+                                <button type="button" data-metric="tradeAmount">交易额</button>
+                                <button type="button" data-metric="withdrawal">提现</button>
                             </div>
                         </div>
-                        <div class="trend-summary-grid">
-                            <article class="trend-summary-card">
-                                <b>今日充值金额</b>
-                                <strong>{{$balance_zc_jr|default='0'}}</strong>
-                                <span>USDT</span>
-                            </article>
-                            <article class="trend-summary-card">
-                                <b>今日提现金额</b>
-                                <strong>{{$withdrawal_jr|default='0'}}</strong>
-                                <span>USDT</span>
-                            </article>
-                            <article class="trend-summary-card">
-                                <b>今日订单充值笔数</b>
-                                <strong>{{$order_jr|default='0'}}</strong>
-                                <span>笔</span>
-                            </article>
-                            <article class="trend-summary-card">
-                                <b>今日 USDT 交易金额</b>
-                                <strong>{{$transaction_order_amount_jr|default='0'}}</strong>
-                                <span>USDT</span>
-                            </article>
-                        </div>
-                    </div>
-
-                    <div class="trend-toolbar">
-                        <div class="trend-field">
-                            <label for="overviewMetricSelect">选择指标</label>
-                            <select id="overviewMetricSelect" class="trend-select">
-                                <option value="balanceRecharge">余额充值金额</option>
-                                <option value="withdrawal">提现金额</option>
-                                <option value="balanceDeduct">后台扣款金额</option>
-                                <option value="orderCount">订单充值笔数</option>
-                                <option value="rebate">代理返佣金额</option>
-                                <option value="tradeCount">USDT 交易订单数</option>
-                                <option value="tradeAmount">USDT 交易金额</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <span class="trend-range-label">选择时间</span>
-                            <div class="trend-range" id="overviewRangeButtons">
-                                <button type="button" class="active" data-range="today">今日</button>
-                                <button type="button" data-range="month">本月</button>
-                                <button type="button" data-range="total">历史</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="trend-window">
-                        <div class="trend-current">
-                            <span class="trend-current-tag" id="overviewCurrentRange">今日</span>
-                            <h2 id="overviewCurrentTitle">余额充值金额</h2>
-                            <span class="trend-current-value" id="overviewCurrentValue">0</span>
-                            <span class="trend-current-unit" id="overviewCurrentUnit">USDT</span>
-                            <div class="trend-insight" id="overviewInsight"></div>
-                            <div class="trend-point-list" id="overviewPointList"></div>
-                        </div>
-
-                        <div class="trend-chart-card">
-                            <div class="trend-chart-head">
-                                <div>
-                                    <h3 id="overviewChartTitle">余额充值金额趋势图</h3>
-                                    <p>本月按当月每日展示，历史按今年每日展示。</p>
+                        <div class="hcz-card-body">
+                            <div class="hcz-chart-wrap" id="hczChartWrap">
+                                <svg id="hczTrendSvg" viewBox="0 0 800 300" preserveAspectRatio="none" role="img" aria-label="经营趋势图"></svg>
+                                <div class="hcz-chart-empty" id="hczChartEmpty" style="display:none;">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3v18h18"/><path d="m7 14 4-4 4 4 5-5"/></svg>
+                                    <div>暂无趋势数据</div>
+                                    <div style="font-size:11px;opacity:0.7;">选择其他时间范围查看数据</div>
                                 </div>
-                                <span class="trend-chart-badge" id="overviewChartBadge">USDT</span>
+                                <div class="hcz-tooltip" id="hczTooltip"></div>
                             </div>
-                            <div class="trend-svg-wrap">
-                                <svg id="overviewTrendSvg" viewBox="0 0 720 250" preserveAspectRatio="none" role="img" aria-label="趋势图"></svg>
+                        </div>
+                    </div>
+
+                    <!-- Business Status -->
+                    <div class="hcz-card">
+                        <div class="hcz-card-head">
+                            <div>
+                                <h2 class="hcz-card-title">业务运行状态</h2>
+                                <p class="hcz-card-subtitle">核心服务实时监控</p>
                             </div>
-                            <div class="trend-axis" id="overviewTrendAxis">
-                                <span>今日</span>
-                                <span>本月</span>
-                                <span>历史</span>
+                        </div>
+                        <div class="hcz-card-body">
+                            <div class="hcz-status-list" id="hczStatusList">
+                                <div class="hcz-status-item">
+                                    <span class="hcz-status-name">支付系统</span>
+                                    <span class="hcz-status-indicator normal"><span class="led"></span>正常</span>
+                                </div>
+                                <div class="hcz-status-item">
+                                    <span class="hcz-status-name">订单系统</span>
+                                    <span class="hcz-status-indicator normal"><span class="led"></span>正常</span>
+                                </div>
+                                <div class="hcz-status-item">
+                                    <span class="hcz-status-name">API 服务</span>
+                                    <span class="hcz-status-indicator normal"><span class="led"></span>正常</span>
+                                </div>
+                                <div class="hcz-status-item">
+                                    <span class="hcz-status-name">数据库</span>
+                                    <span class="hcz-status-indicator normal"><span class="led"></span>正常</span>
+                                </div>
+                                <div class="hcz-status-item">
+                                    <span class="hcz-status-name">任务队列</span>
+                                    <span class="hcz-status-indicator normal"><span class="led"></span>正常</span>
+                                </div>
+                                <div class="hcz-status-item">
+                                    <span class="hcz-status-name">提现通道</span>
+                                    <span class="hcz-status-indicator" id="hczWithdrawStatus"><span class="led"></span>正常</span>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
+
+                <!-- ════════ DUAL SPARKLINE: Revenue + Orders ════════ -->
+                <div class="hcz-spark-grid hcz-fade-in delay-3">
+                    <div class="hcz-spark-card">
+                        <div class="hcz-spark-head">
+                            <span class="hcz-spark-label">收入趋势</span>
+                            <span class="hcz-spark-trend" id="hczSparkRevenueTrend" style="color:var(--hcz-success);">—</span>
+                        </div>
+                        <div class="hcz-spark-value" id="hczSparkRevenueValue">{{$balance_zc_jr|default='0.00'}} <span style="font-size:13px;color:var(--hcz-text-3);font-weight:500;">USDT</span></div>
+                        <svg class="hcz-spark-svg" id="hczSparkRevenue" viewBox="0 0 400 60" preserveAspectRatio="none"></svg>
+                    </div>
+                    <div class="hcz-spark-card">
+                        <div class="hcz-spark-head">
+                            <span class="hcz-spark-label">订单趋势</span>
+                            <span class="hcz-spark-trend" id="hczSparkOrderTrend" style="color:var(--hcz-success);">—</span>
+                        </div>
+                        <div class="hcz-spark-value" id="hczSparkOrderValue">{{$order_jr|default='0'}} <span style="font-size:13px;color:var(--hcz-text-3);font-weight:500;">笔</span></div>
+                        <svg class="hcz-spark-svg" id="hczSparkOrder" viewBox="0 0 400 60" preserveAspectRatio="none"></svg>
+                    </div>
+                </div>
+
+                <!-- ════════ EXCEPTION / ALERT SECTION ════════ -->
+                <div class="hcz-alert-section hcz-fade-in delay-3" id="hczAlertSection">
+                    <div class="hcz-alert-grid">
+                        <a class="hcz-alert-card" href="{{:getConfig('backstage_entrance')}}/withdrawal">
+                            <div class="hcz-alert-icon warn">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                            </div>
+                            <div class="hcz-alert-info">
+                                <div class="hcz-alert-count">{{$pending_withdrawal|default='0'}}</div>
+                                <div class="hcz-alert-label">待审核提现</div>
+                            </div>
+                            <span class="hcz-alert-arrow">→</span>
+                        </a>
+                        <a class="hcz-alert-card" href="{{:getConfig('backstage_entrance')}}/recharge">
+                            <div class="hcz-alert-icon info">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                            </div>
+                            <div class="hcz-alert-info">
+                                <div class="hcz-alert-count">{{$pending_recharge|default='0'}}</div>
+                                <div class="hcz-alert-label">待处理充值</div>
+                            </div>
+                            <span class="hcz-alert-arrow">→</span>
+                        </a>
+                        <a class="hcz-alert-card" href="{{:getConfig('backstage_entrance')}}/order_cz">
+                            <div class="hcz-alert-icon danger">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            </div>
+                            <div class="hcz-alert-info">
+                                <div class="hcz-alert-count">{{$pending_order_cz|default='0'}}</div>
+                                <div class="hcz-alert-label">待处理充值订单</div>
+                            </div>
+                            <span class="hcz-alert-arrow">→</span>
+                        </a>
+                        <a class="hcz-alert-card" href="{{:getConfig('backstage_entrance')}}/order_cx">
+                            <div class="hcz-alert-icon success">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            </div>
+                            <div class="hcz-alert-info">
+                                <div class="hcz-alert-count">{{$pending_order_cx|default='0'}}</div>
+                                <div class="hcz-alert-label">待处理查询订单</div>
+                            </div>
+                            <span class="hcz-alert-arrow">→</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- ════════ RECENT ORDERS ════════ -->
+                <div class="hcz-card hcz-orders-card hcz-fade-in delay-4">
+                    <div class="hcz-card-head">
+                        <div>
+                            <h2 class="hcz-card-title">最近订单</h2>
+                            <p class="hcz-card-subtitle">最新 8 条业务订单</p>
+                        </div>
+                        <a class="hcz-view-all" href="{{:getConfig('backstage_entrance')}}/order_cz">查看全部 →</a>
+                    </div>
+                    <div class="hcz-card-body" style="padding:0 0 8px;">
+                        <table class="hcz-orders-table">
+                            <thead>
+                                <tr>
+                                    <th>订单号</th>
+                                    <th>用户</th>
+                                    <th>类型</th>
+                                    <th>金额</th>
+                                    <th>状态</th>
+                                    <th>时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="hczOrdersBody">
+                                <!-- JS rendered -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div><!-- /.hcz-dash -->
+        </div><!-- /.app-container -->
+    </div><!-- /.app-content -->
 </div>
 
 <script>
 (function () {
-    var ranges = [
-        { key: 'today', label: '今日' },
-        { key: 'month', label: '本月' },
-        { key: 'total', label: '历史(今年)' }
-    ];
+    'use strict';
 
-    function parseMetricValue(value) {
-        var normalized = String(value || '0').replace(/,/g, '').trim();
-        var number = Number(normalized);
-        return Number.isFinite(number) ? number : 0;
-    }
-
-    function makeMetric(label, unit, today, month, total, color) {
-        return {
-            label: label,
-            unit: unit,
-            color: color,
-            values: {
-                today: parseMetricValue(today),
-                month: parseMetricValue(month),
-                total: parseMetricValue(total)
-            },
-            display: {
-                today: String(today || '0'),
-                month: String(month || '0'),
-                total: String(total || '0')
-            }
-        };
-    }
-
-    var metrics = {
-        balanceRecharge: makeMetric('余额充值金额', 'USDT', "{{$balance_zc_jr|default='0'}}", "{{$balance_zc_by|default='0'}}", "{{$balance_zc_s|default='0'}}", '#10b981'),
-        withdrawal: makeMetric('提现金额', 'USDT', "{{$withdrawal_jr|default='0'}}", "{{$withdrawal_by|default='0'}}", "{{$withdrawal_s|default='0'}}", '#ef4444'),
-        balanceDeduct: makeMetric('后台扣款金额', 'USDT', "{{$balance_dk_jr|default='0'}}", "{{$balance_dk_by|default='0'}}", "{{$balance_dk_s|default='0'}}", '#f97316'),
-        orderCount: makeMetric('订单充值笔数', '笔', "{{$order_jr|default='0'}}", "{{$order_by|default='0'}}", "{{$order_s|default='0'}}", '#2563eb'),
-        rebate: makeMetric('代理返佣金额', 'USDT', "{{$rebate_record_jr|default='0'}}", "{{$rebate_record_by|default='0'}}", "{{$rebate_record_s|default='0'}}", '#8b5cf6'),
-        tradeCount: makeMetric('USDT 交易订单数', '笔', "{{$transaction_order_jr|default='0'}}", "{{$transaction_order_by|default='0'}}", "{{$transaction_order_s|default='0'}}", '#0ea5e9'),
-        tradeAmount: makeMetric('USDT 交易金额', 'USDT', "{{$transaction_order_amount_jr|default='0'}}", "{{$transaction_order_amount_by|default='0'}}", "{{$transaction_order_amount_s|default='0'}}", '#f59e0b')
-    };
+    /* ══════════════════════════════════════════════════════════
+       DATA — injected from PHP (real API data, no fakes)
+       ══════════════════════════════════════════════════════════ */
     var trendData = <?php echo $overview_trend_json ?? '{}'; ?>;
+    var recentOrders = <?php echo $recent_orders_json ?? '[]'; ?>;
 
-    var metricSelect = document.getElementById('overviewMetricSelect');
-    var rangeButtons = document.getElementById('overviewRangeButtons');
-    var currentRange = document.getElementById('overviewCurrentRange');
-    var currentTitle = document.getElementById('overviewCurrentTitle');
-    var currentValue = document.getElementById('overviewCurrentValue');
-    var currentUnit = document.getElementById('overviewCurrentUnit');
-    var pointList = document.getElementById('overviewPointList');
-    var chartTitle = document.getElementById('overviewChartTitle');
-    var chartBadge = document.getElementById('overviewChartBadge');
-    var trendAxis = document.getElementById('overviewTrendAxis');
-    var svg = document.getElementById('overviewTrendSvg');
-    var insight = document.getElementById('overviewInsight');
-    var selectedRange = 'today';
+    var METRICS = {
+        balanceRecharge: { label: '余额充值金额', unit: 'USDT', color: '#8B7CF6', key: 'balanceRecharge' },
+        orderCount:      { label: '订单笔数',     unit: '笔',   color: '#60A5FA', key: 'orderCount' },
+        tradeAmount:     { label: 'USDT交易金额', unit: 'USDT', color: '#34D399', key: 'tradeAmount' },
+        withdrawal:      { label: '提现金额',     unit: 'USDT', color: '#F87171', key: 'withdrawal' }
+    };
 
-    if (!metricSelect || !rangeButtons || !currentRange || !currentTitle || !currentValue || !currentUnit || !pointList || !chartTitle || !chartBadge || !trendAxis || !svg || !insight) {
-        return;
+    var state = {
+        metric: 'balanceRecharge',
+        range: '7d'
+    };
+
+    /* ══════════════════════════════════════════════════════════
+       HELPERS
+       ══════════════════════════════════════════════════════════ */
+    function parseNum(v) {
+        var n = Number(String(v || '0').replace(/,/g, ''));
+        return Number.isFinite(n) ? n : 0;
     }
 
-    function formatNumber(value, unit) {
-        if (unit === '笔') {
-            return String(Math.round(value));
+    function fmt(v, unit) {
+        if (unit === '笔') return String(Math.round(v));
+        return Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    /* Catmull-Rom → Cubic Bezier smooth curve */
+    function smoothPath(points) {
+        if (points.length < 2) return points.length ? 'M' + points[0].x + ',' + points[0].y : '';
+        if (points.length === 2) return 'M' + points[0].x + ',' + points[0].y + ' L' + points[1].x + ',' + points[1].y;
+        var d = 'M' + points[0].x + ',' + points[0].y;
+        for (var i = 0; i < points.length - 1; i++) {
+            var p0 = points[i - 1] || points[i];
+            var p1 = points[i];
+            var p2 = points[i + 1];
+            var p3 = points[i + 2] || p2;
+            var c1x = p1.x + (p2.x - p0.x) / 6;
+            var c1y = p1.y + (p2.y - p0.y) / 6;
+            var c2x = p2.x - (p3.x - p1.x) / 6;
+            var c2y = p2.y - (p3.y - p1.y) / 6;
+            d += ' C' + c1x.toFixed(2) + ',' + c1y.toFixed(2) + ' ' + c2x.toFixed(2) + ',' + c2y.toFixed(2) + ' ' + p2.x.toFixed(2) + ',' + p2.y.toFixed(2);
         }
-        return Number(value || 0).toLocaleString('en-US', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        });
+        return d;
     }
 
-    function buildPath(points, command) {
-        return points.map(function (point, index) {
-            return (index === 0 ? command.start : command.next) + point.x + ',' + point.y;
-        }).join(' ');
-    }
+    /* ══════════════════════════════════════════════════════════
+       DATA EXTRACTION by range
+       ══════════════════════════════════════════════════════════ */
+    function getRangeData(metricKey, range) {
+        var month = trendData.month || {};
+        var total = trendData.total || {};
+        var series, labels, fullLabels;
 
-    function sumSeries(series) {
-        return (series || []).reduce(function (total, value) {
-            return total + parseMetricValue(value);
-        }, 0);
-    }
+        // Today: show aggregate comparison (今日 / 本月日均 / 历史日均)
+        if (range === 'today') {
+            var agg = getAggregateValues(metricKey);
+            var monthDays = new Date().getDate() || 1;
+            var yearDays = Math.ceil((Date.now() - new Date(new Date().getFullYear(), 0, 1).getTime()) / 86400000) || 1;
+            return {
+                values: [agg.today, agg.month / monthDays, agg.total / yearDays],
+                labels: ['今日', '本月日均', '历史日均'],
+                fullLabels: ['今日', '本月日均', '历史日均'],
+                isAggregate: true
+            };
+        }
 
-    function getRangeValue(metric, metricKey, rangeKey) {
-        if (rangeKey === 'month' || rangeKey === 'total') {
-            var rangeData = trendData[rangeKey] || {};
-            var dailySeries = rangeData.series && rangeData.series[metricKey];
-            if (Array.isArray(dailySeries)) {
-                return sumSeries(dailySeries);
+        if (range === 'total') {
+            series = total.series ? total.series[metricKey] : null;
+            labels = total.labels || [];
+            fullLabels = total.fullLabels || [];
+        } else {
+            // month-based ranges: 7d, 30d, month
+            series = month.series ? month.series[metricKey] : null;
+            labels = month.labels || [];
+            fullLabels = month.fullLabels || [];
+
+            if (series && (range === '7d' || range === '30d')) {
+                var n = range === '7d' ? 7 : 30;
+                var start = Math.max(0, series.length - n);
+                series = series.slice(start);
+                labels = labels.slice(start);
+                fullLabels = fullLabels.slice(start);
             }
         }
-        return metric.values[rangeKey] || 0;
+
+        if (!series || !series.length) {
+            // fallback: 3 aggregate points (today / month / total)
+            var agg = getAggregateValues(metricKey);
+            return {
+                values: [agg.today, agg.month, agg.total],
+                labels: ['今日', '本月', '历史'],
+                fullLabels: ['今日', '本月', '历史'],
+                isAggregate: true
+            };
+        }
+        return { values: series.map(parseNum), labels: labels, fullLabels: fullLabels, isAggregate: false };
     }
 
-    function getChartPayload(metric, metricKey) {
-        if (selectedRange === 'month' || selectedRange === 'total') {
-            var rangeData = trendData[selectedRange] || {};
-            var dailySeries = rangeData.series && rangeData.series[metricKey];
-            if (Array.isArray(dailySeries) && dailySeries.length) {
-                return {
-                    values: dailySeries.map(parseMetricValue),
-                    labels: Array.isArray(rangeData.labels) ? rangeData.labels : [],
-                    fullLabels: Array.isArray(rangeData.fullLabels) ? rangeData.fullLabels : []
-                };
-            }
-        }
-
-        return {
-            values: ranges.map(function (range) {
-                return getRangeValue(metric, metricKey, range.key);
-            }),
-            labels: ranges.map(function (range) { return range.label; }),
-            fullLabels: ranges.map(function (range) { return range.label; })
+    function getAggregateValues(metricKey) {
+        var map = {
+            balanceRecharge: { today: "{{$balance_zc_jr|default='0'}}", month: "{{$balance_zc_by|default='0'}}", total: "{{$balance_zc_s|default='0'}}" },
+            withdrawal:      { today: "{{$withdrawal_jr|default='0'}}", month: "{{$withdrawal_by|default='0'}}", total: "{{$withdrawal_s|default='0'}}" },
+            orderCount:      { today: "{{$order_jr|default='0'}}", month: "{{$order_by|default='0'}}", total: "{{$order_s|default='0'}}" },
+            tradeAmount:     { today: "{{$transaction_order_amount_jr|default='0'}}", month: "{{$transaction_order_amount_by|default='0'}}", total: "{{$transaction_order_amount_s|default='0'}}" }
         };
+        var m = map[metricKey] || map.balanceRecharge;
+        return { today: parseNum(m.today), month: parseNum(m.month), total: parseNum(m.total) };
     }
 
-    function renderAxis(labels) {
-        if (!labels.length) {
-            trendAxis.innerHTML = '<span>开始</span><span>趋势</span><span>结束</span>';
-            return;
+    /* ══════════════════════════════════════════════════════════
+       MAIN TREND CHART
+       ══════════════════════════════════════════════════════════ */
+    var svg = document.getElementById('hczTrendSvg');
+    var tooltip = document.getElementById('hczTooltip');
+    var chartWrap = document.getElementById('hczChartWrap');
+    var chartPoints = []; // for tooltip hit detection
+
+    function renderChart() {
+        if (!svg) return;
+        var metric = METRICS[state.metric];
+        var data = getRangeData(state.metric, state.range);
+        var values = data.values.length ? data.values : [0];
+        var emptyEl = document.getElementById('hczChartEmpty');
+        var allZero = values.every(function (v) { return v === 0; });
+        if (emptyEl) {
+            emptyEl.style.display = allZero ? 'flex' : 'none';
         }
-        var middle = labels[Math.floor(labels.length / 2)] || labels[0];
-        trendAxis.innerHTML = '<span>' + labels[0] + '</span><span>' + middle + '</span><span>' + labels[labels.length - 1] + '</span>';
-    }
+        svg.style.display = allZero ? 'none' : 'block';
+        if (allZero) return;
 
-    function renderChart(metric, metricKey) {
-        var width = 720;
-        var height = 250;
-        var paddingX = 52;
-        var paddingY = 34;
-        var payload = getChartPayload(metric, metricKey);
-        var values = payload.values.length ? payload.values : [0];
+        var W = 800, H = 300;
+        var padL = 50, padR = 20, padT = 20, padB = 30;
+        var chartW = W - padL - padR;
+        var chartH = H - padT - padB;
+
         var max = Math.max.apply(null, values.concat([1]));
         var min = Math.min.apply(null, values.concat([0]));
         var span = Math.max(1, max - min);
-        var points = values.map(function (value, index) {
-            var denominator = Math.max(1, values.length - 1);
+
+        // Build points
+        chartPoints = values.map(function (v, i) {
+            var denom = Math.max(1, values.length - 1);
             return {
-                x: paddingX + index * ((width - paddingX * 2) / denominator),
-                y: height - paddingY - ((value - min) / span) * (height - paddingY * 2),
-                value: value,
-                label: payload.labels[index] || ''
+                x: padL + i * (chartW / denom),
+                y: padT + chartH - ((v - min) / span) * chartH,
+                value: v,
+                label: data.labels[i] || '',
+                fullLabel: data.fullLabels[i] || data.labels[i] || ''
             };
         });
-        var linePath = buildPath(points, { start: 'M', next: ' L' });
-        var areaPath = linePath + ' L' + points[points.length - 1].x + ',' + (height - paddingY) + ' L' + points[0].x + ',' + (height - paddingY) + ' Z';
-        var dots = points.map(function (point, index) {
-            var shouldLabel = points.length <= 12 || index === 0 || index === points.length - 1 || point.value === max;
-            return '<circle cx="' + point.x + '" cy="' + point.y + '" r="' + (points.length > 40 ? 3 : 5) + '" fill="#fff" stroke="' + metric.color + '" stroke-width="' + (points.length > 40 ? 2 : 3) + '"></circle>' +
-                (shouldLabel ? '<text x="' + point.x + '" y="' + Math.max(18, point.y - 16) + '" text-anchor="middle" fill="#526179" font-size="12" font-weight="800">' + formatNumber(point.value, metric.unit) + '</text>' : '');
-        }).join('');
+
+        var linePath = smoothPath(chartPoints);
+        var areaPath = linePath + ' L' + chartPoints[chartPoints.length - 1].x + ',' + (padT + chartH) +
+            ' L' + chartPoints[0].x + ',' + (padT + chartH) + ' Z';
+
+        // Grid lines (very subtle)
+        var gridLines = '';
+        for (var g = 0; g <= 3; g++) {
+            var gy = padT + (chartH / 3) * g;
+            var gv = max - (span / 3) * g;
+            gridLines += '<line x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy +
+                '" stroke="rgba(148,163,184,0.08)" stroke-width="1"/>';
+            gridLines += '<text x="' + (padL - 8) + '" y="' + (gy + 4) + '" text-anchor="end" fill="#6B7280" font-size="10" font-weight="600">' +
+                (gv >= 1000 ? (gv / 1000).toFixed(1) + 'k' : gv.toFixed(0)) + '</text>';
+        }
+
+        // X axis labels (sparse)
+        var xLabels = '';
+        var labelStep = Math.max(1, Math.floor(chartPoints.length / 6));
+        for (var xi = 0; xi < chartPoints.length; xi += labelStep) {
+            xLabels += '<text x="' + chartPoints[xi].x + '" y="' + (H - 8) + '" text-anchor="middle" fill="#6B7280" font-size="10" font-weight="600">' +
+                chartPoints[xi].label + '</text>';
+        }
+        // Always show last label
+        if (chartPoints.length > 1) {
+            var last = chartPoints[chartPoints.length - 1];
+            xLabels += '<text x="' + last.x + '" y="' + (H - 8) + '" text-anchor="end" fill="#6B7280" font-size="10" font-weight="600">' + last.label + '</text>';
+        }
+
+        // Dots (hidden by default, shown via hover)
+        var dots = '<g id="hczChartDots">';
+        chartPoints.forEach(function (p, i) {
+            dots += '<circle cx="' + p.x + '" cy="' + p.y + '" r="4" fill="' + metric.color + '" stroke="#111318" stroke-width="2" opacity="0" class="hcz-dot" data-idx="' + i + '"/>';
+        });
+        dots += '</g>';
+
+        // Hover vertical line
+        var hoverLine = '<line id="hczHoverLine" x1="0" y1="' + padT + '" x2="0" y2="' + (padT + chartH) + '" stroke="rgba(255,255,255,0.1)" stroke-width="1" stroke-dasharray="4 4" opacity="0"/>';
 
         svg.innerHTML =
             '<defs>' +
-            '<linearGradient id="overviewTrendArea" x1="0" y1="0" x2="0" y2="1">' +
-            '<stop offset="0%" stop-color="' + metric.color + '" stop-opacity="0.28"></stop>' +
-            '<stop offset="100%" stop-color="' + metric.color + '" stop-opacity="0.02"></stop>' +
+            '<linearGradient id="hczAreaGrad" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0%" stop-color="' + metric.color + '" stop-opacity="0.25"/>' +
+            '<stop offset="100%" stop-color="' + metric.color + '" stop-opacity="0.01"/>' +
             '</linearGradient>' +
+            '<filter id="hczGlow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>' +
             '</defs>' +
-            '<path d="' + areaPath + '" fill="url(#overviewTrendArea)"></path>' +
-            '<path d="' + linePath + '" fill="none" stroke="' + metric.color + '" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"></path>' +
-            dots;
-        renderAxis(payload.labels);
+            gridLines +
+            '<path d="' + areaPath + '" fill="url(#hczAreaGrad)"/>' +
+            '<path d="' + linePath + '" fill="none" stroke="' + metric.color + '" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#hczGlow)"/>' +
+            hoverLine +
+            dots +
+            xLabels;
+
+        // Subtitle
+        var sub = document.getElementById('hczChartSubtitle');
+        if (sub) {
+            var rangeLabels = { 'today': '今日对比', '7d': '近 7 天', '30d': '近 30 天', 'month': '本月每日', 'total': '今年每日' };
+            sub.textContent = (rangeLabels[state.range] || '') + ' · ' + metric.label + '走势';
+        }
     }
 
-    function render() {
-        var metricKey = metricSelect.value;
-        var metric = metrics[metricKey] || metrics.balanceRecharge;
-        var range = ranges.find(function (item) { return item.key === selectedRange; }) || ranges[0];
-        var rangeValue = getRangeValue(metric, metricKey, selectedRange);
-        var rechargeValue = getRangeValue(metrics.balanceRecharge, 'balanceRecharge', selectedRange);
-        var withdrawalValue = getRangeValue(metrics.withdrawal, 'withdrawal', selectedRange);
-        var deductValue = getRangeValue(metrics.balanceDeduct, 'balanceDeduct', selectedRange);
-        var netFlow = rechargeValue - withdrawalValue - deductValue;
-        var orderValue = getRangeValue(metrics.orderCount, 'orderCount', selectedRange);
-        var tradeCountValue = getRangeValue(metrics.tradeCount, 'tradeCount', selectedRange);
-        currentRange.textContent = range.label;
-        currentTitle.textContent = metric.label;
-        currentValue.textContent = formatNumber(rangeValue, metric.unit);
-        currentUnit.textContent = metric.unit;
-        chartTitle.textContent = metric.label + (selectedRange === 'month' ? '本月每日趋势' : (selectedRange === 'total' ? '今年每日趋势' : '趋势图'));
-        chartBadge.textContent = metric.unit;
-        insight.classList.toggle('negative', netFlow < 0);
-        insight.innerHTML = '经营净流入：<strong>' + formatNumber(Math.abs(netFlow), 'USDT') + ' USDT</strong>' +
-            (netFlow < 0 ? '（净流出）' : '（净流入）') +
-            ' · 订单充值：<strong>' + formatNumber(orderValue, '笔') + '</strong> 笔' +
-            ' · USDT订单：<strong>' + formatNumber(tradeCountValue, '笔') + '</strong> 笔';
-        pointList.innerHTML = ranges.map(function (item) {
-            var active = item.key === selectedRange ? ' active' : '';
-            return '<div class="trend-point' + active + '"><span>' + (item.key === 'total' ? '今年' : item.label) + '</span><strong>' + formatNumber(getRangeValue(metric, metricKey, item.key), metric.unit) + '</strong></div>';
-        }).join('');
-        Array.prototype.forEach.call(rangeButtons.querySelectorAll('button'), function (button) {
-            button.classList.toggle('active', button.getAttribute('data-range') === selectedRange);
+    /* Tooltip interaction */
+    function bindChartHover() {
+        if (!svg || !chartWrap) return;
+
+        function getNearestPoint(clientX) {
+            var rect = svg.getBoundingClientRect();
+            var scaleX = 800 / rect.width;
+            var svgX = (clientX - rect.left) * scaleX;
+            var nearest = null, minDist = Infinity;
+            chartPoints.forEach(function (p, i) {
+                var d = Math.abs(p.x - svgX);
+                if (d < minDist) { minDist = d; nearest = { point: p, idx: i }; }
+            });
+            return nearest;
+        }
+
+        chartWrap.addEventListener('mousemove', function (e) {
+            var res = getNearestPoint(e.clientX);
+            if (!res) return;
+            var metric = METRICS[state.metric];
+            var p = res.point;
+
+            // Show dot
+            var dots = svg.querySelectorAll('.hcz-dot');
+            dots.forEach(function (d) { d.setAttribute('opacity', '0'); });
+            if (dots[res.idx]) dots[res.idx].setAttribute('opacity', '1');
+
+            // Hover line
+            var hl = document.getElementById('hczHoverLine');
+            if (hl) { hl.setAttribute('x1', p.x); hl.setAttribute('x2', p.x); hl.setAttribute('opacity', '1'); }
+
+            // Tooltip
+            tooltip.innerHTML =
+                '<div class="hcz-tooltip-date">' + p.fullLabel + '</div>' +
+                '<div class="hcz-tooltip-row"><span class="label"><span class="dot" style="background:' + metric.color + '"></span>' + metric.label + '</span>' +
+                '<span class="value">' + fmt(p.value, metric.unit) + ' ' + metric.unit + '</span></div>';
+            tooltip.classList.add('show');
+
+            // Position
+            var ttRect = tooltip.getBoundingClientRect();
+            var tx = e.clientX + 14;
+            var ty = e.clientY - ttRect.height - 10;
+            if (tx + ttRect.width > window.innerWidth - 10) tx = e.clientX - ttRect.width - 14;
+            if (ty < 10) ty = e.clientY + 14;
+            tooltip.style.left = tx + 'px';
+            tooltip.style.top = ty + 'px';
         });
-        document.documentElement.style.setProperty('--trend-primary', metric.color);
-        renderChart(metric, metricKey);
+
+        chartWrap.addEventListener('mouseleave', function () {
+            tooltip.classList.remove('show');
+            var dots = svg.querySelectorAll('.hcz-dot');
+            dots.forEach(function (d) { d.setAttribute('opacity', '0'); });
+            var hl = document.getElementById('hczHoverLine');
+            if (hl) hl.setAttribute('opacity', '0');
+        });
     }
 
-    metricSelect.addEventListener('change', render);
-    rangeButtons.addEventListener('click', function (event) {
-        var button = event.target.closest('button[data-range]');
-        if (!button) return;
-        selectedRange = button.getAttribute('data-range') || 'today';
-        render();
-    });
-    render();
+    /* ══════════════════════════════════════════════════════════
+       SPARKLINES
+       ══════════════════════════════════════════════════════════ */
+    function renderSparkline(svgId, metricKey, color, valueElId, trendElId) {
+        var el = document.getElementById(svgId);
+        if (!el) return;
+        var data = getRangeData(metricKey, '7d');
+        var values = data.values.length ? data.values : [0];
+        var W = 400, H = 60, pad = 4;
+        var max = Math.max.apply(null, values.concat([1]));
+        var min = Math.min.apply(null, values.concat([0]));
+        var span = Math.max(1, max - min);
+
+        var pts = values.map(function (v, i) {
+            var denom = Math.max(1, values.length - 1);
+            return {
+                x: pad + i * ((W - pad * 2) / denom),
+                y: pad + (H - pad * 2) - ((v - min) / span) * (H - pad * 2)
+            };
+        });
+        var line = smoothPath(pts);
+        var area = line + ' L' + pts[pts.length - 1].x + ',' + (H - pad) + ' L' + pts[0].x + ',' + (H - pad) + ' Z';
+        var gradId = 'sparkGrad_' + svgId;
+
+        el.innerHTML =
+            '<defs><linearGradient id="' + gradId + '" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0%" stop-color="' + color + '" stop-opacity="0.3"/>' +
+            '<stop offset="100%" stop-color="' + color + '" stop-opacity="0.02"/>' +
+            '</linearGradient></defs>' +
+            '<path d="' + area + '" fill="url(#' + gradId + ')"/>' +
+            '<path d="' + line + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+
+        // Trend calculation (last vs first)
+        if (values.length >= 2 && values[0] > 0) {
+            var pct = ((values[values.length - 1] - values[0]) / values[0]) * 100;
+            var trendEl = document.getElementById(trendElId);
+            if (trendEl) {
+                var arrow = pct >= 0 ? '↑' : '↓';
+                trendEl.textContent = arrow + ' ' + Math.abs(pct).toFixed(1) + '%';
+                trendEl.style.color = pct >= 0 ? 'var(--hcz-success)' : 'var(--hcz-danger)';
+            }
+        }
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       KPI TRENDS (period-over-period)
+       ══════════════════════════════════════════════════════════ */
+    function calcKpiTrends() {
+        // Recharge: today vs month-daily-average
+        var agg = getAggregateValues('balanceRecharge');
+        var monthDays = new Date().getDate();
+        var monthAvg = monthDays > 0 ? agg.month / monthDays : agg.today;
+        if (monthAvg > 0) {
+            var pct = ((agg.today - monthAvg) / monthAvg) * 100;
+            setKpiTrend('kpiRechargeTrend', pct);
+        }
+        // Orders
+        var aggO = getAggregateValues('orderCount');
+        var monthAvgO = monthDays > 0 ? aggO.month / monthDays : aggO.today;
+        if (monthAvgO > 0) {
+            var pctO = ((aggO.today - monthAvgO) / monthAvgO) * 100;
+            setKpiTrend('kpiOrderTrend', pctO);
+        }
+    }
+
+    function setKpiTrend(id, pct) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        if (!Number.isFinite(pct) || Math.abs(pct) < 0.01) {
+            el.className = 'hcz-kpi-trend flat';
+            el.textContent = '— 持平';
+            return;
+        }
+        var up = pct > 0;
+        el.className = 'hcz-kpi-trend ' + (up ? 'up' : 'down');
+        el.textContent = (up ? '↑ ' : '↓ ') + Math.abs(pct).toFixed(1) + '%';
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       RECENT ORDERS
+       ══════════════════════════════════════════════════════════ */
+    function renderOrders() {
+        var tbody = document.getElementById('hczOrdersBody');
+        if (!tbody) return;
+        if (!Array.isArray(recentOrders) || !recentOrders.length) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--hcz-text-3);font-size:13px;">暂无订单数据</td></tr>';
+            return;
+        }
+        tbody.innerHTML = recentOrders.map(function (o) {
+            var statusClass = 'muted';
+            if (o.status === 2) statusClass = 'success';
+            else if (o.status === 0) statusClass = 'warning';
+            else if (o.status === 3) statusClass = 'danger';
+            else if (o.status === 1) statusClass = 'info';
+
+            var typeClass = o.type === 1 ? 'info' : 'success';
+            var initial = (o.user_mobile || '?').charAt(0).toUpperCase();
+            var time = o.create_time ? o.create_time.substring(5, 16) : '-';
+
+            return '<tr>' +
+                '<td><span class="hcz-order-num">' + esc(o.order_number || '-') + '</span></td>' +
+                '<td><span class="hcz-order-user"><span class="hcz-order-avatar">' + esc(initial) + '</span>' + esc(o.user_mobile || '未知') + '</span></td>' +
+                '<td><span class="hcz-badge ' + typeClass + '">' + esc(o.type_text || '-') + '</span></td>' +
+                '<td><span class="hcz-order-amount">' + fmt(o.amount, 'USDT') + '</span></td>' +
+                '<td><span class="hcz-badge ' + statusClass + '">' + esc(o.status_text || '-') + '</span></td>' +
+                '<td><span class="hcz-order-time">' + esc(time) + '</span></td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       BUSINESS STATUS (dynamic based on pending counts)
+       ══════════════════════════════════════════════════════════ */
+    function updateStatus() {
+        var pendingW = {{$pending_withdrawal|default=0}};
+        var el = document.getElementById('hczWithdrawStatus');
+        if (el) {
+            if (pendingW > 5) {
+                el.className = 'hcz-status-indicator warning';
+                el.innerHTML = '<span class="led"></span>积压';
+            } else {
+                el.className = 'hcz-status-indicator normal';
+                el.innerHTML = '<span class="led"></span>正常';
+            }
+        }
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       EVENT BINDING
+       ══════════════════════════════════════════════════════════ */
+    function bindEvents() {
+        // Metric tabs
+        var tabs = document.getElementById('hczMetricTabs');
+        if (tabs) {
+            tabs.addEventListener('click', function (e) {
+                var btn = e.target.closest('button[data-metric]');
+                if (!btn) return;
+                tabs.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+                state.metric = btn.getAttribute('data-metric');
+                renderChart();
+            });
+        }
+
+        // Range buttons
+        var rg = document.getElementById('hczRangeGroup');
+        if (rg) {
+            rg.addEventListener('click', function (e) {
+                var btn = e.target.closest('button[data-range]');
+                if (!btn) return;
+                rg.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+                state.range = btn.getAttribute('data-range');
+                renderChart();
+                renderSparkline('hczSparkRevenue', 'balanceRecharge', '#8B7CF6', 'hczSparkRevenueValue', 'hczSparkRevenueTrend');
+                renderSparkline('hczSparkOrder', 'orderCount', '#60A5FA', 'hczSparkOrderValue', 'hczSparkOrderTrend');
+            });
+        }
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       REFRESH
+       ══════════════════════════════════════════════════════════ */
+    window.hczRefreshPage = function () {
+        var btn = document.getElementById('hczRefreshBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+            btn.innerHTML = '<span class="spin"></span>刷新中';
+        }
+        setTimeout(function () { location.reload(); }, 400);
+    };
+
+    /* ══════════════════════════════════════════════════════════
+       INIT
+       ══════════════════════════════════════════════════════════ */
+    function init() {
+        renderChart();
+        bindChartHover();
+        renderSparkline('hczSparkRevenue', 'balanceRecharge', '#8B7CF6', 'hczSparkRevenueValue', 'hczSparkRevenueTrend');
+        renderSparkline('hczSparkOrder', 'orderCount', '#60A5FA', 'hczSparkOrderValue', 'hczSparkOrderTrend');
+        calcKpiTrends();
+        renderOrders();
+        updateStatus();
+        bindEvents();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();
 </script>
 
