@@ -736,6 +736,38 @@ class AdminApi
         return show(403, 'error', '权限不足');
     }
 
+    private function directGetAllowedAdminPowerList(): array
+    {
+        return [
+            "用户列表", "支付管理", "充值业务 - 产品列表", "查询业务 - 产品列表",
+            "充值业务 - 订单列表", "查询业务 - 订单列表", "交易挂单数据", "交易订单数据",
+            "充值订单记录", "提现订单记录", "返佣记录", "首页轮播图",
+            "积分管理", "管理员列表", "操作记录", "系统设置管理"
+        ];
+    }
+
+    private function directValidateAdminPowerValue(string $power): array
+    {
+        $allowed = $this->directGetAllowedAdminPowerList();
+        if (trim($power) === '') {
+            return ['ok' => true, 'message' => '', 'cleaned' => ''];
+        }
+        $items = preg_split('/[,，]/', $power);
+        $items = array_map('trim', $items);
+        $items = array_filter($items, function ($v) { return $v !== ''; });
+        $items = array_values($items);
+        $invalid = array_diff($items, $allowed);
+        if (!empty($invalid)) {
+            return ['ok' => false, 'message' => '包含非法权限项：' . implode('、', $invalid), 'cleaned' => ''];
+        }
+        return ['ok' => true, 'message' => '', 'cleaned' => implode(',', $items)];
+    }
+
+    private function directIsCurrentAdminSuperAdmin(): bool
+    {
+        return (int)($this->admin_info['id'] ?? 0) === 1;
+    }
+
     private function directMaskSensitiveLogValue(string $key, mixed $value): string
     {
         if (is_array($value) || is_object($value)) {
@@ -4160,6 +4192,9 @@ public function order_post(string $action)
                         ]);
                         return show(403, 'error', '管理员请求校验失败');
                     }
+                    // P5-P1-002: 操作者权限边界
+                    $isSuperAdmin = $this->directIsCurrentAdminSuperAdmin();
+                    $currentAdminId = (int)($this->admin_info['id'] ?? 0);
                     $AdminModel = AdminModel::find($post_info['id']);
                     if(empty($post_info['account'])){
                         return show(500, 'error', '请输入登录账号');
@@ -4170,6 +4205,17 @@ public function order_post(string $action)
                     $salt = randomkeys(4);
                     if($AdminModel){
                         $beforeAdmin = $AdminModel->getData();
+                        $targetId = (int)$AdminModel['id'];
+                        // P5-P1-002: 非超级管理员禁止修改超级管理员
+                        if (!$isSuperAdmin && $targetId === 1) {
+                            return show(500, 'error', '无权修改超级管理员');
+                        }
+                        // P5-P1-002: power 白名单校验
+                        $powerResult = $this->directValidateAdminPowerValue((string)($post_info['power'] ?? ''));
+                        if (empty($powerResult['ok'])) {
+                            return show(500, 'error', (string)($powerResult['message'] ?? '权限校验失败'));
+                        }
+                        $cleanedPower = (string)($powerResult['cleaned'] ?? '');
                         if($post_info['account'] != $AdminModel['account']){
                             $AdminModels = AdminModel::where('account', $post_info['account'])->find();
                             if($AdminModels){
@@ -4177,18 +4223,37 @@ public function order_post(string $action)
                             }
                         }
                         $AdminModel->account = $post_info['account'];
+                        $AdminModel->name = $post_info['name'];
+                        // P5-P1-002: 仅超级管理员可修改 power 字段，防止自我提权和横向提权
+                        if ($isSuperAdmin) {
+                            $AdminModel->power = $cleanedPower;
+                        }
+                        // P5-P1-003: 非超级管理员不能修改其他管理员的密码（防止账号接管）
+                        if (!$isSuperAdmin && $targetId !== $currentAdminId && !empty($post_info['password'])) {
+                            return show(500, 'error', '仅超级管理员可修改其他管理员密码');
+                        }
+                        // P5-P1-002: 修改密码需敏感操作二次验证
                         if(!empty($post_info['password'])){
+                            $sensitiveResult = $this->directValidateSensitiveOperation($post_info, 'admin_password_change');
+                            if (empty($sensitiveResult['ok'])) {
+                                return show(500, 'error', (string)($sensitiveResult['message'] ?? '敏感操作验证失败'));
+                            }
                             $AdminModel->password = password_hash(($post_info['password'] . $salt), PASSWORD_BCRYPT);
                             $AdminModel->salt = $salt;
                         }
-                        $AdminModel->name = $post_info['name'];
-                        $AdminModel->power = $post_info['power'];
                         $AdminModel->save();
-                        $this->directWriteAdminOperationLog('修改管理员', '管理员管理', '管理员ID：' . (int)($AdminModel['id'] ?? 0) . '，账号：' . (string)($beforeAdmin['account'] ?? '') . ' -> ' . (string)$post_info['account'] . '，名称：' . (string)($beforeAdmin['name'] ?? '') . ' -> ' . (string)$post_info['name'] . '，权限：' . (string)($beforeAdmin['power'] ?? '无') . ' -> ' . (string)($post_info['power'] ?? '无') . (!empty($post_info['password']) ? '，密码：已重置' : ''), [
+                        $powerChangedText = $isSuperAdmin
+                            ? ('，权限：' . (string)($beforeAdmin['power'] ?? '无') . ' -> ' . $cleanedPower)
+                            : '';
+                        $this->directWriteAdminOperationLog('修改管理员', '管理员管理', '管理员ID：' . (int)($AdminModel['id'] ?? 0) . '，账号：' . (string)($beforeAdmin['account'] ?? '') . ' -> ' . (string)$post_info['account'] . '，名称：' . (string)($beforeAdmin['name'] ?? '') . ' -> ' . (string)$post_info['name'] . $powerChangedText . (!empty($post_info['password']) ? '，密码：已重置' : ''), [
                             'target_id' => (int)($AdminModel['id'] ?? 0),
                             'target_type' => 'admin',
                         ]);
                         return show(200, 'success', '修改成功');
+                    }
+                    // P5-P1-002: 仅超级管理员可创建新管理员
+                    if (!$isSuperAdmin) {
+                        return show(500, 'error', '仅超级管理员可创建管理员');
                     }
                     if(empty($post_info['password'])){
                         return show(500, 'error', '请输入登录密码');
@@ -4197,25 +4262,48 @@ public function order_post(string $action)
                     if($AdminModel){
                         return show(500, 'error', '登录账号已存在，请修改');
                     }
+                    // P5-P1-002: 新建管理员 power 白名单校验
+                    $powerResult = $this->directValidateAdminPowerValue((string)($post_info['power'] ?? ''));
+                    if (empty($powerResult['ok'])) {
+                        return show(500, 'error', (string)($powerResult['message'] ?? '权限校验失败'));
+                    }
+                    $cleanedPower = (string)($powerResult['cleaned'] ?? '');
                     AdminModel::create([
                         'account' => $post_info['account'],
                         'password' => password_hash(($post_info['password'] . $salt), PASSWORD_BCRYPT),
                         'salt' => $salt,
                         'name' => $post_info['name'],
-                        'power' => $post_info['power'],
+                        'power' => $cleanedPower,
                         // 新增：默认禁用2FA
                         'twofa_enabled' => 0,
                         'twofa_secret' => null,
                         'twofa_recovery_codes' => null
                     ]);
                     $newAdmin = AdminModel::where('account', $post_info['account'])->find();
-                    $this->directWriteAdminOperationLog('新增管理员', '管理员管理', '新增管理员账号：' . (string)$post_info['account'] . '，名称：' . (string)$post_info['name'] . '，权限：' . (string)($post_info['power'] ?? '无'), [
+                    $this->directWriteAdminOperationLog('新增管理员', '管理员管理', '新增管理员账号：' . (string)$post_info['account'] . '，名称：' . (string)$post_info['name'] . '，权限：' . $cleanedPower, [
                         'target_id' => (int)($newAdmin['id'] ?? 0),
                         'target_type' => 'admin',
                     ]);
                     return show(200, 'success', '添加成功');
                     
                 case 'info':
+                    // P2-001: 权限校验
+                    if (!$this->directHasAdminPermission('管理员列表')) {
+                        return $this->directDenyAdminPermission('管理员列表');
+                    }
+                    // P2-001: 路径校验
+                    if (!$this->directRequestPathMatches('admin_post/info')) {
+                        return show(403, 'error', '管理员请求路径错误');
+                    }
+                    // P2-001: CSRF 校验
+                    if (!$this->directValidateRequiredCsrfToken()) {
+                        Log::warning('admin info invalid csrf blocked', [
+                            'admin_id' => (int)($this->admin_info['id'] ?? 0),
+                            'ip' => (string)$this->request->ip(),
+                            'path' => $this->directCurrentRequestPath(),
+                        ]);
+                        return show(403, 'error', '管理员请求校验失败');
+                    }
                     $id = (int)($post_info['id'] ?? 0);
                     if ($id <= 0) {
                         return show(500, 'error', '参数错误');
@@ -4239,24 +4327,63 @@ public function order_post(string $action)
                         $power_selected .= "<option value=\"{$name}\" {$selected}>{$name}</option>";
                     }
 
-                    $data = $res->getData();
-                    $data['power_selected'] = $power_selected;
-                    $data['twofa_status'] = [
-                        'enabled' => (int)($res['twofa_enabled'] ?? 0),
-                        'has_secret' => !empty($res['twofa_secret']),
+                    // P2-001: 字段白名单，禁止返回 password/salt/twofa_secret/twofa_recovery_codes 等敏感字段
+                    $data = [
+                        'id' => (int)($res['id'] ?? 0),
+                        'account' => (string)($res['account'] ?? ''),
+                        'name' => (string)($res['name'] ?? ''),
+                        'power' => (string)($res['power'] ?? ''),
+                        'power_selected' => $power_selected,
                     ];
 
                     return show(200, 'success', '获取信息成功', $data);
 
                 case 'del':
-                    $deleteAdmin = AdminModel::find($post_info['id']);
-                    AdminModel::destroy($post_info['id']);
-                    if ($deleteAdmin) {
-                        $this->directWriteAdminOperationLog('删除管理员', '管理员管理', '删除管理员ID：' . (int)($deleteAdmin['id'] ?? 0) . '，账号：' . (string)($deleteAdmin['account'] ?? '') . '，名称：' . (string)($deleteAdmin['name'] ?? ''), [
-                            'target_id' => (int)($deleteAdmin['id'] ?? 0),
-                            'target_type' => 'admin',
-                        ]);
+                    // P5-P1-001: 权限校验
+                    if (!$this->directHasAdminPermission('管理员列表')) {
+                        return $this->directDenyAdminPermission('管理员列表');
                     }
+                    // P5-P1-001: 路径校验
+                    if (!$this->directRequestPathMatches('admin_post/del')) {
+                        return show(403, 'error', '管理员请求路径错误');
+                    }
+                    // P5-P1-001: CSRF 校验
+                    if (!$this->directValidateRequiredCsrfToken()) {
+                        Log::warning('admin del invalid csrf blocked', [
+                            'admin_id' => (int)($this->admin_info['id'] ?? 0),
+                            'ip' => (string)$this->request->ip(),
+                            'path' => $this->directCurrentRequestPath(),
+                        ]);
+                        return show(403, 'error', '管理员请求校验失败');
+                    }
+                    $targetId = (int)($post_info['id'] ?? 0);
+                    $currentAdminId = (int)($this->admin_info['id'] ?? 0);
+                    // P5-P1-001: 禁止删除超级管理员
+                    if ($targetId === 1) {
+                        return show(500, 'error', '禁止删除超级管理员');
+                    }
+                    // P5-P1-001: 禁止删除自己
+                    if ($targetId === $currentAdminId) {
+                        return show(500, 'error', '禁止删除当前登录账号');
+                    }
+                    if ($targetId <= 0) {
+                        return show(500, 'error', '参数错误');
+                    }
+                    // P5-P1-001: 敏感操作二次验证
+                    $sensitiveResult = $this->directValidateSensitiveOperation($post_info, 'admin_delete');
+                    if (empty($sensitiveResult['ok'])) {
+                        return show(500, 'error', (string)($sensitiveResult['message'] ?? '敏感操作验证失败'));
+                    }
+                    // P5-P1-001: 删除前确认目标存在
+                    $deleteAdmin = AdminModel::find($targetId);
+                    if (!$deleteAdmin) {
+                        return show(500, 'error', '管理员不存在');
+                    }
+                    AdminModel::destroy($targetId);
+                    $this->directWriteAdminOperationLog('删除管理员', '管理员管理', '删除管理员ID：' . (int)($deleteAdmin['id'] ?? 0) . '，账号：' . (string)($deleteAdmin['account'] ?? '') . '，名称：' . (string)($deleteAdmin['name'] ?? ''), [
+                        'target_id' => (int)($deleteAdmin['id'] ?? 0),
+                        'target_type' => 'admin',
+                    ]);
                     return show(200, 'success', '删除成功');
                 default:
                     return show(500, 'error', '你不对劲');

@@ -21,6 +21,7 @@ use app\service\UserMessageService;
 use think\App;
 use think\facade\View;
 use think\facade\Cache;
+use think\facade\Log;
 use think\facade\Db;
 use think\Request;
 use Yurun\Util\HttpRequest;
@@ -167,6 +168,29 @@ class AdminList
         }
 
         return json($result);
+    }
+
+    private function directHasAdminPermission(string $permission): bool
+    {
+        $adminId = (int)($this->admin_info['id'] ?? 0);
+        if ($adminId === 1) {
+            return true;
+        }
+        if ($adminId <= 0) {
+            return false;
+        }
+        return power((string)($this->admin_info['power'] ?? ''), $permission) != 2;
+    }
+
+    private function directDenyAdminPermission(string $permission)
+    {
+        Log::warning('admin permission denied', [
+            'admin_id' => (int)($this->admin_info['id'] ?? 0),
+            'permission' => $permission,
+            'ip' => (string)$this->request->ip(),
+            'path' => (string)$this->request->pathinfo(),
+        ]);
+        return show(403, 'error', '权限不足');
     }
 
     private function resolveOrder(array $payload, string $default = 'id', array $allowedColumns = []): array
@@ -848,6 +872,11 @@ class AdminList
 
     public function admin_list()
     {
+
+        // P2-002: 管理员列表权限校验
+        if (!$this->directHasAdminPermission('管理员列表')) {
+            return $this->directDenyAdminPermission('管理员列表');
+        }
         $payload = $this->listPayload();
         [$column, $dir] = $this->resolveOrder($payload, 'id');
         [$start, $length] = $this->datatablesPagination($payload);
@@ -855,7 +884,7 @@ class AdminList
         $basePar[] = ['id', '<>', 1];
         $par = $basePar;
         $par[] = ['name|account', 'like', '%' . $search . '%'];
-        $data = AdminModel::where($par)->order($column??'id', $dir??'desc')->order('id', 'asc')->limit($start, $length)->select();
+        $data = AdminModel::where($par)->order($column??'id', $dir??'desc')->order('id', 'asc')->field('id,name,account,avatar,power,create_time')->limit($start, $length)->select();
         foreach($data as $key => $vo) {
 
         }
