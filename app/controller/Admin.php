@@ -120,25 +120,17 @@ class Admin
             View::assign('balance_dk_by', number_format($monthDeductAmount, 2));    // 本月扣款
             View::assign('balance_dk_s', number_format($totalDeductAmount, 2));     // 历史总扣款
             // 提现统计（包含后台扣款，状态1和2，根据实际业务调整）
-            View::assign('withdrawal_jr', number_format(
-                Withdrawal::whereIn('status', [1, 2])
-                    ->whereDay('create_time')
-                    ->sum('amount') ?? 0, 
-                2
-            ));
-            
-            View::assign('withdrawal_by', number_format(
-                Withdrawal::whereIn('status', [1, 2])
-                    ->whereTime('create_time', 'month')
-                    ->sum('amount') ?? 0, 
-                2
-            ));
-            
-            View::assign('withdrawal_s', number_format(
-                Withdrawal::whereIn('status', [1, 2])
-                    ->sum('amount') ?? 0, 
-                2
-            ));
+            $todayWithdrawalAmount = Withdrawal::whereIn('status', [1, 2])
+                ->whereDay('create_time')
+                ->sum('amount') ?? 0;
+            $monthWithdrawalAmount = Withdrawal::whereIn('status', [1, 2])
+                ->whereTime('create_time', 'month')
+                ->sum('amount') ?? 0;
+            $totalWithdrawalAmount = Withdrawal::whereIn('status', [1, 2])
+                ->sum('amount') ?? 0;
+            View::assign('withdrawal_jr', number_format($todayWithdrawalAmount, 2));
+            View::assign('withdrawal_by', number_format($monthWithdrawalAmount, 2));
+            View::assign('withdrawal_s', number_format($totalWithdrawalAmount, 2));
             
             // 订单充值统计
             View::assign('order_jr', Order::whereDay('create_time')->count() ?? 0);
@@ -175,6 +167,61 @@ class Admin
             // 所有账户总余额统计
             $totalUserBalance = UserModel::sum('balance') ?? 0;
             View::assign('total_user_balance', number_format($totalUserBalance, 2));
+
+            // ── 首页扩展统计（只读，不修改业务逻辑/数据库/权限）──
+            // 用户总数
+            $userTotal = (int)UserModel::count();
+            View::assign('user_total', $userTotal);
+            // 今日新增用户
+            $userTodayNew = (int)UserModel::whereDay('create_time')->count();
+            View::assign('user_today_new', $userTodayNew);
+            // 待处理统计
+            $pendingWithdrawal = (int)Withdrawal::where('status', 0)->count();
+            $pendingRecharge = (int)Recharge::where('status', 1)->count();
+            $pendingOrderCz = (int)Order::where('status', 0)->where('type', 1)->count();
+            $pendingOrderCx = (int)Order::where('status', 0)->where('type', 2)->count();
+            $pendingTotal = $pendingWithdrawal + $pendingRecharge + $pendingOrderCz + $pendingOrderCx;
+            View::assign('pending_withdrawal', $pendingWithdrawal);
+            View::assign('pending_recharge', $pendingRecharge);
+            View::assign('pending_order_cz', $pendingOrderCz);
+            View::assign('pending_order_cx', $pendingOrderCx);
+            View::assign('pending_total', $pendingTotal);
+            // 今日订单成功率（已完成/总数，status>0 视为已处理）
+            $todayOrderTotal = (int)Order::whereDay('create_time')->count();
+            $todayOrderPending = (int)Order::whereDay('create_time')->where('status', 0)->count();
+            $todayOrderProcessed = $todayOrderTotal - $todayOrderPending;
+            $paymentSuccessRate = $todayOrderTotal > 0 ? round(($todayOrderProcessed / $todayOrderTotal) * 100, 1) : 0;
+            View::assign('today_order_total', $todayOrderTotal);
+            View::assign('today_order_processed', $todayOrderProcessed);
+            View::assign('payment_success_rate', $paymentSuccessRate);
+            // 最近订单（最近 8 条，含用户信息）
+            $recentOrders = Order::where(function ($query) {
+                $query->whereNull('substation_id')->whereOr('substation_id', 0);
+            })->order('id', 'desc')->limit(8)->select()->toArray();
+            $recentOrdersFormatted = [];
+            foreach ($recentOrders as $ro) {
+                $roUser = UserModel::field('id,mobile,nickname,surname')->find((int)($ro['uid'] ?? 0));
+                $statusMap = [0 => '待处理', 1 => '处理中', 2 => '已完成', 3 => '已取消'];
+                $typeMap = [1 => '充值', 2 => '查询'];
+                $recentOrdersFormatted[] = [
+                    'order_number' => (string)($ro['order_number'] ?? ''),
+                    'user_mobile' => $roUser ? ((string)($roUser['mobile'] ?? '') ?: (string)($roUser['nickname'] ?? '') ?: (string)($roUser['surname'] ?? '')) : '未知用户',
+                    'user_id' => (int)($ro['uid'] ?? 0),
+                    'amount' => isset($ro['cny_amount']) ? (float)$ro['cny_amount'] : (isset($ro['amount_money']) ? (float)$ro['amount_money'] : 0),
+                    'type' => (int)($ro['type'] ?? 0),
+                    'type_text' => $typeMap[(int)($ro['type'] ?? 0)] ?? '未知',
+                    'status' => (int)($ro['status'] ?? 0),
+                    'status_text' => $statusMap[(int)($ro['status'] ?? 0)] ?? '未知',
+                    'create_time' => (string)($ro['create_time'] ?? ''),
+                ];
+            }
+            View::assign('recent_orders_json', json_encode($recentOrdersFormatted, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]');
+            // 数据更新时间
+            View::assign('data_update_time', date('Y-m-d H:i:s'));
+            // 平台净流入（今日加款 - 今日提现 - 今日扣款）
+            $todayNetFlow = (float)$todayAddAmount - (float)$todayWithdrawalAmount - (float)$todayDeductAmount;
+            View::assign('today_net_flow', number_format($todayNetFlow, 2));
+
             View::assign('overview_trend_json', $this->buildOverviewTrendJson($addWhere, $deductWhere));
             
         } catch (\Exception $e) {
@@ -202,6 +249,19 @@ class Admin
             View::assign('rebate_record_by', '0.00');
             View::assign('rebate_record_s', '0.00');
             View::assign('total_user_balance', '0.00');
+            View::assign('user_total', 0);
+            View::assign('user_today_new', 0);
+            View::assign('pending_withdrawal', 0);
+            View::assign('pending_recharge', 0);
+            View::assign('pending_order_cz', 0);
+            View::assign('pending_order_cx', 0);
+            View::assign('pending_total', 0);
+            View::assign('today_order_total', 0);
+            View::assign('today_order_processed', 0);
+            View::assign('payment_success_rate', 0);
+            View::assign('recent_orders_json', '[]');
+            View::assign('data_update_time', date('Y-m-d H:i:s'));
+            View::assign('today_net_flow', '0.00');
             View::assign('overview_trend_json', '{}');
         }
         
