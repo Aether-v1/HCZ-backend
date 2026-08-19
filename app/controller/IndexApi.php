@@ -1521,17 +1521,31 @@ public function account_settings_post(string $action)
             return $result;
         }
 
-        // 初始化当前层级和当前用户（第一层就是邀请码对应的用户）
-        $currentLevel = 1;
-        $currentUser = $user;
-        
-        // 循环获取1-10级上级（递归逻辑）
-        while ($currentLevel <= 10 && !empty($currentUser)) {
-            $result['tid_' . $currentLevel] = $currentUser->id;
-            
-            // 获取当前用户的直接上级（tid_1），继续下一层级查询
-            $currentUser = UserModel::find($currentUser->tid_1);
-            $currentLevel++;
+        // 利用用户表已冗余存储的 tid_1~tid_10 上级链字段，逐层平移：
+        //   新用户 tid_1  = 传入用户.id
+        //   新用户 tid_2  = 传入用户.tid_1
+        //   ...
+        //   新用户 tid_10 = 传入用户.tid_9
+        // 当某层上级为空时终止，后续层级保持默认值 0（与原循环查库终止行为一致）。
+        // 本方法不再执行任何数据库查询。
+        $ancestorChain = [
+            $user->id,
+            $user->tid_1,
+            $user->tid_2,
+            $user->tid_3,
+            $user->tid_4,
+            $user->tid_5,
+            $user->tid_6,
+            $user->tid_7,
+            $user->tid_8,
+            $user->tid_9,
+        ];
+
+        for ($i = 0; $i < 10; $i++) {
+            if (empty($ancestorChain[$i])) {
+                break;
+            }
+            $result['tid_' . ($i + 1)] = $ancestorChain[$i];
         }
 
         return $result;

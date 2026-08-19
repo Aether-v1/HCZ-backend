@@ -651,32 +651,40 @@ trait PointsActions
         $today = date('Y-m-d');
         $startOfMonth = date('Y-m-01');
 
-        $isCheckedIn = CheckinRecord::where('uid', $userId)
-            ->where('checkin_date', $today)
-            ->count() > 0;
+        // 一次查询获取该用户全部签到日期（按日期降序）。
+        // checkin_record 表有 UNIQUE KEY uid_date，保证一天最多一条记录。
+        // 原实现对连续签到逐日查库（while(true)），连续 N 天产生 N+ 次查询；
+        // 此处改为单用户全量签到日期一次读取，后续在 PHP 内存中计算。
+        $records = CheckinRecord::where('uid', $userId)
+            ->order('checkin_date', 'desc')
+            ->column('checkin_date');
 
+        $checkinSet = array_flip($records);
+
+        // 今天是否签到（与原 count() > 0 语义一致）
+        $isCheckedIn = isset($checkinSet[$today]);
+
+        // 连续签到天数：从今天向前追溯，遇断档即停止。
+        // 保持原 while(true) 的无限跨月追溯语义，不设天数上限。
         $continuousDays = 0;
         $currentDate = $today;
-
-        while (true) {
-            $hasCheckin = CheckinRecord::where('uid', $userId)
-                ->where('checkin_date', $currentDate)
-                ->count() > 0;
-
-            if (!$hasCheckin) {
-                break;
-            }
-
+        while (isset($checkinSet[$currentDate])) {
             $continuousDays++;
             $currentDate = date('Y-m-d', strtotime($currentDate . ' -1 day'));
+        }
+
+        // 本月签到次数（与原 checkin_date >= startOfMonth 语义一致）
+        $monthCheckinCount = 0;
+        foreach ($records as $date) {
+            if ($date >= $startOfMonth) {
+                $monthCheckinCount++;
+            }
         }
 
         return [
             'is_checked_in' => $isCheckedIn,
             'continuous_days' => $continuousDays,
-            'month_checkin_count' => CheckinRecord::where('uid', $userId)
-                ->where('checkin_date', '>=', $startOfMonth)
-                ->count(),
+            'month_checkin_count' => $monthCheckinCount,
         ];
     }
 }

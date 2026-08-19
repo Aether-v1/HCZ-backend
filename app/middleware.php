@@ -9,5 +9,7 @@ return [
     // \think\middleware\LoadLangPack::class,
     // Session初始化
      SessionInit::class,
+    // CORS 跨域处理（必须在 SessionInit 之后，CSRF/Auth 之前）
+     \app\middleware\CorsMiddleware::class,
      \app\middleware\ApiResponseFormat::class
 ];
