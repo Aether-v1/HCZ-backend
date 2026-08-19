@@ -8,6 +8,7 @@ return [
 
     'priority' => [
         \think\middleware\SessionInit::class,
+        \app\middleware\CorsMiddleware::class,
         \app\middleware\LegacyUserFrontendDisabled::class,
         \app\middleware\CsrfCheck::class,
         \think\middleware\Csrf::class,
@@ -15,6 +16,7 @@ return [
 
     'middleware' => [
         \think\middleware\SessionInit::class,
+        \app\middleware\CorsMiddleware::class,
         \app\middleware\LegacyUserFrontendDisabled::class,
         \app\middleware\CsrfCheck::class,
         [
