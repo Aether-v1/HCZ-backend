@@ -592,7 +592,7 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 	{
 		$amount = (float) ($this->request->post('amount', 0));
 		if ($amount <= 0) {
-			return show(500, 'error', 'Request error');
+			return show(500, 'error', 'Invalid withdrawal amount');
 		}
 
 		return show(200, 'success', 'Withdrawal request submitted', [
@@ -606,19 +606,19 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 		$usePointsDeduct = (int) $this->request->get('use_points_deduct', 0) === 1;
 		$user = UserModel::where('id', $this->user_info['id'])->find();
 		if (!$user) {
-			return show(500, 'error', 'Request error');
+			return show(500, 'error', 'Account not found');
 		}
 		if ($amount <= 0) {
-			return show(500, 'error', 'Request error');
+			return show(500, 'error', 'Invalid withdrawal amount');
 		}
 		if ($amount < (float) (getConfig('mini_withdrawal_amount') ?? 0)) {
-			return show(500, 'error', 'Request error');
+			return show(500, 'error', 'Withdrawal amount is below the minimum');
 		}
 		if ($amount > (float) ($user['balance'] ?? 0)) {
-			return show(500, 'error', 'Request error');
+			return show(500, 'error', 'Insufficient balance');
 		}
 		if (empty($user['trc20'])) {
-			return show(500, 'error', 'Request error');
+			return show(500, 'error', 'TRC20 wallet address not configured');
 		}
 
 		$baseFee = (float) (getConfig('withdrawal_fee') ?? 0);
@@ -772,7 +772,7 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 		$postInfo = $this->request->post();
 		$userInfo = UserModel::where('id', $this->user_info['id'])->find();
 		if (!$userInfo) {
-			return show(500, 'error', 'Request error');
+			return show(500, 'error', 'Account not found');
 		}
 
 		// SEC-004: 提现提交限流 — 用户维度，60 秒内最多 3 次
@@ -784,16 +784,16 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 
 		$amount = (float) ($postInfo['amount'] ?? 0);
 		if ($amount <= 0) {
-			return show(500, 'error', 'Request error');
+			return show(500, 'error', 'Invalid withdrawal amount');
 		}
 		if ($amount < (float) (getConfig('mini_withdrawal_amount') ?? 0)) {
-			return show(500, 'error', 'Request error');
+			return show(500, 'error', 'Withdrawal amount is below the minimum');
 		}
 		if ($amount > (float) ($userInfo['balance'] ?? 0)) {
-			return show(500, 'error', 'Request error');
+			return show(500, 'error', 'Insufficient balance');
 		}
 		if (empty($userInfo['trc20'])) {
-			return show(500, 'error', 'Request error');
+			return show(500, 'error', 'TRC20 wallet address not configured');
 		}
 
 		// RC-A: 复用统一敏感操作验证方法（2FA window=2，与项目其他敏感操作一致）
@@ -915,7 +915,7 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 			$this->logApiException('finance_withdrawal_submit', $e, [
 				'amount' => $amount,
 			]);
-			return show(500, 'error', 'Request error');
+			return show(500, 'error', 'System error, please try again later');
 		}
 
 		$message = !empty($result['duplicate']) ? 'Success' : 'Success';
@@ -931,12 +931,12 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 	{
 		$id = (int) $this->request->get('id', 0);
 		if ($id <= 0) {
-			return show(500, 'error', 'Request error');
+			return show(500, 'error', 'Invalid withdrawal record ID');
 		}
 
 		$item = Withdrawal::where('uid', $this->user_info['id'])->find($id);
 		if (!$item) {
-			return show(404, 'error', 'Request error');
+			return show(404, 'error', 'Withdrawal record not found');
 		}
 
 		$status = (int) ($item['status'] ?? 0);
