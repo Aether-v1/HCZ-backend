@@ -62,7 +62,14 @@
     --hcz-glow: radial-gradient(circle at 50% 0%, rgba(109,93,240,0.05), transparent 60%);
 }
 
-/* ── Page Background ── */
+/* ── Page Background (apply to content container too) ── */
+#kt_app_content {
+    background: #08090B !important;
+}
+[data-bs-theme-mode="light"] #kt_app_content,
+[data-bs-theme="light"] #kt_app_content {
+    background: #F7F8FA !important;
+}
 .hcz-dash {
     background: var(--hcz-bg);
     min-height: calc(100vh - 120px);
@@ -711,7 +718,7 @@
 </style>
 
 <div class="d-flex flex-column flex-column-fluid">
-    <div id="kt_app_content" class="app-content flex-column-fluid py-3 py-lg-6" style="background:var(--hcz-bg,#08090B);">
+    <div id="kt_app_content" class="app-content flex-column-fluid py-3 py-lg-6">
         <div id="kt_app_content_container" class="app-container container-fluid">
             <div class="hcz-dash">
 
