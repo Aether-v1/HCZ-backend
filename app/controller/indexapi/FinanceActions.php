@@ -575,6 +575,19 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 
 	return $fallbackMap[$changeType] ?? "\u{4F59}\u{989D}\u{6D41}\u{6C34}";
 }
+	/**
+	 * @deprecated Legacy withdrawal endpoint (stub).
+	 *
+	 * The current withdrawal flow uses the preview/submit/detail APIs:
+	 *   - GET  /api/finance/withdrawal-preview
+	 *   - POST /api/finance/withdrawal-submit
+	 *   - GET  /api/finance/withdrawal-detail
+	 *
+	 * This endpoint only validates amount > 0 and returns success without
+	 * performing any real withdrawal logic. It is retained temporarily for
+	 * backward compatibility with potential external callers.
+	 * Do NOT use this in new code.
+	 */
 	protected function handleApiFinanceWithdrawal($unused = null)
 	{
 		$amount = (float) ($this->request->post('amount', 0));
