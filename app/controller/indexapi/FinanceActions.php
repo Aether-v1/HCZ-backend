@@ -783,31 +783,11 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 			return show(500, 'error', 'Request error');
 		}
 
-		$userHas2FA = !empty($userInfo->twofa_enabled);
-		if ($userHas2FA) {
-			if (empty($postInfo['twofa_code']) || !preg_match('/^\d{6}$/', (string) $postInfo['twofa_code'])) {
-				return show(500, 'error', 'Request error');
-			}
-			try {
-				$secret = $this->decryptData($userInfo->twofa_secret);
-				$twofa = new \RobThree\Auth\TwoFactorAuth();
-				if (!$twofa->verifyCode($secret, (string) $postInfo['twofa_code'], 1)) {
-					return show(500, 'error', 'Request error');
-				}
-			} catch (Exception $e) {
-				$this->logApiException('finance_withdrawal_submit_twofa', $e);
-				return show(500, 'error', $this->financeSystemErrorMessage());
-			}
-		} else {
-			if (empty($postInfo['password'])) {
-				return show(500, 'error', 'Request error');
-			}
-			$inputPassword = trim((string) $postInfo['password']);
-			$hashedPassword = (string) ($userInfo['password'] ?? '');
-			$salt = (string) ($userInfo['salt'] ?? '');
-			if (!password_verify($inputPassword . $salt, $hashedPassword)) {
-				return show(500, 'error', 'Request error');
-			}
+		// RC-A: 复用统一敏感操作验证方法（2FA window=2，与项目其他敏感操作一致）
+		// 有2FA则校验2FA动态码，无2FA则校验登录密码；包含2FA尝试限流与具体错误信息
+		$credentialError = $this->verifySensitiveActionCredential($userInfo, $postInfo);
+		if ($credentialError !== null) {
+			return $credentialError;
 		}
 
 		$baseFee = (float) (getConfig('withdrawal_fee') ?? 0);
