@@ -7,6 +7,7 @@ use app\model\BankCard;
 use app\model\TransactionOrder;
 use app\model\TransactionProduct;
 use app\model\User as UserModel;
+use app\service\ActionRateLimiter;
 use app\service\TransactionOrderService;
 use app\service\UserFundLedgerService;
 use Exception;
@@ -161,6 +162,11 @@ trait TransactionActions
                 $pid = (int)($post_info['transact_id'] ?? 0);
                 if ($pid <= 0) {
                     return show(500, 'error', '挂单不存在');
+                }
+
+                $buyerUid = (int)($user_info['id'] ?? 0);
+                if ($buyerUid > 0 && !ActionRateLimiter::check('transaction_buy:uid:' . $buyerUid, 10, 60)) {
+                    return show(429, 'error', '下单操作过于频繁，请稍后再试', [], 429);
                 }
 
                 $order_number = '';
@@ -543,6 +549,10 @@ trait TransactionActions
             return $this->apiError('请先登录', 401);
         }
 
+        if (!ActionRateLimiter::check('transaction_release:uid:' . $uid, 5, 60)) {
+            return $this->apiError('放币操作过于频繁，请稍后再试', 429);
+        }
+
         $order = null;
         $id = (int)($post['id'] ?? 0);
         $orderNumber = trim((string)($post['order_number'] ?? ''));
@@ -621,10 +631,38 @@ trait TransactionActions
 
         $total = (int)(clone $query)->count();
         $rows = $query->page($page, $pageSize)->select();
+
+        // 批量预加载卖家用户信息（消除 N+1 用户查询）
+        $sellerUids = array_unique(array_filter(array_map('intval', array_column($rows->toArray(), 'uid'))));
+        $userMap = [];
+        if (!empty($sellerUids)) {
+            $sellers = UserModel::whereIn('id', $sellerUids)->field('id,avatar,nickname,mobile')->select();
+            foreach ($sellers as $s) {
+                $userMap[(int)$s['id']] = $s;
+            }
+        }
+
+        // 批量聚合已完成订单统计（消除 N+1 count+sum 查询；CASE WHEN 严格等价原 where('status',3)->count()/sum()）
+        $pids = array_unique(array_filter(array_map('intval', array_column($rows->toArray(), 'id'))));
+        $orderStatsMap = [];
+        if (!empty($pids)) {
+            $orderStats = TransactionOrder::whereIn('pid', $pids)
+                ->field('pid, SUM(CASE WHEN status = 3 THEN 1 ELSE 0 END) as completed_count, SUM(CASE WHEN status = 3 THEN pay_amount ELSE 0 END) as completed_amount')
+                ->group('pid')
+                ->select();
+            foreach ($orderStats as $stat) {
+                $orderStatsMap[(int)$stat['pid']] = [
+                    'count' => (int)$stat['completed_count'],
+                    'amount' => (float)$stat['completed_amount'],
+                ];
+            }
+        }
+
         $list = [];
         foreach ($rows as $row) {
-            $seller = UserModel::field('id,avatar,nickname,mobile')->find((int)($row['uid'] ?? 0));
-            $completedQuery = TransactionOrder::where('pid', (int)($row['id'] ?? 0))->where('status', 3);
+            $seller = $userMap[(int)($row['uid'] ?? 0)] ?? null;
+            $pid = (int)($row['id'] ?? 0);
+            $stat = $orderStatsMap[$pid] ?? ['count' => 0, 'amount' => 0.0];
             $list[] = [
                 'id' => (int)($row['id'] ?? 0),
                 'uid' => (int)($row['uid'] ?? 0),
@@ -640,8 +678,8 @@ trait TransactionActions
                     'nickname' => (string)($seller['nickname'] ?? ''),
                     'mobile' => (string)($seller['mobile'] ?? ''),
                 ] : [],
-                'TransactionOrder_count' => (int)$completedQuery->count(),
-                'pay_amount_s' => (float)$completedQuery->sum('pay_amount'),
+                'TransactionOrder_count' => $stat['count'],
+                'pay_amount_s' => $stat['amount'],
             ];
         }
 
@@ -690,12 +728,30 @@ trait TransactionActions
         $total = (int)$query->count();
         $rows = $query->page($page, $pageSize)->select();
 
+        // 批量预加载对手方用户信息（消除 N+1 查询）
+        $counterpartyIds = [];
+        foreach ($rows as $row) {
+            $isBuyer = (int)($row['uid'] ?? 0) === $uid;
+            $cid = $isBuyer ? (int)($row['sell_uid'] ?? 0) : (int)($row['uid'] ?? 0);
+            if ($cid > 0) {
+                $counterpartyIds[] = $cid;
+            }
+        }
+        $counterpartyIds = array_unique($counterpartyIds);
+        $userMap = [];
+        if (!empty($counterpartyIds)) {
+            $users = UserModel::whereIn('id', $counterpartyIds)->field('id,nickname,avatar,mobile')->select();
+            foreach ($users as $u) {
+                $userMap[(int)$u['id']] = $u;
+            }
+        }
+
         $list = [];
         foreach ($rows as $row) {
             $statusMeta = $this->transactionStatusMeta($row);
             $isBuyer = (int)($row['uid'] ?? 0) === $uid;
             $counterpartyId = $isBuyer ? (int)($row['sell_uid'] ?? 0) : (int)($row['uid'] ?? 0);
-            $counterparty = UserModel::field('id,nickname,avatar,mobile')->find($counterpartyId);
+            $counterparty = $userMap[$counterpartyId] ?? null;
 
             $list[] = [
                 'id' => (int)($row['id'] ?? 0),
@@ -760,6 +816,22 @@ trait TransactionActions
         $total = (int)$query->count();
         $rows = $query->page($page, $pageSize)->select();
 
+        // 批量聚合订单统计（消除 2N count 查询）
+        $pids = array_unique(array_filter(array_map('intval', array_column($rows->toArray(), 'id'))));
+        $orderStatsMap = [];
+        if (!empty($pids)) {
+            $orderStats = TransactionOrder::whereIn('pid', $pids)
+                ->field('pid, COUNT(*) as total_count, SUM(CASE WHEN status = 3 THEN 1 ELSE 0 END) as completed_count')
+                ->group('pid')
+                ->select();
+            foreach ($orderStats as $stat) {
+                $orderStatsMap[(int)$stat['pid']] = [
+                    'total' => (int)$stat['total_count'],
+                    'completed' => (int)$stat['completed_count'],
+                ];
+            }
+        }
+
         $list = [];
         foreach ($rows as $row) {
             $statusValue = (int)($row['status'] ?? 0);
@@ -769,8 +841,10 @@ trait TransactionActions
                 3 => '已结束',
             ];
 
-            $orderCount = (int)TransactionOrder::where('pid', (int)$row['id'])->count();
-            $completedCount = (int)TransactionOrder::where('pid', (int)$row['id'])->where('status', 3)->count();
+            $pid = (int)$row['id'];
+            $stat = $orderStatsMap[$pid] ?? ['total' => 0, 'completed' => 0];
+            $orderCount = $stat['total'];
+            $completedCount = $stat['completed'];
 
             $list[] = [
                 'id' => (int)($row['id'] ?? 0),

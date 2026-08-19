@@ -6,6 +6,7 @@ namespace app\controller\indexapi;
 use app\model\RebateRecord;
 use app\model\Substation;
 use app\model\User as UserModel;
+use app\service\ActionRateLimiter;
 use app\service\UserFundLedgerService;
 use think\facade\Db;
 
@@ -155,6 +156,11 @@ trait AgentActions
 
     protected function handleApiAgentWalletTransfer()
     {
+        $agentUid = (int)($this->user_info['id'] ?? 0);
+        if ($agentUid > 0 && !ActionRateLimiter::check('agent_wallet_transfer:uid:' . $agentUid, 5, 60)) {
+            return show(429, 'error', '划转操作过于频繁，请稍后再试', [], 429);
+        }
+
         $amount = $this->request->post('amount', '');
         if (!function_exists('agentWalletToBalance')) {
             require_once app_path() . '/common.php';

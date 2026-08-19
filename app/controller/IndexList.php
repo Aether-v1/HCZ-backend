@@ -365,8 +365,18 @@ class IndexList
         }
         $par[] = ['uid|sell_uid', '=', $userId];
         $data = TransactionOrder::where($par)->order('id', 'desc')->select();
+
+        // 批量预加载买家用户信息（消除 N+1 查询）
+        $buyerUids = array_unique(array_filter(array_map('intval', array_column($data->toArray(), 'uid'))));
+        $userMap = [];
+        if (!empty($buyerUids)) {
+            $users = UserModel::whereIn('id', $buyerUids)->field('id,avatar,nickname')->select();
+            foreach ($users as $u) {
+                $userMap[(int)$u['id']] = $u;
+            }
+        }
         foreach($data as $key => $vo) {
-            $vo['user_info'] = UserModel::field('avatar,nickname')->find($vo['uid']);
+            $vo['user_info'] = $userMap[(int)($vo['uid'] ?? 0)] ?? null;
             $statusMeta = TransactionOrder::buildStatusMeta($vo);
             $isSeller = (int)($vo['sell_uid'] ?? 0) === $userId;
             $isBuyer = (int)($vo['uid'] ?? 0) === $userId;

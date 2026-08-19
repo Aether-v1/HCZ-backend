@@ -238,7 +238,7 @@ class AdminList
         $par[] = ['id|mobile|nickname', 'like', '%' . $search . '%'];
         $data = UserModel::where($par)->order($column??'id', $dir??'desc')->order('id', 'asc')->limit($start, $length)->select();
         foreach($data as $key => $vo) {
-            $vo['t_user_info'] = UserModel::find($vo['tid_1']??'');
+            $vo['t_user_info'] = UserModel::field('id,avatar,nickname,mobile')->find($vo['tid_1']??'');
         }
         $totalRecords = (int)UserModel::count();
         $totalDisplay = (int)UserModel::where($par)->count();
@@ -316,7 +316,7 @@ class AdminList
         $par[] = ['order_number|wallet_address', 'like', '%' . $search . '%'];
         $data = Recharge::where($par)->order($column??'id', $dir??'desc')->order('id', 'asc')->limit($start, $length)->select();
         foreach($data as $key => $vo) {
-            $vo['user_info'] = UserModel::find($vo['uid']);
+            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile')->find($vo['uid']);
             $vo['image'] = !empty($vo['image']) ? '/api/proof/recharge/' . rawurlencode((string)($vo['order_number'] ?? '')) . '/view' : '';
 
         }
@@ -347,7 +347,7 @@ class AdminList
         $par[] = ['order_number|wallet_address', 'like', '%' . $search . '%'];
         $data = Withdrawal::where($par)->order($column??'id', $dir??'desc')->order('id', 'asc')->limit($start, $length)->select();
         foreach($data as $key => $vo) {
-            $vo['user_info'] = UserModel::find($vo['uid']);
+            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile')->find($vo['uid']);
         }
         $totalRecords = (int)Withdrawal::where($basePar)->count();
         $totalDisplay = (int)Withdrawal::where($par)->count();
@@ -398,7 +398,7 @@ class AdminList
             }
         }
         foreach($data as $key => $vo) {
-            $vo['user_info'] = UserModel::find($vo['uid']);
+            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile')->find($vo['uid']);
 
             $order_info = '';
             foreach ($vo['order_info'] as $item) {
@@ -502,7 +502,7 @@ class AdminList
             }
         }
         foreach($data as $key => $vo) {
-            $vo['user_info'] = UserModel::find($vo['uid']);
+            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile')->find($vo['uid']);
 
             $order_info = '';
             foreach ($vo['order_info'] as $item) {
@@ -549,9 +549,18 @@ class AdminList
         $search = $this->datatablesSearch($payload);
         $par[] = ['id', 'like', '%' . $search . '%'];
         $data = TransactionProduct::where($par)->order($column??'id', $dir??'desc')->order('id', 'asc')->limit($start, $length)->select();
-        foreach($data as $key => $vo) {
-            $vo['user_info'] = UserModel::find($vo['uid']);
 
+        // 批量预加载用户信息（限制字段，避免敏感数据泄露；消除 N+1）
+        $uids = array_unique(array_filter(array_map('intval', array_column($data->toArray(), 'uid'))));
+        $userMap = [];
+        if (!empty($uids)) {
+            $users = UserModel::whereIn('id', $uids)->field('id,avatar,nickname,mobile')->select();
+            foreach ($users as $u) {
+                $userMap[(int)$u['id']] = $u;
+            }
+        }
+        foreach($data as $key => $vo) {
+            $vo['user_info'] = $userMap[(int)$vo['uid']] ?? null;
         }
         $totalRecords = (int)TransactionProduct::count();
         $totalDisplay = (int)TransactionProduct::where($par)->count();
@@ -578,11 +587,27 @@ class AdminList
         $par = $basePar;
         $par[] = ['order_number', 'like', '%' . $search . '%'];
         $data = TransactionOrder::where($par)->order($column??'id', $dir??'desc')->order('id', 'asc')->limit($start, $length)->select();
-        foreach($data as $key => $vo) {
-            $vo['user_info'] = UserModel::find($vo['uid']);
-            $vo['sell_uid_info'] = UserModel::find($vo['sell_uid']);
-            $vo['voucher_image'] = !empty($vo['voucher_image']) ? '/api/proof/trade/' . rawurlencode((string)($vo['order_number'] ?? '')) . '/view' : '';
 
+        // 批量预加载买家+卖家用户信息（限制字段，避免敏感数据泄露；消除 2N 查询）
+        $allUids = [];
+        foreach ($data as $vo) {
+            $buyerUid = (int)($vo['uid'] ?? 0);
+            $sellerUid = (int)($vo['sell_uid'] ?? 0);
+            if ($buyerUid > 0) { $allUids[] = $buyerUid; }
+            if ($sellerUid > 0) { $allUids[] = $sellerUid; }
+        }
+        $allUids = array_unique($allUids);
+        $userMap = [];
+        if (!empty($allUids)) {
+            $users = UserModel::whereIn('id', $allUids)->field('id,avatar,nickname,mobile')->select();
+            foreach ($users as $u) {
+                $userMap[(int)$u['id']] = $u;
+            }
+        }
+        foreach($data as $key => $vo) {
+            $vo['user_info'] = $userMap[(int)($vo['uid'] ?? 0)] ?? null;
+            $vo['sell_uid_info'] = $userMap[(int)($vo['sell_uid'] ?? 0)] ?? null;
+            $vo['voucher_image'] = !empty($vo['voucher_image']) ? '/api/proof/trade/' . rawurlencode((string)($vo['order_number'] ?? '')) . '/view' : '';
         }
         $totalRecords = (int)TransactionOrder::where($basePar)->count();
         $totalDisplay = (int)TransactionOrder::where($par)->count();
@@ -610,7 +635,7 @@ class AdminList
         $par[] = ['name|mobile|wx_account|zfb_account', 'like', '%' . $search . '%'];
         $data = BankCard::where($par)->order($column??'id', $dir??'desc')->order('id', 'asc')->limit($start, $length)->select();
         foreach($data as $key => $vo) {
-            $vo['user_info'] = UserModel::find($vo['uid']);
+            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile')->find($vo['uid']);
 
         }
         $totalRecords = (int)BankCard::where($basePar)->count();
@@ -693,10 +718,10 @@ class AdminList
         $par[] = ['order_number', 'like', '%' . $search . '%'];
         $data = RebateRecord::where($par)->order($column??'id', $dir??'desc')->order('id', 'asc')->limit($start, $length)->select();
         foreach($data as $key => $vo) {
-            $vo['user_info'] = UserModel::find($vo['uid']);
+            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile')->find($vo['uid']);
         }
         foreach($data as $key => $vo) {
-            $vo['t_user_info'] = UserModel::find($vo['tid']);
+            $vo['t_user_info'] = UserModel::field('id,avatar,nickname,mobile')->find($vo['tid']);
         }
         $totalRecords = (int)RebateRecord::where($basePar)->count();
         $totalDisplay = (int)RebateRecord::where($par)->count();

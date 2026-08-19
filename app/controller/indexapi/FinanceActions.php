@@ -1567,6 +1567,11 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 			return show(500, 'error', 'Request error');
 		}
 
+		$rechargeUid = (int)($this->user_info['id'] ?? 0);
+		if ($rechargeUid > 0 && !ActionRateLimiter::check('recharge_submit:uid:' . $rechargeUid, 10, 60)) {
+			return show(429, 'error', '操作过于频繁，请稍后再试', [], 429);
+		}
+
 		$recharge = Recharge::where('uid', $this->user_info['id'])
 			->where('order_number', $orderNumber)
 			->find();

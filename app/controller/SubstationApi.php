@@ -15,6 +15,7 @@ use app\model\SubstationProfile;
 use app\model\SubstationProfileAudit;
 use app\model\User as UserModel;
 use app\model\UserBalanceLog;
+use app\service\ActionRateLimiter;
 use app\service\UserFundLedgerService;
 use think\App;
 use think\Exception;
@@ -584,6 +585,9 @@ class SubstationApi
         }
 
         $uid = (int)($this->user_info['id'] ?? 0);
+        if ($uid > 0 && !ActionRateLimiter::check('substation_wallet_transfer:uid:' . $uid, 5, 60)) {
+            return show(429, 'error', '划转操作过于频繁，请稍后再试', [], 429);
+        }
         try {
             $result = Db::transaction(function () use ($uid, $amount, $password) {
                 $substation = Substation::where('uid', $uid)->lock(true)->find();

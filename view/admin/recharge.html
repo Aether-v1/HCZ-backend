@@ -1,4 +1,4 @@
-﻿{{include file="layout/admin_header" web_title="充值订单记录"/}}
+{{include file="layout/admin_header" web_title="充值订单记录"/}}
 <div id="kt_content_container" class="app-container container-fluid">
     <div class="card">
         <div class="card-header">
@@ -304,30 +304,32 @@
             }
         }).then((result) => {
             if (result.isConfirmed) {
-                $.ajax({
-                    url: "{{:getConfig('backstage_entrance')}}/recharge_post/audit",
-                    method: 'POST',
-                    data: {
-                        status: status,
-                        id: id,
-                    },
-                    dataType: 'json',
-                    success: function(res) {
-                        if (res.code === 200) {
-                            toastr.success(
-                                res.message,
-                                {closeButton :!0, timeOut : "3000"}
-                            );
-                            setTimeout(function (){
-                                window.location.reload();
-                            },1500);
-                        } else {
-                            toastr.error(
-                                res.message,
-                                {closeButton :!0, timeOut : "3000"}
-                            );
+                withAdminSensitiveAuth('请完成充值审核安全验证', function (authPayload) {
+                    $.ajax({
+                        url: "{{:getConfig('backstage_entrance')}}/recharge_post/audit",
+                        method: 'POST',
+                        data: Object.assign({
+                            status: status,
+                            id: id,
+                        }, authPayload || {}),
+                        dataType: 'json',
+                        success: function(res) {
+                            if (res.code === 200) {
+                                toastr.success(
+                                    res.message,
+                                    {closeButton :!0, timeOut : "3000"}
+                                );
+                                setTimeout(function (){
+                                    window.location.reload();
+                                },1500);
+                            } else {
+                                toastr.error(
+                                    res.message,
+                                    {closeButton :!0, timeOut : "3000"}
+                                );
+                            }
                         }
-                    }
+                    });
                 });
             }
         })

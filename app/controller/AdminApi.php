@@ -1518,21 +1518,108 @@ class AdminApi
 
     private function handleUserPassword(array $post_info)
     {
-        $user_info = UserModel::find($post_info['uid']);
-        $salt = randomkeys(4);
-        $user_info->password = password_hash(($post_info['password'] . $salt), PASSWORD_BCRYPT);
-        $user_info->salt = $salt;
-        $user_info->save();
+        if (!$this->directHasAdminPermission('用户列表')) {
+            return $this->directDenyAdminPermission('用户列表');
+        }
+        if (!$this->directValidateRequiredCsrfToken()) {
+            Log::warning('admin user_post password invalid csrf blocked', [
+                'admin_id' => (int)($this->admin_info['id'] ?? 0),
+                'uid' => (int)($post_info['uid'] ?? 0),
+                'ip' => (string)$this->request->ip(),
+                'path' => $this->directCurrentRequestPath(),
+            ]);
+            return show(403, 'error', '密码重置请求校验失败');
+        }
+        $sensitiveValidation = $this->directValidateSensitiveOperation((array)$post_info, 'user_password_reset');
+        if (empty($sensitiveValidation['ok'])) {
+            return show(403, 'error', (string)($sensitiveValidation['message'] ?? '安全验证失败'));
+        }
 
-        return show(200, 'success', '修改成功');
+        $uid = (int)($post_info['uid'] ?? 0);
+        if ($uid <= 0) {
+            return show(500, 'error', '用户参数错误');
+        }
+        $newPassword = (string)($post_info['password'] ?? '');
+        if ($newPassword === '') {
+            return show(500, 'error', '新密码不能为空');
+        }
+
+        try {
+            Db::startTrans();
+            $user_info = $this->directLockUser($uid);
+            if (!$user_info) {
+                Db::rollback();
+                return show(500, 'error', '用户不存在');
+            }
+            $salt = randomkeys(4);
+            $user_info->password = password_hash(($newPassword . $salt), PASSWORD_BCRYPT);
+            $user_info->salt = $salt;
+            $user_info->save();
+            Db::commit();
+
+            $this->directWriteAdminOperationLog('重置用户密码', '用户管理', '用户UID：' . (int)$user_info['id'] . '，账号：' . (string)($user_info['mobile'] ?? '') . '，已由管理员重置登录密码', [
+                'target_id' => (int)$user_info['id'],
+                'target_type' => 'user',
+            ]);
+
+            return show(200, 'success', '修改成功');
+        } catch (\Throwable $e) {
+            Db::rollback();
+            Log::error('admin user_post password error: ' . $e->getMessage(), [
+                'uid' => $uid,
+                'admin_id' => (int)($this->admin_info['id'] ?? 0),
+            ]);
+            return show(500, 'error', '修改失败');
+        }
     }
 
     private function handleUserStatusSwitch(array $post_info)
     {
-        $res = UserModel::find($post_info['uid']);
-        $res->status = ($res->status === 0) ? 1 : 0;
-        $res->save();
-        return show(200, 'success', '状态更新成功');
+        if (!$this->directHasAdminPermission('用户列表')) {
+            return $this->directDenyAdminPermission('用户列表');
+        }
+        if (!$this->directValidateRequiredCsrfToken()) {
+            Log::warning('admin user_post status_switch invalid csrf blocked', [
+                'admin_id' => (int)($this->admin_info['id'] ?? 0),
+                'uid' => (int)($post_info['uid'] ?? 0),
+                'ip' => (string)$this->request->ip(),
+                'path' => $this->directCurrentRequestPath(),
+            ]);
+            return show(403, 'error', '状态切换请求校验失败');
+        }
+
+        $uid = (int)($post_info['uid'] ?? 0);
+        if ($uid <= 0) {
+            return show(500, 'error', '用户参数错误');
+        }
+
+        try {
+            Db::startTrans();
+            $res = $this->directLockUser($uid);
+            if (!$res) {
+                Db::rollback();
+                return show(500, 'error', '用户不存在');
+            }
+            $oldStatus = (int)$res['status'];
+            $newStatus = ($oldStatus === 0) ? 1 : 0;
+            $res->status = $newStatus;
+            $res->save();
+            Db::commit();
+
+            $this->directWriteAdminOperationLog('切换用户状态', '用户管理', '用户UID：' . (int)$res['id'] . '，账号：' . (string)($res['mobile'] ?? '') . '，状态：' . ($oldStatus === 0 ? '禁用' : '启用') . ' -> ' . ($newStatus === 0 ? '禁用' : '启用'), [
+                'target_id' => (int)$res['id'],
+                'target_type' => 'user',
+            ]);
+
+            return show(200, 'success', '状态更新成功');
+        } catch (\Throwable $e) {
+            Db::rollback();
+            Log::error('admin user_post status_switch error: ' . $e->getMessage(), [
+                'uid' => $uid,
+                'admin_id' => (int)($this->admin_info['id'] ?? 0),
+            ]);
+            return show(500, 'error', '状态更新失败');
+        }
     }
 
     private function handleUserTwofaUnbind(array $post_info)
@@ -1714,19 +1801,140 @@ class AdminApi
         }
     }
 
+    private function directCheckUserPendingBusiness(int $uid): array
+    {
+        if ($uid <= 0) {
+            return ['ok' => false, 'message' => '用户参数错误'];
+        }
+        // 充值订单：status=0 待支付（链上/网关）、status=1 待审核（手动充值）
+        $pendingRecharge = Recharge::where('uid', $uid)->whereIn('status', [0, 1])->count();
+        if ($pendingRecharge > 0) {
+            return ['ok' => false, 'message' => '存在待处理充值订单（' . $pendingRecharge . '笔）'];
+        }
+        // 提现订单：status=0 待审核
+        $pendingWithdrawal = Withdrawal::where('uid', $uid)->where('status', 0)->count();
+        if ($pendingWithdrawal > 0) {
+            return ['ok' => false, 'message' => '存在待审核提现订单（' . $pendingWithdrawal . '笔）'];
+        }
+        // C2C 订单：作为买家 status IN (0,1)
+        $pendingBuyOrder = TransactionOrder::where('uid', $uid)->whereIn('status', [0, 1])->count();
+        if ($pendingBuyOrder > 0) {
+            return ['ok' => false, 'message' => '存在进行中的C2C买入订单（' . $pendingBuyOrder . '笔）'];
+        }
+        // C2C 订单：作为卖家 status IN (0,1)
+        $pendingSellOrder = TransactionOrder::where('sell_uid', $uid)->whereIn('status', [0, 1])->count();
+        if ($pendingSellOrder > 0) {
+            return ['ok' => false, 'message' => '存在进行中的C2C卖出订单（' . $pendingSellOrder . '笔）'];
+        }
+        // 交易挂单：status IN (1,2) 且有剩余可售量（冻结资金未释放）
+        $pendingListing = TransactionProduct::where('uid', $uid)->whereIn('status', [1, 2])->where('sell_account', '>', 0)->count();
+        if ($pendingListing > 0) {
+            return ['ok' => false, 'message' => '存在进行中的交易挂单（' . $pendingListing . '个）'];
+        }
+        // 钱包余额检查：余额/冻结/代理钱包有余额时禁止删除
+        $user = UserModel::where('id', $uid)->field('id,balance,frozen_amount,agent_wallet,mobile')->find();
+        if ($user) {
+            $balance = round((float)($user['balance'] ?? 0), 2);
+            $frozen = round((float)($user['frozen_amount'] ?? 0), 2);
+            $agentWallet = round((float)($user['agent_wallet'] ?? 0), 2);
+            if ($balance > 0.005 || $frozen > 0.005 || $agentWallet > 0.005) {
+                return ['ok' => false, 'message' => '用户钱包存在余额（余额:' . $balance . ' 冻结:' . $frozen . ' 代理钱包:' . $agentWallet . '）'];
+            }
+        }
+        return ['ok' => true, 'message' => ''];
+    }
+
     private function handleUserDeleteBatch(array $post_info)
     {
-        $data = UserModel::where('id', 'in', $post_info['ids'])->select();
-        foreach($data as $key => $vo) {
-            UserModel::destroy($vo['id']);
+        if (!$this->directHasAdminPermission('用户列表')) {
+            return $this->directDenyAdminPermission('用户列表');
         }
-        return show(200, 'success', '删除成功');
+        if (!$this->directValidateRequiredCsrfToken()) {
+            Log::warning('admin user_post dels invalid csrf blocked', [
+                'admin_id' => (int)($this->admin_info['id'] ?? 0),
+                'ids' => $post_info['ids'] ?? [],
+                'ip' => (string)$this->request->ip(),
+                'path' => $this->directCurrentRequestPath(),
+            ]);
+            return show(403, 'error', '删除请求校验失败');
+        }
+
+        $ids = is_array($post_info['ids'] ?? null) ? $post_info['ids'] : [];
+        if (empty($ids)) {
+            return show(500, 'error', '请选择要删除的用户');
+        }
+        $ids = array_map('intval', $ids);
+        $ids = array_filter($ids, fn($id) => $id > 0);
+        if (empty($ids)) {
+            return show(500, 'error', '用户参数错误');
+        }
+
+        // 先全部检查通过，再执行删除（避免删了一半才失败）
+        $failedChecks = [];
+        foreach ($ids as $uid) {
+            $pendingCheck = $this->directCheckUserPendingBusiness($uid);
+            if (empty($pendingCheck['ok'])) {
+                $failedChecks[] = 'UID#' . $uid . '：' . $pendingCheck['message'];
+            }
+        }
+        if (!empty($failedChecks)) {
+            return show(500, 'error', '以下用户无法删除：' . implode('；', $failedChecks));
+        }
+
+        // 全部通过后执行删除
+        $deletedCount = 0;
+        foreach ($ids as $uid) {
+            $user = UserModel::where('id', $uid)->field('id,mobile')->find();
+            if ($user) {
+                UserModel::destroy($uid);
+                $deletedCount++;
+                $this->directWriteAdminOperationLog('删除用户', '用户管理', '用户UID：' . $uid . '，账号：' . (string)($user['mobile'] ?? ''), [
+                    'target_id' => $uid,
+                    'target_type' => 'user',
+                ]);
+            }
+        }
+
+        return show(200, 'success', '删除成功（' . $deletedCount . '个）');
     }
 
     private function handleUserDelete(array $post_info)
     {
-        $data = UserModel::where('id', 'in', $post_info['id'])->find();
-        UserModel::destroy($data['id']);
+        if (!$this->directHasAdminPermission('用户列表')) {
+            return $this->directDenyAdminPermission('用户列表');
+        }
+        if (!$this->directValidateRequiredCsrfToken()) {
+            Log::warning('admin user_post del invalid csrf blocked', [
+                'admin_id' => (int)($this->admin_info['id'] ?? 0),
+                'uid' => (int)($post_info['id'] ?? 0),
+                'ip' => (string)$this->request->ip(),
+                'path' => $this->directCurrentRequestPath(),
+            ]);
+            return show(403, 'error', '删除请求校验失败');
+        }
+
+        $uid = (int)($post_info['id'] ?? 0);
+        if ($uid <= 0) {
+            return show(500, 'error', '用户参数错误');
+        }
+
+        $pendingCheck = $this->directCheckUserPendingBusiness($uid);
+        if (empty($pendingCheck['ok'])) {
+            return show(500, 'error', $pendingCheck['message'] . '，无法删除');
+        }
+
+        $user = UserModel::where('id', $uid)->field('id,mobile')->find();
+        if (!$user) {
+            return show(500, 'error', '用户不存在');
+        }
+
+        UserModel::destroy($uid);
+
+        $this->directWriteAdminOperationLog('删除用户', '用户管理', '用户UID：' . $uid . '，账号：' . (string)($user['mobile'] ?? ''), [
+            'target_id' => $uid,
+            'target_type' => 'user',
+        ]);
+
         return show(200, 'success', '删除成功');
     }
 
@@ -1902,6 +2110,10 @@ class AdminApi
 
     public function transaction_product_post(string $action)
     {
+        // P2-004 P1-003: C2C 挂单操作/删除权限检查（覆盖 operate/del/dels）
+        if (!$this->directHasAdminPermission('交易挂单数据')) {
+            return $this->directDenyAdminPermission('交易挂单数据');
+        }
         $post_info = $this->request->post();
         switch ($action) {
             case 'operate':
@@ -1921,6 +2133,26 @@ class AdminApi
 public function order_post(string $action)
 {
     $post_info = $this->request->post();
+
+    // P2-004 P1-001: 按订单实际 type 动态权限检查（防止低权限管理员混入不同 type 订单）
+    $orderIds = [];
+    if (!empty($post_info['ids'])) {
+        $idsRaw = is_array($post_info['ids']) ? $post_info['ids'] : explode(',', (string)$post_info['ids']);
+        $orderIds = array_filter(array_unique(array_map('intval', $idsRaw)));
+    } elseif (!empty($post_info['id'])) {
+        $orderIds = [(int)$post_info['id']];
+    }
+    if (!empty($orderIds)) {
+        $ordersForPerm = Order::where('id', 'in', $orderIds)->field('id,type')->select();
+        foreach ($ordersForPerm as $orderForPerm) {
+            $otype = (int)($orderForPerm['type'] ?? 0);
+            $perm = $otype === 1 ? '充值业务 - 订单列表' : ($otype === 2 ? '查询业务 - 订单列表' : '');
+            if ($perm === '' || !$this->directHasAdminPermission($perm)) {
+                return $this->directDenyAdminPermission($perm ?: '订单管理');
+            }
+        }
+    }
+
     switch ($action) {
         case 'audit_s':
             if ((int)$post_info['status'] === 2 || (int)$post_info['status'] === 3) {
@@ -2533,6 +2765,10 @@ public function order_post(string $action)
         $post_info = $this->request->post();
         switch ($action) {
             case 'audit':
+                // P2-004 P1-002: 提现审核权限检查
+                if (!$this->directHasAdminPermission('提现订单记录')) {
+                    return $this->directDenyAdminPermission('提现订单记录');
+                }
                 if (!$this->directValidateRequiredCsrfToken()) {
                     return show(403, 'error', '提现请求校验失败');
                 }
@@ -2748,10 +2984,14 @@ public function order_post(string $action)
         $post_info = $this->request->post();
         switch ($action) {
             case 'audit':
+                // P2-005 P1-006: 充值审核权限检查
+                if (!$this->directHasAdminPermission('充值订单记录')) {
+                    return $this->directDenyAdminPermission('充值订单记录');
+                }
                 if (!$this->directValidateRequiredCsrfToken()) {
                     return show(403, 'error', '充值请求校验失败');
                 }
-                $sensitiveValidation = ['ok' => true, 'mode' => 'skipped'];
+                $sensitiveValidation = $this->directValidateSensitiveOperation((array)$post_info, 'recharge_audit');
                 if (empty($sensitiveValidation['ok'])) {
                     return show(403, 'error', (string)($sensitiveValidation['message'] ?? '安全验证失败'));
                 }
@@ -2873,13 +3113,22 @@ public function order_post(string $action)
 
     public function bank_card_post(string $action)
     {
+        // P2-004 P2-001: 银行卡管理权限检查
+        if (!$this->directHasAdminPermission('支付管理')) {
+            return $this->directDenyAdminPermission('支付管理');
+        }
         $post_info = $this->request->post();
         switch ($action) {
             case 'dels':
                 $data = BankCard::where('id', 'in', $post_info['ids'])->select();
+                $deletedIds = [];
                 foreach($data as $key => $vo) {
                     BankCard::destroy($vo['id']);
+                    $deletedIds[] = (int)$vo['id'];
                 }
+                $this->directWriteAdminOperationLog('删除银行卡', '支付管理', '批量删除用户银行卡，数量：' . count($deletedIds) . '，ID：' . implode(',', $deletedIds), [
+                    'target_type' => 'bank_card',
+                ]);
                 return show(200, 'success', '删除成功');
                 
             default:
@@ -3228,18 +3477,50 @@ public function order_post(string $action)
     public function transaction_order_post(string $action)
     {
         $post_info = $this->request->post();
+
+        if (!$this->directHasAdminPermission('交易订单数据')) {
+            return $this->directDenyAdminPermission('交易订单数据');
+        }
+
         switch ($action) {
             case 'del':
-                TransactionOrder::destroy($post_info['id']);
-                return show(200, 'success', '删除成功');
-                
-            case 'dels':
-                $data = TransactionOrder::where('id', 'in', $post_info['ids'])->select();
-                foreach($data as $key => $vo) {
-                    TransactionOrder::destroy($vo['id']);
+                $id = (int)($post_info['id'] ?? 0);
+                if ($id <= 0) {
+                    return show(500, 'error', '参数错误');
                 }
+                $order = TransactionOrder::find($id);
+                if (!$order) {
+                    return show(500, 'error', '订单不存在');
+                }
+                $orderNumber = (string)($order['order_number'] ?? '');
+                $orderStatus = (int)($order['status'] ?? 0);
+                $buyerUid = (int)($order['uid'] ?? 0);
+                $sellerUid = (int)($order['seller_uid'] ?? 0);
+                TransactionOrder::destroy($id);
+                $this->directWriteAdminOperationLog('删除交易订单', '交易订单', '订单ID：' . $id . '，订单号：' . $orderNumber . '，买家UID：' . $buyerUid . '，卖家UID：' . $sellerUid . '，删除前状态：' . $orderStatus);
                 return show(200, 'success', '删除成功');
-                
+
+            case 'dels':
+                $idsRaw = $post_info['ids'] ?? '';
+                if (is_array($idsRaw)) {
+                    $ids = array_filter(array_map('intval', $idsRaw), static fn($v) => $v > 0);
+                } else {
+                    $ids = array_filter(array_map('intval', explode(',', (string)$idsRaw)), static fn($v) => $v > 0);
+                }
+                if (empty($ids)) {
+                    return show(500, 'error', '参数错误');
+                }
+                $orders = TransactionOrder::where('id', 'in', $ids)->select();
+                $deletedCount = 0;
+                $orderNumbers = [];
+                foreach ($orders as $vo) {
+                    $orderNumbers[] = (string)($vo['order_number'] ?? '');
+                    TransactionOrder::destroy($vo['id']);
+                    $deletedCount++;
+                }
+                $this->directWriteAdminOperationLog('批量删除交易订单', '交易订单', '删除数量：' . $deletedCount . '，订单ID：' . implode(',', $ids) . '，订单号：' . implode(',', $orderNumbers));
+                return show(200, 'success', '删除成功');
+
             default:
                 return show(500, 'error', '你不对劲');
         }
@@ -3249,18 +3530,47 @@ public function order_post(string $action)
     public function rebate_record_post(string $action)
     {
         $post_info = $this->request->post();
+
+        if (!$this->directHasAdminPermission('返佣记录')) {
+            return $this->directDenyAdminPermission('返佣记录');
+        }
+
         switch ($action) {
             case 'del':
-                RebateRecord::destroy($post_info['id']);
-                return show(200, 'success', '删除成功');
-                
-            case 'dels':
-                $data = RebateRecord::where('id', 'in', $post_info['ids'])->select();
-                foreach($data as $key => $vo) {
-                    RebateRecord::destroy($vo['id']);
+                $id = (int)($post_info['id'] ?? 0);
+                if ($id <= 0) {
+                    return show(500, 'error', '参数错误');
                 }
+                $record = RebateRecord::find($id);
+                if (!$record) {
+                    return show(500, 'error', '记录不存在');
+                }
+                $uid = (int)($record['uid'] ?? 0);
+                $amount = (string)($record['amount'] ?? '');
+                $orderNumber = (string)($record['order_number'] ?? '');
+                RebateRecord::destroy($id);
+                $this->directWriteAdminOperationLog('删除返佣记录', '返佣记录', '记录ID：' . $id . '，用户UID：' . $uid . '，关联订单号：' . $orderNumber . '，金额：' . $amount);
                 return show(200, 'success', '删除成功');
-                
+
+            case 'dels':
+                $idsRaw = $post_info['ids'] ?? '';
+                if (is_array($idsRaw)) {
+                    $ids = array_filter(array_map('intval', $idsRaw), static fn($v) => $v > 0);
+                } else {
+                    $ids = array_filter(array_map('intval', explode(',', (string)$idsRaw)), static fn($v) => $v > 0);
+                }
+                if (empty($ids)) {
+                    return show(500, 'error', '参数错误');
+                }
+                $records = RebateRecord::where('id', 'in', $ids)->select();
+                $deletedCount = 0;
+                foreach ($records as $vo) {
+                    RebateRecord::destroy($vo['id']);
+                    $deletedCount++;
+                }
+                $this->directWriteAdminOperationLog('批量删除返佣记录', '返佣记录', '删除数量：' . $deletedCount . '，记录ID：' . implode(',', $ids));
+                return show(200, 'success', '删除成功');
+
             default:
                 return show(500, 'error', '你不对劲');
         }
@@ -3271,6 +3581,11 @@ public function order_post(string $action)
     public function slide_post(string $action)
     {
         $post_info = $this->request->post();
+
+        if (!$this->directHasAdminPermission('首页轮播图')) {
+            return $this->directDenyAdminPermission('首页轮播图');
+        }
+
         switch ($action) {
             case 'submit':
                 if(empty($post_info['name'])){
@@ -3279,23 +3594,39 @@ public function order_post(string $action)
                 if(empty($post_info['image'])){
                     return show(500, 'error', '请上传轮播图图片');
                 }
-                $Product_info = Product::find($post_info['id']??'');
-                if($Product_info){
-                    $Product_info->name = $post_info['name'];
-                    $Product_info->image = $post_info['image'];
-                    $Product_info->save();
-                    return show(200, 'success', '修改成功');
+                $slideId = (int)($post_info['id'] ?? 0);
+                if ($slideId > 0) {
+                    $slide = Slide::find($slideId);
+                    if ($slide) {
+                        $oldName = (string)$slide['name'];
+                        $slide->name = $post_info['name'];
+                        $slide->image = $post_info['image'];
+                        $slide->save();
+                        $this->directWriteAdminOperationLog('修改轮播图', '首页轮播图', '轮播图ID：' . $slideId . '，名称：' . $oldName . ' -> ' . $post_info['name']);
+                        return show(200, 'success', '修改成功');
+                    }
                 }
                 Slide::create([
                     'name' => $post_info['name'],
                     'image' => $post_info['image'],
                 ]);
+                $this->directWriteAdminOperationLog('添加轮播图', '首页轮播图', '轮播图名称：' . $post_info['name']);
                 return show(200, 'success', '添加成功');
 
             case 'del':
-                Slide::destroy($post_info['id']);
+                $id = (int)($post_info['id'] ?? 0);
+                if ($id <= 0) {
+                    return show(500, 'error', '参数错误');
+                }
+                $slide = Slide::find($id);
+                if (!$slide) {
+                    return show(500, 'error', '轮播图不存在');
+                }
+                $slideName = (string)$slide['name'];
+                Slide::destroy($id);
+                $this->directWriteAdminOperationLog('删除轮播图', '首页轮播图', '轮播图ID：' . $id . '，名称：' . $slideName);
                 return show(200, 'success', '删除成功');
-                
+
             default:
                 return show(500, 'error', '你不对劲');
         }
@@ -3306,6 +3637,11 @@ public function order_post(string $action)
         $post_info = $this->request->post();
         switch ($action) {
             case 'add_modify':
+                $productType = (int)($post_info['type'] ?? 0);
+                $productPermission = $productType === 1 ? '充值业务 - 产品列表' : ($productType === 2 ? '查询业务 - 产品列表' : '');
+                if ($productPermission === '' || !$this->directHasAdminPermission($productPermission)) {
+                    return $this->directDenyAdminPermission($productPermission ?: '产品管理');
+                }
                 if(empty($post_info['name'])){
                     return show(500, 'error', '请输入产品名称');
                 }
@@ -3499,26 +3835,90 @@ public function order_post(string $action)
                 
 
             case 'status_switch':
-                $res = Product::find($post_info['id']);
-                $res->status = ($res->status === 0) ? 1 : 0;
+                $id = (int)($post_info['id'] ?? 0);
+                if ($id <= 0) {
+                    return show(500, 'error', '参数错误');
+                }
+                $res = Product::find($id);
+                if (!$res) {
+                    return show(500, 'error', '产品不存在');
+                }
+                $prodType = (int)$res['type'];
+                $prodPerm = $prodType === 1 ? '充值业务 - 产品列表' : ($prodType === 2 ? '查询业务 - 产品列表' : '');
+                if ($prodPerm === '' || !$this->directHasAdminPermission($prodPerm)) {
+                    return $this->directDenyAdminPermission($prodPerm ?: '产品管理');
+                }
+                $oldStatus = (int)$res['status'];
+                $newStatus = $oldStatus === 0 ? 1 : 0;
+                $res->status = $newStatus;
                 $res->save();
+                $this->directWriteAdminOperationLog('切换产品状态', '产品管理', '产品ID：' . $id . '，产品名称：' . (string)$res['name'] . '，类型：' . $prodType . '，状态：' . $oldStatus . ' -> ' . $newStatus);
                 return show(200, 'success', '状态更新成功');
 
             case 'sort':
-                $res = Product::find($post_info['id']);
-                $res->sort = $post_info['sort'];
-                $res->save();
-                return show(200, 'success', '更新成功');
-                
-            case 'del':
-                Product::destroy($post_info['id']);
-                return show(200, 'success', '删除成功');
-                
-            case 'dels':
-                $data = Product::where('id', 'in', $post_info['ids'])->select();
-                foreach($data as $key => $vo) {
-                    Product::destroy($vo['id']);
+                $id = (int)($post_info['id'] ?? 0);
+                if ($id <= 0) {
+                    return show(500, 'error', '参数错误');
                 }
+                $res = Product::find($id);
+                if (!$res) {
+                    return show(500, 'error', '产品不存在');
+                }
+                $prodType = (int)$res['type'];
+                $prodPerm = $prodType === 1 ? '充值业务 - 产品列表' : ($prodType === 2 ? '查询业务 - 产品列表' : '');
+                if ($prodPerm === '' || !$this->directHasAdminPermission($prodPerm)) {
+                    return $this->directDenyAdminPermission($prodPerm ?: '产品管理');
+                }
+                $oldSort = (int)$res['sort'];
+                $newSort = (int)($post_info['sort'] ?? 0);
+                $res->sort = $newSort;
+                $res->save();
+                $this->directWriteAdminOperationLog('修改产品排序', '产品管理', '产品ID：' . $id . '，产品名称：' . (string)$res['name'] . '，排序：' . $oldSort . ' -> ' . $newSort);
+                return show(200, 'success', '更新成功');
+
+            case 'del':
+                $id = (int)($post_info['id'] ?? 0);
+                if ($id <= 0) {
+                    return show(500, 'error', '参数错误');
+                }
+                $res = Product::find($id);
+                if (!$res) {
+                    return show(500, 'error', '产品不存在');
+                }
+                $prodType = (int)$res['type'];
+                $prodPerm = $prodType === 1 ? '充值业务 - 产品列表' : ($prodType === 2 ? '查询业务 - 产品列表' : '');
+                if ($prodPerm === '' || !$this->directHasAdminPermission($prodPerm)) {
+                    return $this->directDenyAdminPermission($prodPerm ?: '产品管理');
+                }
+                $productName = (string)$res['name'];
+                Product::destroy($id);
+                $this->directWriteAdminOperationLog('删除产品', '产品管理', '产品ID：' . $id . '，产品名称：' . $productName . '，类型：' . $prodType);
+                return show(200, 'success', '删除成功');
+
+            case 'dels':
+                $idsRaw = $post_info['ids'] ?? '';
+                if (is_array($idsRaw)) {
+                    $ids = array_filter(array_map('intval', $idsRaw), static fn($v) => $v > 0);
+                } else {
+                    $ids = array_filter(array_map('intval', explode(',', (string)$idsRaw)), static fn($v) => $v > 0);
+                }
+                if (empty($ids)) {
+                    return show(500, 'error', '参数错误');
+                }
+                $products = Product::where('id', 'in', $ids)->select();
+                $deletedCount = 0;
+                $productNames = [];
+                foreach ($products as $vo) {
+                    $prodType = (int)$vo['type'];
+                    $prodPerm = $prodType === 1 ? '充值业务 - 产品列表' : ($prodType === 2 ? '查询业务 - 产品列表' : '');
+                    if ($prodPerm === '' || !$this->directHasAdminPermission($prodPerm)) {
+                        return $this->directDenyAdminPermission($prodPerm ?: '产品管理');
+                    }
+                    $productNames[] = (string)$vo['name'];
+                    Product::destroy($vo['id']);
+                    $deletedCount++;
+                }
+                $this->directWriteAdminOperationLog('批量删除产品', '产品管理', '删除数量：' . $deletedCount . '，产品ID：' . implode(',', $ids) . '，产品名称：' . implode(',', $productNames));
                 return show(200, 'success', '删除成功');
                 
             default:
@@ -3869,6 +4269,10 @@ public function order_post(string $action)
 
     public function account_post(string $action)
     {
+        // P2-004 P3-002: 显式 CSRF 双重保护（全局 CsrfCheck 已保护，此处增加 controller 层校验）
+        if (!$this->directValidateRequiredCsrfToken()) {
+            return show(403, 'error', '请求校验失败');
+        }
         $post_info = $this->request->post();
         try {
             switch ($action) {
@@ -4060,6 +4464,23 @@ public function order_post(string $action)
             return show(404, 'error', '请选择图片');
         }
 
+        // P2-004 P2-002: 按 keyname 动态权限检查
+        $settingKeys = ['a_recommend_upload', 'b_recommend_upload', 'contact_service_upload', 'user_avatar_upload'];
+        if (in_array($keyname, $settingKeys, true)) {
+            if (!$this->directHasAdminPermission('系统设置管理')) {
+                return $this->directDenyAdminPermission('系统设置管理');
+            }
+        } elseif ($keyname === 'upload') {
+            // 通用上传：产品管理/轮播图/系统设置任意一个权限即可
+            $hasUploadPerm = $this->directHasAdminPermission('充值业务 - 产品列表')
+                || $this->directHasAdminPermission('查询业务 - 产品列表')
+                || $this->directHasAdminPermission('首页轮播图')
+                || $this->directHasAdminPermission('系统设置管理');
+            if (!$hasUploadPerm) {
+                return $this->directDenyAdminPermission('文件上传');
+            }
+        }
+
         $uploader = new UploadService();
         if (in_array($keyname, ['a_recommend_upload', 'b_recommend_upload', 'contact_service_upload', 'user_avatar_upload', 'upload'], true)) {
             try {
@@ -4078,6 +4499,10 @@ public function order_post(string $action)
 
     public function message_send()
     {
+        // P2-007: 消息发送权限检查
+        if (!$this->directHasAdminPermission('系统设置管理')) {
+            return $this->directDenyAdminPermission('系统设置管理');
+        }
         $post_info = $this->request->post();
 
         try {
@@ -4223,6 +4648,10 @@ public function order_post(string $action)
 
     public function message_pin()
     {
+        // P2-007: 消息置顶权限检查
+        if (!$this->directHasAdminPermission('系统设置管理')) {
+            return $this->directDenyAdminPermission('系统设置管理');
+        }
         $post_info = $this->request->post();
         $id = (int)($post_info['id'] ?? 0);
         $isPinned = (int)($post_info['is_pinned'] ?? -1);
@@ -4251,6 +4680,10 @@ public function order_post(string $action)
 
 public function message_delete()
 {
+    // P2-007: 消息删除权限检查
+    if (!$this->directHasAdminPermission('系统设置管理')) {
+        return $this->directDenyAdminPermission('系统设置管理');
+    }
     $post_info = $this->request->post();
     $id = (int)($post_info['id'] ?? 0);
 
