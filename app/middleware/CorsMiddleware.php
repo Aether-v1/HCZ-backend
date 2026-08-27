@@ -26,8 +26,8 @@ class CorsMiddleware
     /** 允许的 HTTP 方法 */
     protected string $allowMethods = 'GET, POST, PUT, DELETE, OPTIONS';
 
-    /** 允许的请求头（必须包含前端实际发送的 X-CSRF-Token） */
-    protected string $allowHeaders = 'Content-Type, X-Requested-With, X-CSRF-Token';
+    /** 允许的请求头（必须包含前端实际发送的 X-CSRF-Token、Cache-Control、Pragma） */
+    protected string $allowHeaders = 'Content-Type, X-Requested-With, X-CSRF-Token, Cache-Control, Pragma';
 
     /** 允许携带凭证 */
     protected string $allowCredentials = 'true';
