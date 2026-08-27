@@ -41,19 +41,27 @@ class SubstationService
 
     public static function extractHostFromRequest(Request $request): string
     {
-        $forwardedHost = (string)$request->header('x-forwarded-host', '');
-        $host = (string)$request->host();
+        // F9 修复：默认以实际请求 Host（HTTP_HOST / SERVER_NAME）为准，不信任客户端提交的
+        // X-Forwarded-Host。此前该头被无条件优先采用，普通客户端可伪造
+        // `X-Forwarded-Host: <任意子站域名>` 影响子站识别 -> 折扣价/佣金归属/订单归属。
+        // 仅当部署方显式配置 TRUST_PROXY_HEADERS=true（且确认可信反代/Nginx 会覆盖该头，
+        // 客户端无法直连后端）时才读取 X-Forwarded-Host，且只取逗号分隔的第一个值。
+        $host = self::normalizeHost((string)$request->host());
 
-        if ($forwardedHost !== '') {
-            foreach (explode(',', $forwardedHost) as $item) {
-                $normalizedHost = self::normalizeHost($item);
-                if ($normalizedHost !== '') {
-                    return $normalizedHost;
+        $trustProxyHeaders = (bool)env('TRUST_PROXY_HEADERS', false);
+        if ($trustProxyHeaders) {
+            $forwardedHost = (string)$request->header('x-forwarded-host', '');
+            if ($forwardedHost !== '') {
+                foreach (explode(',', $forwardedHost) as $item) {
+                    $normalizedHost = self::normalizeHost($item);
+                    if ($normalizedHost !== '') {
+                        return $normalizedHost;
+                    }
                 }
             }
         }
 
-        return self::normalizeHost($host);
+        return $host;
     }
 
     public static function normalizeHost(string $host): string

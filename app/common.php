@@ -45,136 +45,123 @@ function show(int $code = 200, string $status = 'success', string $message = "�
 const AGENT_WALLET_TO_BALANCE_DUPLICATE_WINDOW_SECONDS = 8;
 
 function agentWalletToBalanceUsingLedger($uid, $amount = null) {
-    $transferLog = null;
+    $uid = (int)$uid;
     try {
-        $ledger = new UserFundLedgerService();
-        $user = $ledger->lockUser((int)$uid);
-        if (empty($user)) {
-            throw new \Exception('用户不存在');
-        }
+        // F1 修复：整个「佣金钱包 → 普通钱包」转移在同一个数据库事务内完成。
+        // 事务内第一步 lockUser() 执行 SELECT ... FOR UPDATE（锁在事务提交前持续有效），
+        // agent_wallet / balance / fund_log / transfer_log 任一环节失败整体回滚。
+        return Db::transaction(function () use ($uid, $amount) {
+            $ledger = new UserFundLedgerService();
+            $user = $ledger->lockUser($uid);
+            if (empty($user)) {
+                throw new \Exception('用户不存在');
+            }
 
-        if ($user->agent_status != 1) {
-            throw new \Exception('未开通代理，无法将佣金钱包金额转入普通钱包');
-        }
+            if ($user->agent_status != 1) {
+                throw new \Exception('未开通代理，无法将佣金钱包金额转入普通钱包');
+            }
 
-        $agentWallet = round(floatval($user->agent_wallet), 2);
-        $currentBalance = round(floatval($user->balance), 2);
-        $requestedAmount = $amount === null ? null : round(floatval($amount), 2);
-        $recentTransferQuery = WalletTransferLog::where('uid', (int)$uid)
-            ->where('from_type', 'agent_wallet')
-            ->where('to_type', 'balance')
-            ->where('status', 1)
-            ->where('transfer_time', '>=', date('Y-m-d H:i:s', time() - AGENT_WALLET_TO_BALANCE_DUPLICATE_WINDOW_SECONDS))
-            ->order('id', 'desc');
+            $agentWallet = round(floatval($user->agent_wallet), 2);
+            $currentBalance = round(floatval($user->balance), 2);
+            $requestedAmount = $amount === null ? null : round(floatval($amount), 2);
+            $recentTransferQuery = WalletTransferLog::where('uid', $uid)
+                ->where('from_type', 'agent_wallet')
+                ->where('to_type', 'balance')
+                ->where('status', 1)
+                ->where('transfer_time', '>=', date('Y-m-d H:i:s', time() - AGENT_WALLET_TO_BALANCE_DUPLICATE_WINDOW_SECONDS))
+                ->order('id', 'desc');
 
-        if ($requestedAmount !== null) {
-            $recentTransferQuery->where('amount', $requestedAmount);
-        }
+            if ($requestedAmount !== null) {
+                $recentTransferQuery->where('amount', $requestedAmount);
+            }
 
-        $recentTransfer = $recentTransferQuery->find();
-        if ($recentTransfer && ($requestedAmount !== null || $agentWallet <= 0)) {
-            Db::commit();
+            $recentTransfer = $recentTransferQuery->find();
+            if ($recentTransfer && ($requestedAmount !== null || $agentWallet <= 0)) {
+                return [
+                    'status' => 1,
+                    'msg' => "成功转入" . round((float)($recentTransfer['amount'] ?? 0), 2) . "，当前普通钱包余额：{$currentBalance}"
+                ];
+            }
+
+            if ($agentWallet <= 0) {
+                throw new \Exception('佣金钱包余额为 0，无需转入');
+            }
+
+            if ($amount !== null) {
+                $amount = $requestedAmount;
+                if ($amount <= 0 || $amount > $agentWallet) {
+                    throw new \Exception('转入金额无效（需大于 0 且不超过佣金钱包余额）');
+                }
+            } else {
+                $amount = $agentWallet;
+            }
+
+            $transferLog = WalletTransferLog::create([
+                'uid' => $uid,
+                'from_type' => 'agent_wallet',
+                'to_type' => 'balance',
+                'amount' => $amount,
+                'transfer_time' => date('Y-m-d H:i:s'),
+                'status' => 0,
+            ]);
+            if (!$transferLog) {
+                throw new \Exception('转账流水创建失败');
+            }
+
+            $transferLogId = (int)($transferLog['id'] ?? 0);
+            if ($transferLogId <= 0) {
+                throw new \Exception('转账流水业务 ID 异常');
+            }
+
+            $bizNo = 'AWTB' . $transferLogId;
+            $requestNo = 'agent_wallet_transfer:' . $transferLogId;
+            $transferResult = $ledger->transferLockedUserWallet(
+                $user,
+                UserFundLedgerService::WALLET_AGENT,
+                UserFundLedgerService::WALLET_BALANCE,
+                (float)$amount,
+                [
+                    'biz_type' => 'agent_wallet_transfer',
+                    'biz_no' => $bizNo,
+                    'order_number' => $bizNo,
+                    'operator_type' => 'user',
+                    'operator_id' => $uid,
+                    'status' => 'done',
+                    'request_no' => $requestNo,
+                    'out_change_type' => 'agent_wallet_transfer_out',
+                    'in_change_type' => 'agent_wallet_transfer_in',
+                    'idempotent' => true,
+                    'remark' => '佣金钱包转入普通钱包',
+                    'extra' => [
+                        'source' => 'agentWalletToBalance',
+                        'from_wallet_type' => UserFundLedgerService::WALLET_AGENT,
+                        'to_wallet_type' => UserFundLedgerService::WALLET_BALANCE,
+                    ],
+                ]
+            );
+
+            $walletSnapshot = (array)($transferResult['wallet_snapshot'] ?? []);
+            if (array_key_exists('balance', $walletSnapshot) && $walletSnapshot['balance'] !== null && $walletSnapshot['balance'] !== '') {
+                $currentBalance = round((float)$walletSnapshot['balance'], 2);
+            } elseif (isset($user['balance'])) {
+                $currentBalance = round((float)$user['balance'], 2);
+            } else {
+                $latestBalance = UserModel::where('id', $uid)->lock(true)->value('balance');
+                $currentBalance = round((float)($latestBalance ?? 0), 2);
+            }
+
+            $transferLog->status = 1;
+            $transferLog->transfer_time = date('Y-m-d H:i:s');
+            if ($transferLog->save() === false) {
+                throw new \Exception('转账流水更新失败');
+            }
 
             return [
                 'status' => 1,
-                'msg' => "成功转入" . round((float)($recentTransfer['amount'] ?? 0), 2) . "，当前普通钱包余额：{$currentBalance}"
+                'msg' => "成功转入{$amount}，当前普通钱包余额：{$currentBalance}"
             ];
-        }
-
-        if ($agentWallet <= 0) {
-            throw new \Exception('佣金钱包余额为 0，无需转入');
-        }
-
-        if ($amount !== null) {
-            $amount = $requestedAmount;
-            if ($amount <= 0 || $amount > $agentWallet) {
-                throw new \Exception('转入金额无效（需大于 0 且不超过佣金钱包余额）');
-            }
-        } else {
-            $amount = $agentWallet;
-        }
-
-        $transferLog = WalletTransferLog::create([
-            'uid' => (int)$uid,
-            'from_type' => 'agent_wallet',
-            'to_type' => 'balance',
-            'amount' => $amount,
-            'transfer_time' => date('Y-m-d H:i:s'),
-            'status' => 0,
-        ]);
-        if (!$transferLog) {
-            throw new \Exception('杞寘娴佹按鍒涘缓澶辫触');
-        }
-
-        $transferLogId = (int)($transferLog['id'] ?? 0);
-        if ($transferLogId <= 0) {
-            throw new \Exception('杞寘娴佹按涓氬姟 ID 寮傚父');
-        }
-
-        $bizNo = 'AWTB' . $transferLogId;
-        $requestNo = 'agent_wallet_transfer:' . $transferLogId;
-        $transferResult = $ledger->transferLockedUserWallet(
-            $user,
-            UserFundLedgerService::WALLET_AGENT,
-            UserFundLedgerService::WALLET_BALANCE,
-            (float)$amount,
-            [
-                'biz_type' => 'agent_wallet_transfer',
-                'biz_no' => $bizNo,
-                'order_number' => $bizNo,
-                'operator_type' => 'user',
-                'operator_id' => (int)$uid,
-                'status' => 'done',
-                'request_no' => $requestNo,
-                'out_change_type' => 'agent_wallet_transfer_out',
-                'in_change_type' => 'agent_wallet_transfer_in',
-                'idempotent' => true,
-                'remark' => '佣金钱包转入普通钱包',
-                'extra' => [
-                    'source' => 'agentWalletToBalance',
-                    'from_wallet_type' => UserFundLedgerService::WALLET_AGENT,
-                    'to_wallet_type' => UserFundLedgerService::WALLET_BALANCE,
-                ],
-            ]
-        );
-
-        $walletSnapshot = (array)($transferResult['wallet_snapshot'] ?? []);
-        if (array_key_exists('balance', $walletSnapshot) && $walletSnapshot['balance'] !== null && $walletSnapshot['balance'] !== '') {
-            $currentBalance = round((float)$walletSnapshot['balance'], 2);
-        } elseif (isset($user['balance'])) {
-            $currentBalance = round((float)$user['balance'], 2);
-        } else {
-            $latestBalance = UserModel::where('id', (int)$uid)->lock(true)->value('balance');
-            $currentBalance = round((float)($latestBalance ?? 0), 2);
-        }
-
-        $transferLog->status = 1;
-        $transferLog->transfer_time = date('Y-m-d H:i:s');
-        if ($transferLog->save() === false) {
-            throw new \Exception('杞寘娴佹按鏇存柊澶辫触');
-        }
-
-        Db::commit();
-
-        return [
-            'status' => 1,
-            'msg' => "成功转入{$amount}，当前普通钱包余额：{$currentBalance}"
-        ];
-    } catch (\Exception $e) {
-        if ($transferLog && (int)($transferLog['status'] ?? 0) !== 1) {
-            try {
-                $transferLog->delete();
-            } catch (\Throwable $cleanupException) {
-                Log::warning('agent wallet transfer log cleanup failed', [
-                    'uid' => (int)$uid,
-                    'transfer_log_id' => (int)($transferLog['id'] ?? 0),
-                    'error' => $cleanupException->getMessage(),
-                ]);
-            }
-        }
-
-        Db::rollback();
-
+        });
+    } catch (\Throwable $e) {
         Log::error("agent wallet to balance failed: uid={$uid}, amount={$amount}, error={$e->getMessage()}");
 
         return [
@@ -699,29 +686,42 @@ function power($power, $name)
 
 
 function getTelecomOperator($phone, $type = 0) {
+    // F4/F8：凭据从 config/third_party.php（env）读取，禁止硬编码；统一设置连接/总超时。
+    $apiUrl = (string)(config('third_party.xiaoyun.url') ?: '');
+    $apiKey = (string)(config('third_party.xiaoyun.key') ?: '');
+    if ($apiUrl === '' || $apiKey === '') {
+        return '查询失败';
+    }
     $postData = array(
-        'key' => 'b9I8kweccpt6uizL9rHtgFkGuS',
+        'key' => $apiKey,
         'phone' => $phone
     );
     // 初始化 cURL
     $ch = curl_init();
 
     // 设置 cURL 选项
-    curl_setopt($ch, CURLOPT_URL, 'https://ap.xiaoyun.top/api/xy/xhzw');
+    curl_setopt($ch, CURLOPT_URL, $apiUrl);
     curl_setopt($ch, CURLOPT_POST, 1);
     curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));  // 将数据编码为 URL 字符串
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    if (strtolower((string)parse_url($apiUrl, PHP_URL_SCHEME)) === 'https') {
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    }
 
     // 执行 cURL 请求
     $response = curl_exec($ch);
+    $curlErrno = curl_errno($ch);
     // 关闭 cURL 资源
     curl_close($ch);
 
-    if ($response === false) {
+    if ($response === false || $curlErrno !== 0) {
         return '查询失败';
     } else {
         $responseData = json_decode($response, true);
-        if($responseData['code'] == 200){
+        if (is_array($responseData) && ($responseData['code'] ?? null) == 200){
             if($type == 0){
                 
                 return $responseData['data']['oldIsp'];
@@ -745,10 +745,19 @@ function phone_yue_bak($phone) {
     if(getTelecomOperator($phone) == '电信'){
         $channel = 'telecom_balance';
     }
-    
+
+    // F4/F5/F8：凭据从 config/third_party.php（env）读取；默认端点为 http://（需服务商确认 HTTPS），
+    // 本函数当前无任何调用方（死代码）。未配置凭据时直接返回失败，绝不发送空密钥到第三方。
+    $apiUrl = (string)(config('third_party.gfggf.url') ?: '');
+    $apiId  = (string)(config('third_party.gfggf.id') ?: '');
+    $apiKey = (string)(config('third_party.gfggf.key') ?: '');
+    if ($apiUrl === '' || $apiId === '' || $apiKey === '' || !isset($channel)) {
+        return '查询失败';
+    }
+
     $postData = array(
-        'id' => '241111155762',
-        'key' => '11882c0cf4235b24d86aa48cba76f172',
+        'id' => $apiId,
+        'key' => $apiKey,
         'channel' => $channel,
         'mobile' => $phone
     );
@@ -756,23 +765,30 @@ function phone_yue_bak($phone) {
     $ch = curl_init();
 
     // 设置 cURL 选项
-    curl_setopt($ch, CURLOPT_URL, 'http://api.gfggf.cn/api/gateway');
+    curl_setopt($ch, CURLOPT_URL, $apiUrl);
     curl_setopt($ch, CURLOPT_POST, 1);
     curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));  // 将数据编码为 URL 字符串
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    if (strtolower((string)parse_url($apiUrl, PHP_URL_SCHEME)) === 'https') {
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    }
 
     // 执行 cURL 请求
     $response = curl_exec($ch);
+    $curlErrno = curl_errno($ch);
 
     // 关闭 cURL 资源
     curl_close($ch);
 
     // 处理响应
-    if ($response === false) {
+    if ($response === false || $curlErrno !== 0) {
         return '查询失败';
     } else {
         $responseData = json_decode($response, true);
-        if($responseData['code'] == 200){
+        if (is_array($responseData) && ($responseData['code'] ?? null) == 200){
             return $responseData['data']['curFee'];
         }
         return '查询失败';
@@ -796,12 +812,21 @@ function nsend($API_URL, $get_post_data, $type, $ifsign, $sk = '')
 
 
 function phone_yue($phone) {
+    // F4/F6：凭据从 config/third_party.php（env）读取，禁止硬编码。
+    // 注意：供应商 taolale 的正式签名规范/真实 Secret 需向服务商确认；
+    // 未确认前保留现有签名实现（secret 为空时 sign 可被伪造），
+    // 但该接口仅用于号码余额/运营商查询展示，不构成资金入账路径。
+    $apiUrl = (string)(config('third_party.taolale.url') ?: '');
+    $apiKey = (string)(config('third_party.taolale.key') ?: '');
+    if ($apiUrl === '') {
+        return '查询失败,食不果腹,自行查询';
+    }
     $postData = array(
-        'key' => 'TG:@pay5188888',
+        'key' => $apiKey,
         'mobile' => $phone
     );
-    $res = nsend('https://api.taolale.com/api/Inquiry_Phone_Charges/get',$postData,'POST',true,'');
-    if($res['code'] != 200){
+    $res = nsend($apiUrl, $postData, 'POST', true, (string)config('third_party.taolale.sign_secret', ''));
+    if(!is_array($res) || ($res['code'] ?? null) != 200){
         return '查询失败,食不果腹,自行查询';
     }else{
         return $res['data']['mobile_fee'];
@@ -824,15 +849,47 @@ function nsend_curl($API_URL, $type, $get_post_data, $sign= '')
     }
     curl_setopt($ch, CURLOPT_REFERER, $API_URL);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    // F8：统一连接超时与总请求超时，禁止第三方服务卡死 PHP worker。
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
     if ($scheme === 'https') {
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
     }
     $resdata = curl_exec($ch);
+    $curlErrno = curl_errno($ch);
+    $curlError = curl_error($ch);
     curl_close($ch);
-    
-    return json_decode($resdata,true);
+
+    if ($resdata === false || $curlErrno !== 0) {
+        // 保持原有返回契约（null），同时记录错误便于排查，不吞掉异常信息。
+        try {
+            \think\facade\Log::warning('third_party_http_error', [
+                'url' => (string)$API_URL,
+                'errno' => $curlErrno,
+                'error' => $curlError,
+                'time' => date('Y-m-d H:i:s'),
+            ]);
+        } catch (\Throwable $e) {
+            // 日志失败不影响业务返回
+        }
+        return null;
+    }
+
+    $decoded = json_decode($resdata, true);
+    if (!is_array($decoded)) {
+        try {
+            \think\facade\Log::warning('third_party_invalid_json', [
+                'url' => (string)$API_URL,
+                'http_body_prefix' => substr((string)$resdata, 0, 200),
+                'time' => date('Y-m-d H:i:s'),
+            ]);
+        } catch (\Throwable $e) {
+            // 日志失败不影响业务返回
+        }
+        return null;
+    }
+    return $decoded;
 }
 
 

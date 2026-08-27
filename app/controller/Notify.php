@@ -147,9 +147,52 @@ class Notify
                 throw new Exception('充值单不存在');
             }
 
-            if ((int)($recharge['status'] ?? 0) === 3) {
+            $localStatus = (int)($recharge['status'] ?? 0);
+
+
+            if ($localStatus === 3) {
+
+
                 Db::commit();
+
+
                 return response('ok', 200);
+
+
+            }
+
+
+
+            if ($localStatus === 2) {
+
+
+                Log::warning('bepusdt notify rejected: recharge already cancelled, no fund change allowed', [
+
+
+                    'order_number' => $orderNumber,
+
+
+                    'gateway_status' => $status,
+
+
+                    'uid' => (int)($recharge['uid'] ?? 0),
+
+
+                    'amount' => (float)($recharge['amount'] ?? 0),
+
+
+                    'paid_amount' => $paidAmount,
+
+
+                ]);
+
+
+                Db::commit();
+
+
+                return response('ok', 200);
+
+
             }
 
             if ($status === 1) {
@@ -183,8 +226,45 @@ class Notify
             }
 
             if ($status !== 2) {
+
+
                 throw new Exception('未知回调状态: ' . $status);
+
+
             }
+
+
+
+            if ($localStatus !== 0) {
+
+
+                Log::warning('bepusdt notify rejected: payment success but local recharge status is not pending', [
+
+
+                    'order_number' => $orderNumber,
+
+
+                    'local_status' => $localStatus,
+
+
+                    'uid' => (int)($recharge['uid'] ?? 0),
+
+
+                    'amount' => (float)($recharge['amount'] ?? 0),
+
+
+                ]);
+
+
+                Db::commit();
+
+
+                return response('ok', 200);
+
+
+            }
+
+
 
             $amount = round((float)($recharge['amount'] ?? 0), 2);
             if ($amount <= 0) {

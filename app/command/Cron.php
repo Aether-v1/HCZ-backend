@@ -11,6 +11,7 @@ use think\console\Command;
 use think\console\Input;
 use think\console\input\Option;
 use think\console\Output;
+use think\facade\Log;
 
 class Cron extends Command
 {
@@ -31,11 +32,11 @@ class Cron extends Command
         try {
             $summary = $this->processDataTasks();
             $output->writeln(sprintf(
-                '执行完成: 交易订单取消 %d 条, 充值订单取消 %d 条, 订单自动确认 %d 条, 30 天前订单清理 %d 条',
+                '执行完成: 交易订单取消 %d 条, 充值订单取消 %d 条, 订单自动确认 %d 条, 历史订单归档 %d 条',
                 $summary['transaction_orders_cancelled'],
                 $summary['recharges_cancelled'],
                 $summary['orders_auto_confirmed'],
-                $summary['orders_deleted']
+                $summary['orders_archived']
             ));
         } catch (\Throwable $e) {
             $output->writeln('执行失败: ' . $e->getMessage());
@@ -76,17 +77,45 @@ class Cron extends Command
                 ]);
                 $ordersAutoConfirmed++;
             } catch (\Throwable $e) {
+                // F12 修复：禁止空 catch。
+                // 单笔自动确认失败不得阻塞整个 Cron；订单保持 status=2 / confirm_status=1，
+                // 下次 Cron 会继续重试（confirmReceipt 内部事务回滚 + 账本幂等，不会重复扣款/重复释放冻结）。
+                Log::error('cron_auto_confirm_failed', [
+                    'order_id' => (int)($autoConfirmOrder['id'] ?? 0),
+                    'order_no' => (string)($autoConfirmOrder['order_number'] ?? ''),
+                    'uid' => (int)($autoConfirmOrder['uid'] ?? 0),
+                    'message' => $e->getMessage(),
+                    'time' => date('Y-m-d H:i:s'),
+                ]);
             }
         }
 
-        $ordersDeleted = (int) Order::where('complete_time', '<', date('Y-m-d H:i:s', $now - 30 * 24 * 60 * 60))
-            ->delete();
+        // F3 修复：禁止物理删除历史订单（订单是财务对账/售后/退款/审计的原始记录）。
+        // 改为“归档”：仅对已完成（status=2）且超过保留期的订单打 archived 标记，记录保留不删除。
+        // 需要 cz_order 新增列 archived / archived_time（见 secure-keys/order_archive_schema.sql）。
+        // 归档列未就绪时跳过并告警，绝不回退为物理删除。
+        $ordersArchived = 0;
+        try {
+            $ordersArchived = (int) Order::where('complete_time', '<', date('Y-m-d H:i:s', $now - 30 * 24 * 60 * 60))
+                ->where('status', 2)
+                ->where('archived', 0)
+                ->update([
+                    'archived' => 1,
+                    'archived_time' => $currentTime,
+                ]);
+        } catch (\Throwable $e) {
+            Log::error('cron_order_archive_failed', [
+                'message' => $e->getMessage(),
+                'hint' => 'cz_order 缺少 archived/archived_time 列，请先执行 secure-keys/order_archive_schema.sql',
+                'time' => date('Y-m-d H:i:s'),
+            ]);
+        }
 
         return [
             'transaction_orders_cancelled' => $transactionOrdersCancelled,
             'recharges_cancelled' => $rechargesCancelled,
             'orders_auto_confirmed' => $ordersAutoConfirmed,
-            'orders_deleted' => $ordersDeleted,
+            'orders_archived' => $ordersArchived,
         ];
     }
 }

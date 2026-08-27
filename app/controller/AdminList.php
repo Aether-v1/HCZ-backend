@@ -255,6 +255,10 @@ class AdminList
 
     public function user_list()
     {
+        // F13：用户列表为 PII 敏感接口，必须细粒度权限码（超管 id=1 直通）
+        if (!$this->directHasAdminPermission('用户列表')) {
+            return $this->directDenyAdminPermission('用户列表');
+        }
         $payload = $this->listPayload();
         [$column, $dir] = $this->resolveOrder($payload, 'id');
         [$start, $length] = $this->datatablesPagination($payload);
@@ -282,6 +286,11 @@ class AdminList
         [$column, $dir] = $this->resolveOrder($payload, 'id');
         [$start, $length] = $this->datatablesPagination($payload);
         $type = $this->payloadInt($payload, ['type'], 0, 0);
+        // F13：产品列表按业务类型区分权限码（type 1=充值业务 / 2=查询业务）
+        $productPermission = $type === 1 ? '充值业务 - 产品列表' : ($type === 2 ? '查询业务 - 产品列表' : '');
+        if ($productPermission === '' || !$this->directHasAdminPermission($productPermission)) {
+            return $this->directDenyAdminPermission($productPermission !== '' ? $productPermission : '充值业务 - 产品列表');
+        }
         $search = $this->datatablesSearch($payload);
 
         $par[] = ['type', '=', $type];
@@ -304,6 +313,10 @@ class AdminList
 
     public function slide_list()
     {
+        // F13
+        if (!$this->directHasAdminPermission('首页轮播图')) {
+            return $this->directDenyAdminPermission('首页轮播图');
+        }
         $payload = $this->listPayload();
         [$column, $dir] = $this->resolveOrder($payload, 'id');
         [$start, $length] = $this->datatablesPagination($payload);
@@ -327,6 +340,10 @@ class AdminList
 
     public function recharge_list()
     {
+        // F13
+        if (!$this->directHasAdminPermission('充值订单记录')) {
+            return $this->directDenyAdminPermission('充值订单记录');
+        }
         $payload = $this->listPayload();
         [$column, $dir] = $this->resolveOrder($payload, 'id');
         [$start, $length] = $this->datatablesPagination($payload);
@@ -358,6 +375,10 @@ class AdminList
 
     public function withdrawal_list()
     {
+        // F13
+        if (!$this->directHasAdminPermission('提现订单记录')) {
+            return $this->directDenyAdminPermission('提现订单记录');
+        }
         $payload = $this->listPayload();
         [$column, $dir] = $this->resolveOrder($payload, 'id');
         [$start, $length] = $this->datatablesPagination($payload);
@@ -387,6 +408,10 @@ class AdminList
 
     public function order_cz_list()
     {
+        // F13：充值业务订单列表
+        if (!$this->directHasAdminPermission('充值业务 - 订单列表')) {
+            return $this->directDenyAdminPermission('充值业务 - 订单列表');
+        }
         $payload = $this->listPayload();
         [$column, $dir] = $this->resolveOrder($payload, 'id');
         [$start, $length] = $this->datatablesPagination($payload);
@@ -493,6 +518,10 @@ class AdminList
 
     public function order_cx_list()
     {
+        // F13：查询业务订单列表
+        if (!$this->directHasAdminPermission('查询业务 - 订单列表')) {
+            return $this->directDenyAdminPermission('查询业务 - 订单列表');
+        }
         $payload = $this->listPayload();
         [$column, $dir] = $this->resolveOrder($payload, 'id');
         [$start, $length] = $this->datatablesPagination($payload);
@@ -567,6 +596,10 @@ class AdminList
 
     public function transaction_product_list()
     {
+        // F13
+        if (!$this->directHasAdminPermission('交易挂单数据')) {
+            return $this->directDenyAdminPermission('交易挂单数据');
+        }
         $payload = $this->listPayload();
         [$column, $dir] = $this->resolveOrder($payload, 'id');
         [$start, $length] = $this->datatablesPagination($payload);
@@ -599,6 +632,10 @@ class AdminList
 
     public function transaction_order_list()
     {
+        // F13
+        if (!$this->directHasAdminPermission('交易订单数据')) {
+            return $this->directDenyAdminPermission('交易订单数据');
+        }
         $payload = $this->listPayload();
         [$column, $dir] = $this->resolveOrder($payload, 'id');
         [$start, $length] = $this->datatablesPagination($payload);
@@ -646,6 +683,10 @@ class AdminList
 
     public function bank_card_list()
     {
+        // F13：银行卡为支付/PII 敏感数据，映射「支付管理」权限码
+        if (!$this->directHasAdminPermission('支付管理')) {
+            return $this->directDenyAdminPermission('支付管理');
+        }
         $payload = $this->listPayload();
         [$column, $dir] = $this->resolveOrder($payload, 'id');
         [$start, $length] = $this->datatablesPagination($payload);
@@ -675,6 +716,10 @@ class AdminList
 
     public function user_t_list()
     {
+        // F13：团队/下级用户列表含用户 PII，映射「用户列表」权限码
+        if (!$this->directHasAdminPermission('用户列表')) {
+            return $this->directDenyAdminPermission('用户列表');
+        }
         $payload = $this->listPayload();
         [$column, $dir] = $this->resolveOrder($payload, 'id');
         [$start, $length] = $this->datatablesPagination($payload);
@@ -729,6 +774,10 @@ class AdminList
 
     public function rebate_record_list()
     {
+        // F13
+        if (!$this->directHasAdminPermission('返佣记录')) {
+            return $this->directDenyAdminPermission('返佣记录');
+        }
         $payload = $this->listPayload();
         [$column, $dir] = $this->resolveOrder($payload, 'id');
         [$start, $length] = $this->datatablesPagination($payload);
@@ -761,6 +810,10 @@ class AdminList
 
     public function message_list()
     {
+        // F13：站内消息含用户维度数据，映射「用户列表」权限码（不新增权限字符串，避免破坏现有权限模型）
+        if (!$this->directHasAdminPermission('用户列表')) {
+            return $this->directDenyAdminPermission('用户列表');
+        }
         $payload = $this->listPayload();
         $column = 'id';
         $dir = 'desc';
@@ -901,6 +954,10 @@ class AdminList
 
     public function operation_log_list()
     {
+        // F13
+        if (!$this->directHasAdminPermission('操作记录')) {
+            return $this->directDenyAdminPermission('操作记录');
+        }
         $payload = $this->listPayload();
         [$column, $dir] = $this->resolveOrder($payload, 'create_time', ['id', 'create_time', 'admin_username', 'module', 'action', 'ip']);
         $search = $this->datatablesSearch($payload);

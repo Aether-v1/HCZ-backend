@@ -495,6 +495,16 @@ trait TransactionActions
 
         $seller = UserModel::field('id,nickname,avatar,mobile')->find((int)($order['sell_uid'] ?? 0));
         $buyer = UserModel::field('id,nickname,avatar,mobile')->find((int)($order['uid'] ?? 0));
+        // F10 修复：订单详情中交易对方的注册手机号需脱敏；仅展示本人完整手机号。
+        // 买家付款所需的收款方联系方式保留在 payment_info（银行/微信/支付宝/收款手机号）中，不受影响。
+        $sellerInfo = $seller ? $seller->toArray() : [];
+        if (!empty($sellerInfo) && (int)($sellerInfo['id'] ?? 0) !== $uid) {
+            $sellerInfo['mobile'] = $this->directMaskMobile((string)($sellerInfo['mobile'] ?? ''));
+        }
+        $buyerInfo = $buyer ? $buyer->toArray() : [];
+        if (!empty($buyerInfo) && (int)($buyerInfo['id'] ?? 0) !== $uid) {
+            $buyerInfo['mobile'] = $this->directMaskMobile((string)($buyerInfo['mobile'] ?? ''));
+        }
         $product = TransactionProduct::find((int)($order['pid'] ?? 0));
         $bankInfo = $this->parseBankCardInfo($order['bank_card_info'] ?? []);
         $statusMeta = $this->transactionStatusMeta($order);
@@ -515,8 +525,8 @@ trait TransactionActions
             'cancel_time' => (string)($order['cancel_time'] ?? ''),
             'complete_time' => (string)($order['complete_time'] ?? ''),
             'bank_card_info' => $bankInfo['raw'],
-            'seller_info' => $seller ?: [],
-            'buyer_info' => $buyer ?: [],
+            'seller_info' => $sellerInfo,
+            'buyer_info' => $buyerInfo,
             'product_info' => $product ? [
                 'id' => (int)($product['id'] ?? 0),
                 'sell_account' => (float)($product['sell_account'] ?? 0),
@@ -676,7 +686,8 @@ trait TransactionActions
                     'id' => (int)($seller['id'] ?? 0),
                     'avatar' => (string)($seller['avatar'] ?? ''),
                     'nickname' => (string)($seller['nickname'] ?? ''),
-                    'mobile' => (string)($seller['mobile'] ?? ''),
+                    // F10 修复：C2C 市场列表禁止向普通用户输出卖家完整手机号（PII 泄露），统一脱敏。
+                    'mobile' => $this->directMaskMobile((string)($seller['mobile'] ?? '')),
                 ] : [],
                 'TransactionOrder_count' => $stat['count'],
                 'pay_amount_s' => $stat['amount'],

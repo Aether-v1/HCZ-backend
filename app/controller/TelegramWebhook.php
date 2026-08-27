@@ -89,15 +89,11 @@ class TelegramWebhook extends BaseController
         }
     }
 
-    public function queryPhoneBalance($phoneNumber)
-    {
-        return TelegramHelper::queryPhoneBalance($phoneNumber);
-    }
-
-    public function maskPhoneNumber($phoneNumber)
-    {
-        return TelegramHelper::maskPhoneNumber((string) $phoneNumber);
-    }
+    // F16 修复：删除遗留的未鉴权公共方法 queryPhoneBalance / maskPhoneNumber。
+    // 这两个方法不在 route/app.php 显式路由中，仅靠 auto-routing（url_route_must=false）
+    // 暴露，任何匿名用户都可直接访问并代理第三方号码余额查询（滥用/信息泄露向量）。
+    // bot 正常流程经 TelegramHelper::queryPhoneBalance / maskPhoneNumber 直接调用，
+    // 不依赖这两个控制器包装方法，删除不影响业务。
 
     private function processMessage(array $message): void
     {

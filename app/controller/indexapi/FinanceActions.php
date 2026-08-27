@@ -1162,8 +1162,50 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 					]);
 					throw new Exception('Recharge not found');
 				}
-				if ((int) ($recharge['status'] ?? 0) === 3) {
-					return;
+				$localStatus = (int) ($recharge['status'] ?? 0);
+
+				if ($localStatus === 3) {
+
+				    return;
+
+				}
+
+
+				if ($localStatus === 2) {
+
+				    Log::warning('epay notify rejected: recharge already cancelled, no fund change allowed', [
+
+				        'order_number' => $orderNumber,
+
+				        'recharge_id' => (int) ($recharge['id'] ?? 0),
+
+				        'uid' => (int) ($recharge['uid'] ?? 0),
+
+				        'amount' => (float) ($recharge['amount'] ?? 0),
+
+				        'trade_status' => $tradeStatus ?? 'unknown',
+
+				    ]);
+
+				    return;
+
+				}
+
+
+				if ($localStatus !== 0) {
+
+				    Log::warning('epay notify rejected: payment success but local recharge status is not pending', [
+
+				        'order_number' => $orderNumber,
+
+				        'local_status' => $localStatus,
+
+				        'uid' => (int) ($recharge['uid'] ?? 0),
+
+				    ]);
+
+				    return;
+
 				}
 				$payType = (string) ($recharge['pay_type'] ?? '');
 				$gateway = (string) ($recharge['gateway'] ?? '');
@@ -1364,6 +1406,18 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 		$userInfo = UserModel::where('id', $this->user_info['id'])->find();
 		if (!$userInfo) {
 			return show(500, 'error', 'Request error');
+		}
+
+		// F11 修复：为“创建充值订单”增加用户维度 + IP 维度限流，防止批量创建大量
+		// 第三方支付订单造成资源消耗。仅限制创建动作，不限制支付回调 / 支付流程。
+		// 与项目现有 ActionRateLimiter 体系保持一致（见 withdrawal / recharge_submit 用法）。
+		$rechargeUid = (int)($this->user_info['id'] ?? 0);
+		if ($rechargeUid > 0 && !ActionRateLimiter::check('recharge_create:uid:' . $rechargeUid, 10, 60)) {
+			return show(429, 'error', '创建充值订单过于频繁，请稍后再试', [], 429);
+		}
+		$clientIp = trim((string)$this->request->ip());
+		if ($clientIp !== '' && !ActionRateLimiter::check('recharge_create:ip:' . $clientIp, 30, 60)) {
+			return show(429, 'error', '创建充值订单过于频繁，请稍后再试', [], 429);
 		}
 
 		$amount = (float) ($postInfo['amount'] ?? 0);

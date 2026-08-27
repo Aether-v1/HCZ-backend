@@ -114,13 +114,15 @@ protected function handleOutOrderPost(string $action)
                 }
                 return show(500, 'error', '订单不可取消');
 
-            case 'order_del':
-                Order::destroy($post_info['del_id']);
-                return show(200, 'success', '删除成功');
-
             case 'del':
                 if ($order_info && $order_info['status'] == 2) {
-                    Order::destroy($post_info['id']);
+                    // F2 修复：不再物理删除，改为用户侧软删除（保留订单记录用于对账/退款）
+                    if (!Order::supportsUserSoftDelete()) {
+                        return show(500, 'error', '订单软删除尚未启用，请先执行数据库升级');
+                    }
+                    if ($order_info->markUserDeleted() === false) {
+                        return show(500, 'error', '删除失败');
+                    }
                     return show(200, 'success', '删除成功');
                 }
                 return show(500, 'error', '请求失败');
@@ -649,6 +651,34 @@ protected function handleProductPost(string $action)
                 return show(500, 'error', '充值金额不能低于 ' . $Product['mini_recharge_amount']);
             }
             $createdOrders = [];
+            // F7 修复：第三方余额查询（phone_yue，HTTP）从数据库事务与用户行锁内移出。
+            // phone_yue 结果仅作为订单信息快照（phone_yue_a / phone_yue 字段）存储，
+            // 不参与金额计算 / 冻结 / 余额判断（余额判断在事务内基于 FOR UPDATE 后的最新余额），
+            // 因此移出事务不会破坏资金一致性。
+            // 收益：事务保持纯 DB 本地，不再在持有用户行锁期间等待第三方 HTTP（最长 10s/次，
+            // batch 模式为 N 次），避免长期占用数据库连接并阻塞该用户的提现/返佣/充值/调账。
+            $phoneYueByNumber = [];
+            if ($post_info['batch_type'] == 0) {
+                $preOrderArray = json_decode($post_info['order_info'], true);
+                if (is_array($preOrderArray)) {
+                    foreach ($preOrderArray as $preItem) {
+                        if (preg_match('/\[(.*?)\](.*)/', $preItem, $preMatches)
+                            && $preMatches[2] !== ''
+                            && phone_info($preMatches[2])
+                            && $Product['product_type'] == 1) {
+                            $phoneYueByNumber[$preMatches[2]] = phone_yue($preMatches[2]);
+                        }
+                    }
+                }
+            } elseif ($post_info['batch_type'] == 1) {
+                $preBatchData = Batch::where('uid', $this->user_info['id'])->where('status', 0)->select();
+                foreach ($preBatchData as $preVo) {
+                    $preNumber = (string)($preVo['number'] ?? '');
+                    if ($preNumber !== '' && phone_info($preNumber) && $Product['product_type'] == 1) {
+                        $phoneYueByNumber[$preNumber] = phone_yue($preNumber);
+                    }
+                }
+            }
             try {
                 Db::startTrans();
                 $user_info = UserModel::where('id', $this->user_info['id'])->lock(true)->find();
@@ -674,7 +704,7 @@ protected function handleProductPost(string $action)
                                     }
                                 }
                             } elseif (phone_info($matches[2]) && $Product['product_type'] == 1) {
-                                $phone_yue = phone_yue($matches[2]);
+                                $phone_yue = $phoneYueByNumber[$matches[2]] ?? 0.00;
                             }
                         }
                     }
@@ -721,9 +751,8 @@ protected function handleProductPost(string $action)
                     $this->freezeProductOrderPayment($user_info, $createdOrder, (float)$finalCnyAmount);
                     $createdOrders[] = $createdOrder->toArray();
                 } elseif ($post_info['batch_type'] == 1) {
-                    $batch_data = Batch::where('uid', $this->user_info['id'])->where('status', 0)->select();
-                    $batch_ok_count = Batch::where('uid', $this->user_info['id'])->where('status', 0)->count();
-                    if (empty($batch_ok_count)) {
+                    $batch_data = $preBatchData ?? collect();
+                    if (count($batch_data) === 0) {
                         throw new Exception('请导入充值号码');
                     }
                     $substationContext = SubstationService::resolveByRequest($this->request);
@@ -738,7 +767,7 @@ protected function handleProductPost(string $action)
 
                         $phone_yue = 0.00;
                         if (phone_info($vo['number']) && $Product['product_type'] == 1) {
-                            $phone_yue = phone_yue($vo['number']);
+                            $phone_yue = $phoneYueByNumber[(string)$vo['number']] ?? 0.00;
                         }
 
                         $productInfoSnapshot = is_array($Product->toArray()) ? $Product->toArray() : (array)$Product;
