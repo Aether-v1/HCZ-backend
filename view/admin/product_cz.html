@@ -727,6 +727,9 @@
     function upload(name) {
         var myDropzone = new Dropzone("#" + name, {
             url: "{{:getConfig('backstage_entrance')}}/upload_post",
+            headers: {
+                "X-CSRF-Token": adminCsrfToken
+            },
             paramName: name,
             maxFiles: 1,
             maxFilesize: 5, // MB
