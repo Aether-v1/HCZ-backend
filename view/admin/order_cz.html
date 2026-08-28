@@ -617,7 +617,7 @@
         }
     }();
     
-    // 快捷时间筛选绑定
+    // 快捷时间筛选绑定（通过触发时间输入框 change 事件，间接调用闭包内 time() 函数）
     (function() {
         function bindTimeFilters() {
             document.querySelectorAll('.time-filter-btn').forEach(function (btn) {
@@ -626,10 +626,9 @@
                     btn.classList.add('active');
                     var days = btn.getAttribute('data-days');
                     var timeInput = document.querySelector('[data-kt="time"]');
-                    if (typeof dt === 'undefined') return;
+                    if (!timeInput) return;
                     if (days === 'all') {
-                        if (timeInput) timeInput.value = '';
-                        dt.column(15).search('').draw();
+                        timeInput.value = 'time_all';
                     } else {
                         var end = new Date();
                         var start = new Date();
@@ -640,10 +639,9 @@
                             start.setDate(start.getDate() - parseInt(days));
                         }
                         var fmt = function(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
-                        var range = fmt(start) + ' - ' + fmt(end);
-                        if (timeInput) timeInput.value = range;
-                        dt.column(15).search(range).draw();
+                        timeInput.value = fmt(start) + ' - ' + fmt(end);
                     }
+                    $(timeInput).trigger('change');
                 });
             });
         }
