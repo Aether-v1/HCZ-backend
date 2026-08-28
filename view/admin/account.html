@@ -1,4 +1,4 @@
-{{include file="layout/admin_header" web_title="账户资料修改"/}}
+﻿{{include file="layout/admin_header" web_title="账户资料修改"/}}
 
 <div id="kt_content_container" class="app-container container-fluid">
     <div class="card mb-5 mb-xl-10">
@@ -335,12 +335,12 @@
     function avatar_upload(){
         let file = this.files[0]; 
         if(!/image\/\w+/.test(file.type)){
-            alert("请确保文件为图像类型"); 
+            toastr.error("请确保文件为图像类型", {closeButton: true, timeOut: 3000}); 
             return false; 
         }
         let reader = new FileReader(); 
         reader.readAsDataURL(file); 
-        console.log();
+        
         reader.onload = function(e){ 
             const uploadResult = this.result;
             withAdminSensitiveAuth('请完成管理员头像修改安全验证', function (authPayload) {

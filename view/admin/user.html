@@ -130,6 +130,60 @@
 
 <input type="hidden" id="uid" value="0">
 {{include file="layout/admin_footer"/}}
+
+<!-- 用户详情弹窗 -->
+<div class="modal fade admin-modal" id="userDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-4">
+                <h3 class="modal-title fw-bold">用户详情 <span id="userDetailName" class="text-gray-500 fs-6"></span></h3>
+                <div class="btn btn-icon btn-sm btn-active-light-primary ms-2" data-bs-dismiss="modal" aria-label="Close">
+                    <span class="svg-icon svg-icon-2x"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 18L18 6M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+                </div>
+            </div>
+            <div class="modal-body py-5">
+                <div class="d-flex align-items-center gap-4 mb-6 pb-4 border-bottom border-gray-200">
+                    <div class="symbol symbol-70px symbol-circle"><img id="userDetailAvatar" src="" alt=""></div>
+                    <div>
+                        <div class="fs-3 fw-bold" id="userDetailNickname"></div>
+                        <div class="text-gray-500" id="userDetailMobile"></div>
+                    </div>
+                    <div class="ms-auto"><span id="userDetailStatus" class="badge fs-6 px-4 py-2"></span></div>
+                </div>
+                <div class="row g-6">
+                    <div class="col-md-6">
+                        <div class="card card-flush"><div class="card-header py-2"><h3 class="card-title fw-bold fs-5">基本信息</h3></div><div class="card-body py-3">
+                            <div class="row mb-3"><div class="col-4 text-gray-500">用户ID</div><div class="col-8 fw-semibold" id="userDetailId"></div></div>
+                            <div class="row mb-3"><div class="col-4 text-gray-500">手机号</div><div class="col-8 fw-semibold" id="userDetailMobile2"></div></div>
+                            <div class="row mb-3"><div class="col-4 text-gray-500">昵称</div><div class="col-8 fw-semibold" id="userDetailNickname2"></div></div>
+                            <div class="row mb-3"><div class="col-4 text-gray-500">注册时间</div><div class="col-8 fw-semibold" id="userDetailRegTime"></div></div>
+                            <div class="row mb-3"><div class="col-4 text-gray-500">在线状态</div><div class="col-8 fw-semibold" id="userDetailOnline"></div></div>
+                        </div></div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card card-flush"><div class="card-header py-2"><h3 class="card-title fw-bold fs-5">账户信息</h3></div><div class="card-body py-3">
+                            <div class="row mb-3"><div class="col-4 text-gray-500">账户余额</div><div class="col-8 fw-semibold text-end admin-amount-cell text-success" id="userDetailBalance"></div></div>
+                            <div class="row mb-3"><div class="col-4 text-gray-500">团队上级</div><div class="col-8 fw-semibold" id="userDetailTeam"></div></div>
+                            <div class="row mb-3"><div class="col-4 text-gray-500">用户状态</div><div class="col-8 fw-semibold" id="userDetailStatus2"></div></div>
+                        </div></div>
+                    </div>
+                </div>
+                <div class="mt-6 p-4 bg-light rounded">
+                    <div class="text-gray-600 fs-7 mb-3">快捷操作（在对应页面筛选该用户的数据）：</div>
+                    <div class="d-flex gap-3 flex-wrap">
+                        <a id="userDetailOrders" href="#" class="btn btn-sm btn-primary">查看充值订单</a>
+                        <a id="userDetailRecharge" href="#" class="btn btn-sm btn-info">查看充值记录</a>
+                        <a id="userDetailWithdraw" href="#" class="btn btn-sm btn-warning">查看提现记录</a>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-4">
+                <button type="button" class="btn btn-light-primary me-3" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary" id="userDetailToggleStatus">切换用户状态</button>
+            </div>
+        </div>
+    </div>
+</div>
 <script src="__ADMIN__/js/highlight.min.js"></script>
 <script src="__ADMIN__/js/quill.min.js"></script>
 <script type="text/javascript">
@@ -178,10 +232,13 @@
                         targets: 1,
                         orderable: false,
                         render: function (data, type, row) {
+            window._userRowData[row.id] = row;
+            var detailBtn = '<a class="menu-link text-primary fw-bold" onclick="showUserDetail(' + row.id + ')">用户详情</a>';
+
                             const parentAvatar = escapeHtml(row.t_user_info?.avatar || '__ADMIN__/media/avatars/blank.png');
                             const parentNickname = escapeHtml(row.t_user_info?.nickname || '');
                             if(row.t_user_info){
-                                return `
+                                            var _actionHtml = `
                                 <div class="cursor-pointer symbol symbol-35px" data-kt-menu-trigger="{default: 'click', lg: 'hover'}" data-kt-menu-attach="parent" data-kt-menu-placement="bottom-end">
                                     <img src="${parentAvatar}" class="rounded-3" alt="user">
                                 </div>
@@ -358,7 +415,7 @@
 
     function del(id) {
         Swal.fire({
-            html: '<h2>是否确认删除？</h2>',
+            html: '<h2>是否确认删除？</h2><p class="text-muted fs-7">此操作不可恢复</p>',
             showDenyButton: true,
             reverseButtons: true,
             denyButtonText: '取消',
@@ -606,6 +663,36 @@
                 });
             });
         });
+    }
+
+    // 用户详情弹窗
+    window._userRowData = window._userRowData || {};
+    function showUserDetail(id) {
+        var row = window._userRowData[id];
+        if (!row) { toastr.error('用户数据未找到', {closeButton: true, timeOut: 3000}); return; }
+        document.getElementById('userDetailId').textContent = row.id || '-';
+        document.getElementById('userDetailName').textContent = '#' + (row.id || '');
+        document.getElementById('userDetailNickname').textContent = row.nickname || row.mobile || '-';
+        document.getElementById('userDetailNickname2').textContent = row.nickname || '-';
+        document.getElementById('userDetailMobile').textContent = row.mobile || '-';
+        document.getElementById('userDetailMobile2').textContent = row.mobile || '-';
+        document.getElementById('userDetailRegTime').textContent = row.create_time || row.register_time || row.add_time || '-';
+        document.getElementById('userDetailOnline').innerHTML = row.on_line_status == 1 ? '<span class="badge badge-light-success">在线</span>' : '<span class="badge badge-light-secondary">离线</span>';
+        document.getElementById('userDetailBalance').textContent = row.balance !== undefined ? ('¥' + row.balance) : (row.money !== undefined ? ('¥' + row.money) : '-');
+        var ti = row.t_user_info || {};
+        document.getElementById('userDetailTeam').textContent = ti.nickname ? (ti.nickname + ' (ID:' + ti.id + ')') : '无';
+        var st = row.status == 1 || row.status == 'normal' ? ['正常', 'success'] : (row.status == 0 ? ['禁用', 'danger'] : ['未知', 'secondary']);
+        document.getElementById('userDetailStatus').className = 'badge fs-6 px-4 py-2 badge-light-' + st[1];
+        document.getElementById('userDetailStatus').textContent = st[0];
+        document.getElementById('userDetailStatus2').textContent = st[0];
+        if (row.avatar) { document.getElementById('userDetailAvatar').src = row.avatar; }
+        // 快捷链接 - 带 uid 参数
+        var base = "{{:getConfig('backstage_entrance')}}";
+        document.getElementById('userDetailOrders').href = base + '/admin/order_cz?uid=' + row.id;
+        document.getElementById('userDetailRecharge').href = base + '/admin/recharge?uid=' + row.id;
+        document.getElementById('userDetailWithdraw').href = base + '/admin/withdrawal?uid=' + row.id;
+        document.getElementById('userDetailToggleStatus').onclick = function() { $('#userDetailModal').modal('hide'); status_switch(row.id); };
+        $('#userDetailModal').modal('show');
     }
 </script>
 

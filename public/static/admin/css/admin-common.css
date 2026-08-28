@@ -361,3 +361,143 @@ span.flatpickr-weekday {
         margin: 0.5rem;
     }
 }
+
+
+/* ── 13. Phase 2+3 增强样式 ── */
+
+/* 自动注入的页面头部间距 */
+.admin-page-header.auto-injected {
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--bs-gray-200, #e4e6ef);
+}
+.admin-page-header.auto-injected h1 {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--bs-gray-800, #181c32);
+}
+
+/* 金额单元格统一：右对齐、等宽数字、统一小数位 */
+.admin-amount-cell {
+    text-align: right !important;
+    font-variant-numeric: tabular-nums;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, monospace;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.admin-amount-cell.text-success { color: #50CD89 !important; }
+.admin-amount-cell.text-danger { color: #F1416C !important; }
+.admin-amount-cell.text-warning { color: #FFC700 !important; }
+
+/* 表格横向滚动容器（小屏保护） */
+.dataTables_wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.dataTables_wrapper table {
+    min-width: 600px;
+}
+
+/* 筛选栏响应式：小屏自动换行 */
+.admin-filter-bar {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.admin-filter-bar .form-select,
+.admin-filter-bar .form-control {
+    min-height: 38px;
+}
+
+/* Modal 统一增强 */
+.admin-modal .modal-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--bs-gray-200, #e4e6ef);
+}
+.admin-modal .modal-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+}
+.admin-modal .modal-body {
+    padding: 1.25rem;
+}
+.admin-modal .modal-footer {
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid var(--bs-gray-200, #e4e6ef);
+}
+
+/* Swal 统一按钮样式覆盖 */
+.swal2-actions {
+    gap: 0.5rem;
+}
+.swal2-confirm {
+    font-weight: 600 !important;
+}
+.swal2-cancel, .swal2-deny {
+    font-weight: 600 !important;
+}
+
+/* 订单状态 Badge 增强 */
+.admin-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.65rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border-radius: 0.425rem;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+.admin-badge.success { background: #E8FFF3; color: #50CD89; }
+.admin-badge.danger { background: #FFF5F8; color: #F1416C; }
+.admin-badge.warning { background: #FFF8DD; color: #FFC700; }
+.admin-badge.info { background: #EEF6FF; color: #7239EA; }
+.admin-badge.primary { background: #EEF6FF; color: #3699FF; }
+.admin-badge.secondary { background: #F5F8FA; color: #A1A5B7; }
+.admin-badge.dark { background: #F5F8FA; color: #181C32; }
+
+/* ── 14. 响应式增强（Phase 2 专项） ── */
+@media (max-width: 1399px) {
+    .admin-page-header.auto-injected h1 { font-size: 1.2rem; }
+}
+@media (max-width: 1199px) {
+    .app-sidebar { width: 200px !important; }
+    .admin-filter-bar .form-group { flex: 1 1 45%; }
+}
+@media (max-width: 991px) {
+    .app-sidebar {
+        position: fixed !important;
+        z-index: 1050;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+    }
+    .app-sidebar[data-kt-drawer="true"] {
+        transform: translateX(0);
+    }
+    .admin-filter-bar .form-group { flex: 1 1 100%; }
+    .dataTables_wrapper table { min-width: 700px; }
+}
+@media (max-width: 767px) {
+    .admin-page-header.auto-injected h1 { font-size: 1.1rem; }
+    .admin-modal .modal-dialog { margin: 0.5rem; }
+    .admin-modal .modal-content { border-radius: 0.5rem; }
+    .dataTables_length, .dataTables_filter {
+        float: none !important;
+        text-align: left !important;
+        margin-bottom: 0.5rem;
+    }
+    .dataTables_paginate {
+        float: none !important;
+        text-align: center !important;
+        margin-top: 0.75rem;
+    }
+    .dataTables_info {
+        float: none !important;
+        text-align: center !important;
+        margin-bottom: 0.5rem;
+    }
+}
+@media (max-width: 575px) {
+    .admin-badge { font-size: 0.7rem; padding: 0.2rem 0.5rem; }
+    .admin-amount-cell { font-size: 0.8rem; }
+}

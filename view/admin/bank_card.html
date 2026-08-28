@@ -180,7 +180,7 @@
     
     function dels() {
         Swal.fire({
-            html: '<h2>是否确认批量删除？</h2>',
+            html: '<h2>是否确认批量删除？</h2><p class="text-muted fs-7">已选 ' + $(":checkbox[name='batch_selection']:checked").length + ' 条记录，此操作不可恢复</p>',
             showDenyButton: true,
             reverseButtons: true,
             denyButtonText: '取消',

@@ -71,6 +71,25 @@
                 <button type="button" class="btn btn-sm btn-light btn-active-danger" onclick="example()">全部导出</button>
             </div>
         </div>
+        <!-- 异常订单快捷筛选 -->
+        <div class="card-body py-3 border-bottom border-gray-200 admin-quick-filters">
+            <div class="d-flex align-items-center flex-wrap gap-2">
+                <span class="text-gray-500 fs-7 fw-bold me-2">快捷筛选：</span>
+                <button type="button" class="btn btn-sm btn-active-primary btn-active-light-primary quick-filter-btn active" data-filter="all">全部</button>
+                <button type="button" class="btn btn-sm btn-active-warning btn-active-light-warning quick-filter-btn" data-filter="status_0">待充值</button>
+                <button type="button" class="btn btn-sm btn-active-info btn-active-light-info quick-filter-btn" data-filter="status_1">充值中</button>
+                <button type="button" class="btn btn-sm btn-active-success btn-active-light-success quick-filter-btn" data-filter="status_2">已完成</button>
+                <button type="button" class="btn btn-sm btn-active-danger btn-active-light-danger quick-filter-btn" data-filter="status_3">已取消/失败</button>
+            </div>            </div>
+            <div class="d-flex align-items-center flex-wrap gap-2 mt-3 pt-3 border-top border-gray-100">
+                <span class="text-gray-500 fs-7 fw-bold me-2">时间：</span>
+                <button type="button" class="btn btn-sm btn-active-info btn-active-light-info time-filter-btn" data-days="0">今天</button>
+                <button type="button" class="btn btn-sm btn-active-info btn-active-light-info time-filter-btn" data-days="1">昨天</button>
+                <button type="button" class="btn btn-sm btn-active-info btn-active-light-info time-filter-btn" data-days="7">最近7天</button>
+                <button type="button" class="btn btn-sm btn-active-info btn-active-light-info time-filter-btn" data-days="30">最近30天</button>
+                <button type="button" class="btn btn-sm btn-active-info btn-active-light-info time-filter-btn active" data-days="all">全部时间</button>
+            </div>
+        </div>
         <div class="card-body pb-5">
             <table id="kt_datatable_example_1" class="table align-middle table-row-dashed fs-6 gy-5">
                 <thead>
@@ -184,6 +203,62 @@
 </div>
 
 {{include file="layout/admin_footer"/}}
+
+<!-- 订单详情弹窗 -->
+<div class="modal fade admin-modal" id="orderDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-4">
+                <h3 class="modal-title fw-bold">订单详情 <span id="detailOrderNumber" class="text-gray-500 fs-6"></span></h3>
+                <div class="btn btn-icon btn-sm btn-active-light-primary ms-2" data-bs-dismiss="modal" aria-label="Close">
+                    <span class="svg-icon svg-icon-2x"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 18L18 6M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+                </div>
+            </div>
+            <div class="modal-body py-5">
+                <div class="d-flex align-items-center justify-content-between bg-light-primary rounded p-4 mb-6">
+                    <div class="d-flex align-items-center gap-6">
+                        <div><div class="text-gray-500 fs-7 mb-1">订单状态</div><span id="detailStatusBadge" class="badge fs-6 px-4 py-2"></span></div>
+                        <div class="vr"></div>
+                        <div><div class="text-gray-500 fs-7 mb-1">确认状态</div><span id="detailConfirmBadge" class="badge fs-6 px-4 py-2"></span></div>
+                        <div class="vr"></div>
+                        <div><div class="text-gray-500 fs-7 mb-1">导出状态</div><span id="detailExportBadge" class="badge fs-6 px-4 py-2"></span></div>
+                    </div>
+                    <div class="text-end"><div class="text-gray-500 fs-7 mb-1">订单金额</div><div id="detailAmount" class="fs-2 fw-bold text-primary"></div></div>
+                </div>
+                <div class="row g-6">
+                    <div class="col-md-6"><div class="card card-flush h-100"><div class="card-header py-2"><h3 class="card-title fw-bold fs-5">基础信息</h3></div><div class="card-body py-3">
+                        <div class="row mb-3"><div class="col-4 text-gray-500">订单ID</div><div class="col-8 fw-semibold" id="detailId"></div></div>
+                        <div class="row mb-3"><div class="col-4 text-gray-500">订单号</div><div class="col-8 fw-semibold" id="detailOrderNo"></div></div>
+                        <div class="row mb-3"><div class="col-4 text-gray-500">订单类型</div><div class="col-8 fw-semibold" id="detailType"></div></div>
+                        <div class="row mb-3"><div class="col-4 text-gray-500">创建时间</div><div class="col-8 fw-semibold" id="detailCreateTime"></div></div>
+                    </div></div></div>
+                    <div class="col-md-6"><div class="card card-flush h-100"><div class="card-header py-2"><h3 class="card-title fw-bold fs-5">用户信息</h3></div><div class="card-body py-3">
+                        <div class="row mb-3"><div class="col-4 text-gray-500">用户ID</div><div class="col-8 fw-semibold" id="detailUid"></div></div>
+                        <div class="row mb-3"><div class="col-4 text-gray-500">用户名</div><div class="col-8 fw-semibold" id="detailNickname"></div></div>
+                        <div class="row mb-3"><div class="col-4 text-gray-500">手机号</div><div class="col-8 fw-semibold" id="detailMobile"></div></div>
+                        <div class="row mb-3"><div class="col-4 text-gray-500">在线状态</div><div class="col-8 fw-semibold" id="detailOnline"></div></div>
+                    </div></div></div>
+                    <div class="col-md-6"><div class="card card-flush h-100"><div class="card-header py-2"><h3 class="card-title fw-bold fs-5">商品信息</h3></div><div class="card-body py-3" id="detailProductInfo"><div class="text-gray-400">加载中...</div></div></div></div>
+                    <div class="col-md-6"><div class="card card-flush h-100"><div class="card-header py-2"><h3 class="card-title fw-bold fs-5">金额信息</h3></div><div class="card-body py-3">
+                        <div class="row mb-3"><div class="col-5 text-gray-500">订单金额</div><div class="col-7 fw-semibold text-end admin-amount-cell" id="detailAmountMoney"></div></div>
+                        <div class="row mb-3"><div class="col-5 text-gray-500">实际到账</div><div class="col-7 fw-semibold text-end admin-amount-cell text-success" id="detailAmountReceived"></div></div>
+                        <div class="row mb-3"><div class="col-5 text-gray-500">优惠金额</div><div class="col-7 fw-semibold text-end admin-amount-cell text-warning" id="detailDiscountAmount"></div></div>
+                        <div class="row mb-3"><div class="col-5 text-gray-500">折扣率</div><div class="col-7 fw-semibold text-end" id="detailDiscount"></div></div>
+                        <div class="row mb-3"><div class="col-5 text-gray-500">汇率</div><div class="col-7 fw-semibold text-end" id="detailRate"></div></div>
+                        <div class="row mb-3"><div class="col-5 text-gray-500">USDT金额</div><div class="col-7 fw-semibold text-end admin-amount-cell" id="detailCnyAmount"></div></div>
+                    </div></div></div>
+                    <div class="col-12"><div class="card card-flush"><div class="card-header py-2"><h3 class="card-title fw-bold fs-5">充值信息 / 订单备注</h3></div><div class="card-body py-3" id="detailOrderInfo"><div class="text-gray-400">加载中...</div></div></div></div>
+                </div>
+            </div>
+            <div class="modal-footer py-4">
+                <button type="button" class="btn btn-light-primary me-3" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary me-3" id="detailBtnAmount">设置实际到账</button>
+                <button type="button" class="btn btn-success me-3" id="detailBtnComplete">标记已完成</button>
+                <button type="button" class="btn btn-danger" id="detailBtnCancel">标记已取消</button>
+            </div>
+        </div>
+    </div>
+</div>
 <script src="__ADMIN__/js/highlight.min.js"></script>
 <script src="__ADMIN__/js/quill.min.js"></script>
 <script type="text/javascript">
@@ -384,7 +459,10 @@
                         orderable: false,
                         className: 'text-end',
                         render: function (data, type, row) {
+                            window._orderRowData = window._orderRowData || {};
+                            window._orderRowData[row.id] = row;
                             var status = '';
+                            status += `<a class="menu-link text-primary fw-bold" onclick="showOrderDetail(${row.id})">订单详情</a>`;
                             // 添加设置实际到账的操作
                             status += `<a class="menu-link" onclick="showAmountReceivedModal(${row.id})">设置实际到账</a>`;
                             
@@ -518,10 +596,64 @@
                 product();
                 status();
                 time();
+                // 快捷筛选按钮绑定
+                document.querySelectorAll('.quick-filter-btn').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        document.querySelectorAll('.quick-filter-btn').forEach(function (b) { b.classList.remove('active'); });
+                        btn.classList.add('active');
+                        var filter = btn.getAttribute('data-filter');
+                        if (filter === 'all') {
+                            dt.column(12).search('').draw();
+                            var ss = document.querySelector('[data-kt="status"]');
+                            if (ss) ss.value = 'status_all';
+                        } else {
+                            dt.column(12).search(filter).draw();
+                            var ss = document.querySelector('[data-kt="status"]');
+                            if (ss) ss.value = filter;
+                        }
+                    });
+                });
             }
         }
     }();
-    KTUtil.onDOMContentLoaded(function () {
+    
+    // 快捷时间筛选绑定
+    (function() {
+        function bindTimeFilters() {
+            document.querySelectorAll('.time-filter-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    document.querySelectorAll('.time-filter-btn').forEach(function (b) { b.classList.remove('active'); });
+                    btn.classList.add('active');
+                    var days = btn.getAttribute('data-days');
+                    var timeInput = document.querySelector('[data-kt="time"]');
+                    if (typeof dt === 'undefined') return;
+                    if (days === 'all') {
+                        if (timeInput) timeInput.value = '';
+                        dt.column(15).search('').draw();
+                    } else {
+                        var end = new Date();
+                        var start = new Date();
+                        if (days === '1') {
+                            start.setDate(start.getDate() - 1);
+                            end.setDate(end.getDate() - 1);
+                        } else if (days !== '0') {
+                            start.setDate(start.getDate() - parseInt(days));
+                        }
+                        var fmt = function(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
+                        var range = fmt(start) + ' - ' + fmt(end);
+                        if (timeInput) timeInput.value = range;
+                        dt.column(15).search(range).draw();
+                    }
+                });
+            });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bindTimeFilters);
+        } else {
+            setTimeout(bindTimeFilters, 500);
+        }
+    })();
+KTUtil.onDOMContentLoaded(function () {
         KTDatatablesServerSide.init();
     });
     
@@ -832,6 +964,93 @@
                 }
             }
         });
+    }
+
+    // 订单详情弹窗
+    function showOrderDetail(id) {
+        var row = (window._orderRowData || {})[id];
+        if (!row) { toastr.error('订单数据未找到', {closeButton: true, timeOut: 3000}); return; }
+
+        // 基础信息
+        document.getElementById('detailId').textContent = row.id || '-';
+        document.getElementById('detailOrderNo').textContent = row.order_number || '-';
+        document.getElementById('detailOrderNumber').textContent = '#' + (row.order_number || row.id || '');
+        document.getElementById('detailType').textContent = row.type == 1 ? '充值订单' : (row.type == 2 ? '查询订单' : ('类型' + (row.type || '-')));
+        document.getElementById('detailCreateTime').textContent = row.create_time || '-';
+
+        // 用户信息
+        var ui = row.user_info || {};
+        document.getElementById('detailUid').textContent = ui.id || row.uid || '-';
+        document.getElementById('detailNickname').textContent = ui.nickname || '-';
+        document.getElementById('detailMobile').textContent = ui.mobile || '-';
+        document.getElementById('detailOnline').innerHTML = ui.on_line_status == 1 ? '<span class="badge badge-light-success">在线</span>' : '<span class="badge badge-light-secondary">离线</span>';
+
+        // 状态徽章
+        var statusMap = {0: ['待充值', 'warning'], 1: ['充值中', 'info'], 2: ['已完成', 'success'], 3: ['已取消', 'danger']};
+        var st = statusMap[row.status] || ['未知', 'secondary'];
+        document.getElementById('detailStatusBadge').className = 'badge fs-6 px-4 py-2 badge-light-' + st[1];
+        document.getElementById('detailStatusBadge').textContent = st[0];
+
+        var confirmMap = {0: ['待确认', 'warning'], 1: ['确认中', 'info'], 2: ['已收到', 'success'], 3: ['未收到', 'danger']};
+        var cs = confirmMap[row.confirm_status] || ['未知', 'secondary'];
+        document.getElementById('detailConfirmBadge').className = 'badge fs-6 px-4 py-2 badge-light-' + cs[1];
+        document.getElementById('detailConfirmBadge').textContent = cs[0];
+
+        var expMap = {0: ['未导出', 'dark'], 1: ['已导出', 'success']};
+        var es = expMap[row.export_status] || ['未知', 'secondary'];
+        document.getElementById('detailExportBadge').className = 'badge fs-6 px-4 py-2 badge-light-' + es[1];
+        document.getElementById('detailExportBadge').textContent = es[0];
+
+        // 金额
+        document.getElementById('detailAmount').textContent = '¥' + (row.amount_money || '0.00');
+        document.getElementById('detailAmountMoney').textContent = '¥' + (row.amount_money || '0.00');
+        document.getElementById('detailAmountReceived').textContent = row.amount_received ? ('¥' + row.amount_received) : '未设置';
+        document.getElementById('detailDiscountAmount').textContent = row.discount_amount ? ('¥' + row.discount_amount) : '¥0.00';
+        document.getElementById('detailDiscount').textContent = row.discount ? (row.discount + '%') : '-';
+        document.getElementById('detailRate').textContent = row.rate || '-';
+        document.getElementById('detailCnyAmount').textContent = row.cny_amount ? (row.cny_amount + ' USDT') : '-';
+
+        // 商品信息
+        var pi = row.product_info;
+        var piHtml = '';
+        if (pi && pi.length) {
+            for (var i = 0; i < pi.length; i++) {
+                var item = pi[i];
+                if (typeof item === 'string') {
+                    piHtml += '<div class="mb-2">' + escapeHtml(item) + '</div>';
+                } else if (typeof item === 'object') {
+                    for (var key in item) {
+                        if (item.hasOwnProperty(key)) {
+                            piHtml += '<div class="row mb-2"><div class="col-4 text-gray-500">' + escapeHtml(key) + '</div><div class="col-8 fw-semibold">' + escapeHtml(String(item[key])) + '</div></div>';
+                        }
+                    }
+                }
+            }
+        } else {
+            piHtml = '<div class="text-gray-400">无商品信息</div>';
+        }
+        document.getElementById('detailProductInfo').innerHTML = piHtml;
+
+        // 充值信息/订单备注 (order_info 已被后端转为 HTML 字符串)
+        var oi = row.order_info;
+        if (oi && typeof oi === 'string' && oi.length > 0) {
+            document.getElementById('detailOrderInfo').innerHTML = '<div class="fs-6">' + oi + '</div>';
+        } else if (oi && typeof oi === 'object' && oi.length) {
+            var oiHtml = '';
+            for (var j = 0; j < oi.length; j++) {
+                oiHtml += '<div class="mb-1">' + escapeHtml(String(oi[j])) + '</div>';
+            }
+            document.getElementById('detailOrderInfo').innerHTML = oiHtml;
+        } else {
+            document.getElementById('detailOrderInfo').innerHTML = '<div class="text-gray-400">无充值信息</div>';
+        }
+
+        // 底部操作按钮绑定
+        document.getElementById('detailBtnAmount').onclick = function() { $('#orderDetailModal').modal('hide'); showAmountReceivedModal(id); };
+        document.getElementById('detailBtnComplete').onclick = function() { $('#orderDetailModal').modal('hide'); audit(2, id); };
+        document.getElementById('detailBtnCancel').onclick = function() { $('#orderDetailModal').modal('hide'); audit(3, id); };
+
+        $('#orderDetailModal').modal('show');
     }
 </script>
 

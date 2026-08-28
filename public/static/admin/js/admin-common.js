@@ -382,10 +382,252 @@
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
+        },
+
+        /* ──────────────────────────────────────────────
+         * 13. 自动页面头部注入（Phase 2 核心）
+         * 从侧边栏激活菜单或 <title> 读取页面名称，
+         * 自动在内容区顶部注入统一 .admin-page-header
+         * ────────────────────────────────────────────── */
+        getPageTitle: function () {
+            // 优先从激活的侧边栏菜单项读取
+            var $activeMenu = $('.menu-link.active .menu-title, .menu-link.active .menu-text');
+            if ($activeMenu.length && $activeMenu.text().trim()) {
+                return $activeMenu.text().trim();
+            }
+            // 其次从 <title> 解析（格式：页面名 - 【站点名】后台管理）
+            var rawTitle = (document.title || '').trim();
+            var dashIndex = rawTitle.indexOf(' - ');
+            if (dashIndex > 0) {
+                return rawTitle.substring(0, dashIndex).trim();
+            }
+            if (rawTitle) return rawTitle;
+            return '';
+        },
+
+        injectPageHeader: function () {
+            // 已注入则跳过
+            if ($('.admin-page-header.auto-injected').length) return;
+
+            var title = AdminUI.getPageTitle();
+            if (!title) return;
+
+            // 登录页、2FA设置页不注入
+            if (title === '登录' || title.indexOf('2FA') >= 0 || title.indexOf('二步') >= 0) return;
+
+            var headerHtml = '<div class="admin-page-header auto-injected">' +
+                '<div class="admin-page-title"><h1>' + AdminUI.escapeHtml(title) + '</h1></div>' +
+                '</div>';
+
+            // 查找内容注入点：优先 app-main 内第一个容器，其次 .card 之前，其次 body
+            var $main = $('#kt_app_main .d-flex.flex-column.flex-column-fluid, #kt_app_main, .app-main');
+            if ($main.length) {
+                // 在第一个子元素前注入
+                var $firstChild = $main.first().children().first();
+                if ($firstChild.length) {
+                    $firstChild.before(headerHtml);
+                } else {
+                    $main.first().prepend(headerHtml);
+                }
+            } else {
+                var $firstCard = $('.card').first();
+                if ($firstCard.length) {
+                    $firstCard.before(headerHtml);
+                }
+            }
+        },
+
+        /* ──────────────────────────────────────────────
+         * 14. 全局 Toastr 默认值统一（Phase 2 核心）
+         * 覆盖 toastr.options，使所有现有 toastr 调用自动统一
+         * ────────────────────────────────────────────── */
+        initToastrDefaults: function () {
+            if (typeof toastr === 'undefined') return;
+            toastr.options = {
+                closeButton: true,
+                debug: false,
+                newestOnTop: true,
+                progressBar: true,
+                positionClass: 'toast-top-right',
+                preventDuplicates: false,
+                onclick: null,
+                showDuration: 300,
+                hideDuration: 1000,
+                timeOut: 3000,
+                extendedTimeOut: 1000,
+                showEasing: 'swing',
+                hideEasing: 'linear',
+                showMethod: 'fadeIn',
+                hideMethod: 'fadeOut'
+            };
+        },
+
+        /* ──────────────────────────────────────────────
+         * 15. 订单状态 Badge 统一渲染（Phase 3 核心）
+         * 支付状态 + 充值状态联合判断，全后台统一视觉
+         * ────────────────────────────────────────────── */
+        renderOrderStatusBadge: function (payStatus, rechargeStatus) {
+            var pay = String(payStatus || '');
+            var recharge = String(rechargeStatus || '');
+            var text = '';
+            var type = 'secondary';
+
+            // 支付失败
+            if (pay === '0' || pay === 'failed' || pay === '未支付' || pay === '支付失败') {
+                text = '未支付';
+                type = 'secondary';
+            }
+            // 支付中
+            else if (pay === '1' || pay === 'pending' || pay === '支付中' || pay === '待支付') {
+                text = '支付中';
+                type = 'warning';
+            }
+            // 已支付
+            else if (pay === '2' || pay === 'success' || pay === '已支付' || pay === '支付成功') {
+                // 充值成功
+                if (recharge === '2' || recharge === 'success' || recharge === '充值成功' || recharge === '成功') {
+                    text = '充值成功';
+                    type = 'success';
+                }
+                // 充值失败
+                else if (recharge === '3' || recharge === 'failed' || recharge === '充值失败' || recharge === '失败') {
+                    text = '充值失败';
+                    type = 'danger';
+                }
+                // 充值处理中
+                else if (recharge === '1' || recharge === 'processing' || recharge === '充值中' || recharge === '处理中') {
+                    text = '充值中';
+                    type = 'info';
+                }
+                // 已退款
+                else if (recharge === '4' || recharge === 'refunded' || recharge === '已退款' || recharge === '退款') {
+                    text = '已退款';
+                    type = 'secondary';
+                }
+                // 异常
+                else if (recharge === '5' || recharge === 'error' || recharge === '异常' || recharge === 'timeout' || recharge === '超时') {
+                    text = '充值异常';
+                    type = 'danger';
+                }
+                else {
+                    text = '已支付';
+                    type = 'primary';
+                }
+            }
+            else {
+                text = '未知';
+                type = 'secondary';
+            }
+
+            return AdminUI.renderBadge(type, text);
+        },
+
+        /* 商品状态 Badge */
+        renderProductStatusBadge: function (status) {
+            var s = String(status || '');
+            if (s === '1' || s === 'on' || s === '上架' || s === '启用' || s === '正常') {
+                return AdminUI.renderBadge('success', '上架');
+            }
+            if (s === '0' || s === 'off' || s === '下架' || s === '禁用' || s === '关闭') {
+                return AdminUI.renderBadge('secondary', '下架');
+            }
+            return AdminUI.renderBadge('secondary', '未知');
+        },
+
+        /* 用户状态 Badge */
+        renderUserStatusBadge: function (status) {
+            var s = String(status || '');
+            if (s === '1' || s === 'normal' || s === '正常' || s === '启用') {
+                return AdminUI.renderBadge('success', '正常');
+            }
+            if (s === '0' || s === 'disabled' || s === '禁用' || s === '冻结') {
+                return AdminUI.renderBadge('danger', '禁用');
+            }
+            return AdminUI.renderBadge('secondary', '未知');
+        },
+
+        /* ──────────────────────────────────────────────
+         * 16. 筛选栏标准化（Phase 2）
+         * 给现有筛选表单添加统一类名和结构
+         * ────────────────────────────────────────────── */
+        standardizeFilterBar: function () {
+            // 查找包含搜索/筛选的表单区域，添加统一类名
+            $('.card:has(.dataTables_filter), .card:has(form)').each(function () {
+                var $card = $(this);
+                if (!$card.find('.admin-filter-bar').length) {
+                    // 查找筛选表单
+                    var $filter = $card.find('form').first();
+                    if ($filter.length && $filter.find('input, select').length) {
+                        $filter.addClass('admin-filter-bar');
+                    }
+                }
+            });
+        },
+
+        /* ──────────────────────────────────────────────
+         * 17. Modal 标准化（Phase 2）
+         * 给现有 Modal 添加统一类名
+         * ────────────────────────────────────────────── */
+        standardizeModals: function () {
+            $('.modal').each(function () {
+                var $modal = $(this);
+                if (!$modal.hasClass('admin-modal')) {
+                    $modal.addClass('admin-modal');
+                }
+                // 统一 modal-dialog 大小
+                var $dialog = $modal.find('.modal-dialog');
+                if ($dialog.length && !$dialog.attr('class').match(/modal-(sm|md|lg|xl)/)) {
+                    $dialog.addClass('modal-md');
+                }
+            });
+        },
+
+        /* ──────────────────────────────────────────────
+         * 18. 金额显示统一（Phase 3 财务）
+         * 自动给金额元素添加统一格式
+         * ────────────────────────────────────────────── */
+        standardizeAmounts: function () {
+            // 给包含金额的 td 添加统一类名（基于列标题判断）
+            $('table').each(function () {
+                var $table = $(this);
+                $table.find('thead th').each(function (colIndex) {
+                    var headerText = $(this).text().trim();
+                    if (headerText.match(/金额|收入|支出|成本|利润|售价|面值|到账|支付|充值|余额|提现|返佣/)) {
+                        $table.find('tbody tr').each(function () {
+                            $(this).find('td').eq(colIndex).addClass('admin-amount-cell');
+                        });
+                    }
+                });
+            });
         }
     };
 
     // 暴露到全局
     window.AdminUI = AdminUI;
+
+    /* ──────────────────────────────────────────────
+     * 自动初始化（DOM ready 时执行）
+     * ────────────────────────────────────────────── */
+    $(function () {
+        // 1. 统一 Toastr 默认值（所有现有 toastr 调用自动生效）
+        AdminUI.initToastrDefaults();
+
+        // 2. 自动注入页面头部（所有页面自动获得统一 H1）
+        AdminUI.injectPageHeader();
+
+        // 3. 标准化 Modal
+        AdminUI.standardizeModals();
+
+        // 4. 标准化金额显示
+        AdminUI.standardizeAmounts();
+
+        // 5. DataTables 绘制完成后重新标准化
+        $(document).on('draw.dt', function () {
+            AdminUI.standardizeAmounts();
+            if (typeof KTMenu !== 'undefined') {
+                try { KTMenu.createInstances(); } catch (e) {}
+            }
+        });
+    });
 
 })(window, jQuery);
