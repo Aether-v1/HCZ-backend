@@ -435,29 +435,31 @@
 
 
     function status_switch(id) {
-        $.ajax({
-            url: "{{:getConfig('backstage_entrance')}}/product_post/status_switch",
-            method: 'POST',
-            data: {
-                id: id,
-            },
-            dataType: 'json',
-            success: function(res) {
-                if (res.code === 200) {
-                    toastr.success(
-                        res.message,
-                        {closeButton :!0, timeOut : "3000"}
-                    );
-                } else {
-                    toastr.error(
-                        res.message,
-                        {closeButton :!0, timeOut : "3000"}
-                    );
+        Swal.fire({
+            html: '<h2>是否切换商品状态？</h2><p class="text-muted">商品ID：' + id + '</p><p class="text-warning fs-7">上下架将立即影响前端销售</p>',
+            showDenyButton: true,
+            reverseButtons: true,
+            denyButtonText: '取消',
+            confirmButtonText: '确认切换',
+            customClass: { denyButton: "btn btn-light me-6", confirmButton: 'btn btn-primary' }
+        }).then((result) => {
+            if (!result.isConfirmed) return;
+            $.ajax({
+                url: "{{:getConfig('backstage_entrance')}}/product_post/status_switch",
+                method: 'POST',
+                data: { id: id },
+                dataType: 'json',
+                success: function(res) {
+                    if (res.code === 200) {
+                        toastr.success(res.message, {closeButton: true, timeOut: 3000});
+                        setTimeout(function(){ window.location.reload(); }, 1000);
+                    } else {
+                        toastr.error(res.message, {closeButton: true, timeOut: 3000});
+                    }
                 }
-            }
+            });
         });
     }
-
 
     function sort(id) {
         $.ajax({
@@ -528,7 +530,7 @@
     
     function del(id) {
         Swal.fire({
-            html: '<h2>是否确认删除？</h2>',
+            html: '<h2>是否确认删除？</h2><p class="text-muted">ID：' + id + '</p>',
             showDenyButton: true,
             reverseButtons: true,
             denyButtonText: '取消',
@@ -569,8 +571,9 @@
     
     
     function dels() {
+        const _delsCount = $(":checkbox[name='batch_selection']:checked").length;
         Swal.fire({
-            html: '<h2>是否确认批量删除？</h2>',
+            html: '<h2>是否确认批量删除？</h2><p class="text-muted">已选 ' + _delsCount + ' 条</p>',
             showDenyButton: true,
             reverseButtons: true,
             denyButtonText: '取消',

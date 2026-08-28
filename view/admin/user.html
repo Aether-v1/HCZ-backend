@@ -470,26 +470,32 @@
     }
     
     function status_switch(uid) {
-        $.ajax({
-            url: "{{:getConfig('backstage_entrance')}}/user_post/status_switch",
-            method: 'POST',
-            data: {
-                uid: uid,
-            },
-            dataType: 'json',
-            success: function(res) {
-                if (res.code === 200) {
-                    toastr.success(
-                        res.message,
-                        {closeButton :!0, timeOut : "3000"}
-                    );
-                } else {
-                    toastr.error(
-                        res.message,
-                        {closeButton :!0, timeOut : "3000"}
-                    );
-                }
+        Swal.fire({
+            html: '<h2>是否切换用户状态？</h2><p class="text-muted">用户ID：' + uid + '</p><p class="text-warning fs-7">启用/禁用将立即生效，影响用户登录和下单</p>',
+            showDenyButton: true,
+            reverseButtons: true,
+            denyButtonText: '取消',
+            confirmButtonText: '确认切换',
+            customClass: {
+                denyButton: "btn btn-light me-6",
+                confirmButton: 'btn btn-primary'
             }
+        }).then((result) => {
+            if (!result.isConfirmed) return;
+            $.ajax({
+                url: "{{:getConfig('backstage_entrance')}}/user_post/status_switch",
+                method: 'POST',
+                data: { uid: uid },
+                dataType: 'json',
+                success: function(res) {
+                    if (res.code === 200) {
+                        toastr.success(res.message, {closeButton: true, timeOut: 3000});
+                        setTimeout(function(){ window.location.reload(); }, 1000);
+                    } else {
+                        toastr.error(res.message, {closeButton: true, timeOut: 3000});
+                    }
+                }
+            });
         });
     }
 

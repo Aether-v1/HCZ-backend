@@ -1,0 +1,363 @@
+/* ============================================================
+ * Admin UI Common Styles — 后台管理系统统一 UI 样式
+ * 作用：统一表格、Modal、Badge、页面头部、筛选栏、空状态等
+ * 引入位置：admin_header.html 中 style.bundle.css 之后
+ * ============================================================ */
+
+/* ── 1. 页面头部统一 ── */
+.admin-page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    gap: 1rem;
+}
+.admin-page-header .admin-page-title h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--bs-gray-100);
+}
+.admin-page-header .admin-page-title p {
+    font-size: 0.85rem;
+    color: var(--bs-gray-500);
+    margin: 0.25rem 0 0 0;
+}
+.admin-page-header .admin-page-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* ── 2. 筛选/工具栏统一 ── */
+.admin-filter-bar {
+    background: var(--bs-gray-800);
+    border: 1px solid var(--bs-gray-700);
+    border-radius: 0.625rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+}
+.admin-filter-bar .admin-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+.admin-filter-bar .admin-filter-row:last-child {
+    margin-bottom: 0;
+}
+.admin-filter-bar .admin-filter-search {
+    flex: 1;
+    min-width: 240px;
+    max-width: 400px;
+}
+.admin-filter-bar .admin-filter-result {
+    font-size: 0.85rem;
+    color: var(--bs-gray-500);
+}
+.admin-filter-bar .admin-filter-quick {
+    display: inline-flex;
+    gap: 0.25rem;
+}
+.admin-filter-bar .admin-filter-quick button {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.6rem;
+}
+
+/* ── 3. 表格统一 ── */
+.admin-datatable {
+    width: 100% !important;
+}
+.admin-datatable thead th {
+    font-size: 0.7rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    color: var(--bs-gray-500) !important;
+    white-space: nowrap !important;
+    padding: 0.75rem 1rem !important;
+    border-bottom: 1px solid var(--bs-gray-700) !important;
+}
+.admin-datatable tbody td {
+    padding: 0.75rem 1rem !important;
+    font-size: 0.85rem !important;
+    vertical-align: middle !important;
+}
+.admin-datatable tbody tr:hover td {
+    background: var(--bs-gray-800) !important;
+}
+/* 数字列右对齐 */
+.admin-datatable td.col-number,
+.admin-datatable td.col-amount {
+    text-align: right !important;
+    font-variant-numeric: tabular-nums !important;
+    font-family: 'SF Mono', 'Consolas', monospace !important;
+}
+/* 操作列固定右对齐 */
+.admin-datatable td.col-actions {
+    text-align: right !important;
+    white-space: nowrap !important;
+}
+/* 订单号等宽字体 */
+.admin-datatable .admin-order-num {
+    font-family: 'SF Mono', 'Consolas', monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--bs-gray-100);
+}
+/* DataTables 分页信息统一 */
+.admin-datatable_wrapper .dataTables_info {
+    font-size: 0.8rem !important;
+    color: var(--bs-gray-500) !important;
+    padding-top: 0.85rem !important;
+}
+.admin-datatable_wrapper .dataTables_paginate {
+    padding-top: 0.5rem !important;
+}
+.admin-datatable_wrapper .dataTables_paginate .paginate_button {
+    padding: 0.4rem 0.75rem !important;
+    font-size: 0.8rem !important;
+    margin-left: 0.25rem !important;
+    border-radius: 0.375rem !important;
+}
+.admin-datatable_wrapper .dataTables_length select {
+    padding: 0.4rem 2rem 0.4rem 0.75rem !important;
+    font-size: 0.8rem !important;
+}
+.admin-datatable_wrapper .dataTables_length label {
+    font-size: 0.8rem !important;
+    color: var(--bs-gray-500) !important;
+}
+/* DataTables processing 统一 */
+.admin-datatable_wrapper .dataTables_processing {
+    background: rgba(17, 19, 24, 0.85) !important;
+    border: 1px solid var(--bs-gray-700) !important;
+    border-radius: 0.5rem !important;
+    color: var(--bs-gray-300) !important;
+    font-size: 0.85rem !important;
+    padding: 1rem 1.5rem !important;
+    z-index: 1000 !important;
+}
+
+/* ── 4. Badge 统一 ── */
+.admin-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.55rem;
+    border-radius: 0.375rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+.admin-badge.admin-badge-sm {
+    padding: 0.15rem 0.45rem;
+    font-size: 0.65rem;
+}
+.admin-badge.primary { background: rgba(139, 124, 246, 0.15); color: #8B7CF6; }
+.admin-badge.success { background: rgba(52, 211, 153, 0.15); color: #34D399; }
+.admin-badge.warning { background: rgba(251, 191, 36, 0.15); color: #FBBF24; }
+.admin-badge.danger  { background: rgba(248, 113, 113, 0.15); color: #F87171; }
+.admin-badge.info    { background: rgba(96, 165, 250, 0.15); color: #60A5FA; }
+.admin-badge.secondary { background: rgba(148, 163, 184, 0.15); color: #94A3B8; }
+.admin-badge.dark    { background: rgba(75, 85, 99, 0.3); color: #9CA3AF; }
+
+/* ── 5. Modal 统一 ── */
+.admin-modal .modal-dialog {
+    margin: 1.75rem auto;
+}
+.admin-modal .modal-content {
+    background: var(--bs-gray-800);
+    border: 1px solid var(--bs-gray-700);
+    border-radius: 0.75rem;
+}
+.admin-modal .modal-header {
+    border-bottom: 1px solid var(--bs-gray-700);
+    padding: 1rem 1.25rem;
+}
+.admin-modal .modal-header .modal-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--bs-gray-100);
+}
+.admin-modal .modal-header .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+.admin-modal .modal-body {
+    padding: 1.25rem;
+    color: var(--bs-gray-300);
+}
+.admin-modal .modal-footer {
+    border-top: 1px solid var(--bs-gray-700);
+    padding: 0.85rem 1.25rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+.admin-modal .modal-footer .btn {
+    min-width: 80px;
+}
+/* Modal 尺寸统一 */
+.admin-modal.admin-modal-sm .modal-dialog { max-width: 400px; }
+.admin-modal.admin-modal-md .modal-dialog { max-width: 600px; }
+.admin-modal.admin-modal-lg .modal-dialog { max-width: 800px; }
+.admin-modal.admin-modal-xl .modal-dialog { max-width: 1100px; }
+/* Modal 危险操作提示 */
+.admin-modal .admin-modal-warning {
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.8rem;
+    color: #F87171;
+}
+
+/* ── 6. 空状态统一 ── */
+.admin-empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+}
+.admin-empty-state .admin-empty-icon {
+    font-size: 3rem;
+    color: var(--bs-gray-600);
+    margin-bottom: 1rem;
+    opacity: 0.6;
+}
+.admin-empty-state .admin-empty-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--bs-gray-400);
+    margin-bottom: 0.25rem;
+}
+.admin-empty-state .admin-empty-desc {
+    font-size: 0.8rem;
+    color: var(--bs-gray-500);
+    margin-bottom: 1rem;
+}
+.admin-empty-state .admin-empty-action {
+    margin-top: 0.5rem;
+}
+
+/* ── 7. 确认框统一（Swal 覆盖） ── */
+.swal2-popup {
+    background: var(--bs-gray-800) !important;
+    border: 1px solid var(--bs-gray-700) !important;
+    border-radius: 0.75rem !important;
+    color: var(--bs-gray-200) !important;
+}
+.swal2-title {
+    color: var(--bs-gray-100) !important;
+    font-size: 1.1rem !important;
+    font-weight: 700 !important;
+}
+.swal2-html-container {
+    color: var(--bs-gray-400) !important;
+    font-size: 0.85rem !important;
+}
+.swal2-confirm {
+    border-radius: 0.5rem !important;
+    font-weight: 600 !important;
+    padding: 0.5rem 1.25rem !important;
+}
+.swal2-cancel, .swal2-deny {
+    border-radius: 0.5rem !important;
+    font-weight: 600 !important;
+    padding: 0.5rem 1.25rem !important;
+}
+
+/* ── 8. Toast 统一（Toastr 覆盖） ── */
+#toast-container > div {
+    border-radius: 0.5rem !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+    font-size: 0.85rem !important;
+    padding: 0.85rem 1rem !important;
+    opacity: 0.95 !important;
+}
+#toast-container .toast-title {
+    font-weight: 700 !important;
+    font-size: 0.85rem !important;
+    margin-bottom: 0.2rem !important;
+}
+
+/* ── 9. DatePicker 统一（Flatpickr 覆盖） ── */
+.flatpickr-calendar {
+    background: var(--bs-gray-800) !important;
+    border: 1px solid var(--bs-gray-700) !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+}
+.flatpickr-day {
+    color: var(--bs-gray-300) !important;
+}
+.flatpickr-day:hover {
+    background: var(--bs-gray-700) !important;
+}
+.flatpickr-day.selected {
+    background: var(--bs-primary) !important;
+    border-color: var(--bs-primary) !important;
+}
+.flatpickr-day.today {
+    border-color: var(--bs-primary) !important;
+}
+.flatpickr-months .flatpickr-month,
+.flatpickr-current-month .flatpickr-monthDropdown-months {
+    color: var(--bs-gray-200) !important;
+}
+.flatpickr-weekday {
+    color: var(--bs-gray-500) !important;
+}
+span.flatpickr-weekday {
+    background: transparent !important;
+}
+
+/* ── 10. 金额显示统一 ── */
+.admin-amount {
+    font-variant-numeric: tabular-nums;
+    font-family: 'SF Mono', 'Consolas', monospace;
+    font-weight: 600;
+}
+.admin-amount.admin-amount-positive { color: #34D399; }
+.admin-amount.admin-amount-negative { color: #F87171; }
+.admin-amount.admin-amount-muted { color: var(--bs-gray-500); }
+.admin-amount-unit {
+    font-size: 0.7em;
+    color: var(--bs-gray-500);
+    font-weight: 500;
+    margin-left: 0.15rem;
+}
+
+/* ── 11. 操作列"更多"菜单统一 ── */
+.admin-action-menu .menu-item.danger .menu-link {
+    color: #F87171 !important;
+}
+.admin-action-menu .menu-item.danger .menu-link:hover {
+    background: rgba(248, 113, 113, 0.1) !important;
+}
+.admin-action-menu .menu-separator {
+    height: 1px;
+    background: var(--bs-gray-700);
+    margin: 0.25rem 0;
+}
+
+/* ── 12. 响应式适配 ── */
+@media (max-width: 768px) {
+    .admin-page-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .admin-page-header .admin-page-actions {
+        width: 100%;
+    }
+    .admin-filter-bar .admin-filter-search {
+        max-width: 100%;
+    }
+    .admin-modal.admin-modal-lg .modal-dialog,
+    .admin-modal.admin-modal-xl .modal-dialog {
+        max-width: 95vw;
+        margin: 0.5rem;
+    }
+}

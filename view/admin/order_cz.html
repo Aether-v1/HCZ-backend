@@ -1,4 +1,4 @@
-{{include file="layout/admin_header" web_title="充值业务 - 订单列表"/}}
+﻿{{include file="layout/admin_header" web_title="充值业务 - 订单列表"/}}
 <div id="kt_content_container" class="app-container container-fluid">
     <div class="card">
         <div class="card-header">
@@ -551,9 +551,9 @@
             },
             dataType: 'json',
             success: function(res) {
-                // 修改成功提示为"你不对劲"
+                // 修改成功提示为"批量设置成功"
                 toastr.success(
-                    '设置成功',  // 这里修改了提示信息
+                    '设置成功',  
                     {closeButton: true, timeOut: 3000}
                 );
                 $('#amountReceivedModal').modal('hide');
@@ -604,9 +604,9 @@
             },
             dataType: 'json',
             success: function(res) {
-                // 修改成功提示为"你不对劲"
+                // 修改成功提示为"批量设置成功"
                 toastr.success(
-                    '你不对劲',  // 这里修改了提示信息
+                    '批量设置成功',  
                     {closeButton: true, timeOut: 3000}
                 );
                 $('#batchAmountReceivedModal').modal('hide');
@@ -621,8 +621,9 @@
     }
     
     function audit(status, id, type = 'status') {
+        const auditStatusText = status == 1 ? '通过' : '拒绝';
         Swal.fire({
-            html: '<h2>是否确认审核？</h2>',
+            html: '<h2>是否确认审核？</h2><p class="text-muted">订单号：' + id + '，审核结果：' + auditStatusText + '</p>',
             showDenyButton: true,
             reverseButtons: true,
             denyButtonText: '取消',
@@ -664,8 +665,10 @@
     }
     
     function audit_s(status) {
+        const auditSCount = $(":checkbox[name='batch_selection']:checked").length;
+        const auditSStatusText = status == 1 ? '通过' : '拒绝';
         Swal.fire({
-            html: '<h2>是否确认审核？</h2>',
+            html: '<h2>是否确认批量审核？</h2><p class="text-muted">已选 ' + auditSCount + ' 笔订单，审核结果：' + auditSStatusText + '</p>',
             showDenyButton: true,
             reverseButtons: true,
             denyButtonText: '取消',
@@ -716,7 +719,7 @@
     
     function del(id) {
         Swal.fire({
-            html: '<h2>是否确认删除？</h2>',
+            html: '<h2>是否确认删除订单？</h2><p class="text-muted">订单号：' + id + '</p>',
             showDenyButton: true,
             reverseButtons: true,
             denyButtonText: '取消',
@@ -757,8 +760,9 @@
     
     
     function dels() {
+        const delCount = $(":checkbox[name='batch_selection']:checked").length;
         Swal.fire({
-            html: '<h2>是否确认批量删除？</h2>',
+            html: '<h2>是否确认批量删除？</h2><p class="text-muted">已选 ' + delCount + ' 笔订单</p>',
             showDenyButton: true,
             reverseButtons: true,
             denyButtonText: '取消',
