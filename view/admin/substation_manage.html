@@ -1,4 +1,4 @@
-{{include file="layout/admin_header" web_title="分站管理"}}
+﻿{{include file="layout/admin_header" web_title="分站管理"}}
 <div id="kt_content_container" class="app-container container-fluid">
   <div class="card mb-6">
     <div class="card-header border-0 pt-6">
@@ -82,18 +82,23 @@ function esc(v){return String(v??'').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&l
 function statusBadge(v){v=Number(v||0); if(v===2) return '<span class="badge badge-light-success">已开通</span>'; if(v===1) return '<span class="badge badge-light-warning">待审核</span>'; if(v===3) return '<span class="badge badge-light-danger">已驳回</span>'; if(v===4) return '<span class="badge badge-light-dark">已冻结</span>'; return '<span class="badge badge-light">未开通</span>'}
 function getCheckedIds(){return $('.row-check:checked').map((_,el)=>$(el).val()).get();}
 function toggleAll(checked){$('.row-check').prop('checked',checked);}
-async function doAction(action, ids, extra = {}){ if(!ids.length){toastr.warning('请先选择分站'); return;} const res=await $.post(base+'/substation/manage-action',{action,ids:ids.join(','),...extra}); if(res.code===200){toastr.success(res.message||'操作成功'); reloadList(page);}else{toastr.error(res.message||'操作失败');}}
-function askAdjustPayload(action){
-  const title = action==='wallet_add' ? '请输入加款金额(USDT)' : '请输入扣减金额(USDT)';
-  const amount = prompt(title,'');
-  if(amount===null) return null;
-  const n = Number(amount);
-  if(!Number.isFinite(n) || n<=0){ toastr.warning('请输入正确金额'); return null; }
-  const remark = prompt('请输入备注(可选)','') || '';
-  return { amount: n.toFixed(2), remark };
+async function doAction(action, ids, extra = {}){ if(!ids.length){toastr.warning('请先选择分站'); return;}
+  const dangerMap={freeze:{title:'确认冻结分站？',text:'冻结后该分站将无法正常使用',confirm:'确认冻结'},cancel:{title:'确认取消分站？',text:'取消后该分站将被永久移除，此操作不可恢复',confirm:'确认取消'},wallet_deduct:{title:'确认余额扣减？',text:'将从选中分站余额中扣减金额',confirm:'确认扣减'}};
+  const d=dangerMap[action];
+  if(d){ const {isConfirmed}=await Swal.fire({title:d.title,html:d.text+'<br>即将操作：'+ids.length+' 个分站',icon:'warning',showCancelButton:true,confirmButtonText:d.confirm,cancelButtonText:'取消'}); if(!isConfirmed) return; }
+  const res=await $.post(base+'/substation/manage-action',{action,ids:ids.join(','),...extra}); if(res.code===200){toastr.success(res.message||'操作成功'); reloadList(page);}else{toastr.error(res.message||'操作失败');}
 }
-function singleAction(id){ const action=$('#action_'+id).val(); if(!action){toastr.warning('请选择操作'); return;} if(action==='wallet_add' || action==='wallet_deduct'){ const extra = askAdjustPayload(action); if(!extra) return; doAction(action,[id],extra); return; } doAction(action,[id]); }
-function bulkAction(action){ if(action==='wallet_add' || action==='wallet_deduct'){ const extra = askAdjustPayload(action); if(!extra) return; doAction(action,getCheckedIds(),extra); return; } doAction(action,getCheckedIds())}
+async function askAdjustPayload(action){
+  const title = action==='wallet_add' ? '请输入加款金额(USDT)' : '请输入扣减金额(USDT)';
+  const {value:amountVal}=await Swal.fire({title,input:'text',showCancelButton:true,confirmButtonText:'确认',cancelButtonText:'取消'});
+  if(amountVal===undefined) return null;
+  const n = Number(amountVal);
+  if(!Number.isFinite(n) || n<=0){ toastr.warning('请输入正确金额'); return null; }
+  const {value:remarkVal}=await Swal.fire({title:'请输入备注(可选)',input:'text',showCancelButton:true,confirmButtonText:'确认',cancelButtonText:'取消'});
+  return { amount: n.toFixed(2), remark: remarkVal||'' };
+}
+async function singleAction(id){ const action=$('#action_'+id).val(); if(!action){toastr.warning('请选择操作'); return;} if(action==='wallet_add' || action==='wallet_deduct'){ const extra = await askAdjustPayload(action); if(!extra) return; doAction(action,[id],extra); return; } doAction(action,[id]); }
+async function bulkAction(action){ if(action==='wallet_add' || action==='wallet_deduct'){ const extra = await askAdjustPayload(action); if(!extra) return; doAction(action,getCheckedIds(),extra); return; } doAction(action,getCheckedIds())}
 function actionOptions(row){return `
 <select id="action_${row.id}" class="form-select form-select-solid form-select-sm w-125px d-inline-block me-2">
   <option value="">选择操作</option>

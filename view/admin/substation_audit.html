@@ -1,4 +1,4 @@
-{{include file="layout/admin_header" web_title="分站审核"}}
+﻿{{include file="layout/admin_header" web_title="分站审核"}}
 <div id="kt_content_container" class="app-container container-fluid">
   <div class="card mb-6">
     <div class="card-header border-0 pt-6">
@@ -88,7 +88,7 @@ async function loadAuditList(){
  renderAuditRows(data.list||[]); document.getElementById('audit_page_info').textContent=`第 ${page} 页 / 共 ${Math.max(1, Math.ceil(total/limit))} 页，共 ${total} 条`;
 }
 async function saveBaseDomain(){ const baseDomain=$('#base_domain').val().trim(); const res=await $.post(base+'/substation/save-base-domain',{base_domain:baseDomain}); if(res.code===200){toastr.success(res.message||'保存成功'); loadAuditList();} else {toastr.error(res.message||'保存失败');}}
-async function auditItem(id,status){ let reject_reason=''; if(status===2){ reject_reason=prompt('请输入驳回原因','')||''; }
+async function auditItem(id,status){ let reject_reason=''; if(status===2){ const{value:rr}=await Swal.fire({title:'请输入驳回原因',input:'text',showCancelButton:true,confirmButtonText:'确认',cancelButtonText:'取消'});if(rr===undefined)return;reject_reason=rr||''; }
  const res=await $.post(base+'/substation/audit',{audit_id:id,status,reject_reason}); if(res.code===200){toastr.success(res.message||'操作成功'); loadAuditList();} else {toastr.error(res.message||'操作失败');}}
 function reloadCurrent(){page=1; loadAuditList();}
 function changePage(delta){ const totalPages=Math.max(1,Math.ceil(total/limit)); const next=page+delta; if(next<1||next>totalPages) return; page=next; loadAuditList(); }
