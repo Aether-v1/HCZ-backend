@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 declare (strict_types=1);
 namespace app\controller;
 use app\middleware\AdminAuth;
@@ -357,7 +357,7 @@ class AdminList
         $par[] = ['order_number|wallet_address', 'like', '%' . $search . '%'];
         $data = Recharge::where($par)->order($column??'id', $dir??'desc')->order('id', 'asc')->limit($start, $length)->select();
         foreach($data as $key => $vo) {
-            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile')->find($vo['uid']);
+            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile,on_line_status')->find($vo['uid']);
             $vo['image'] = !empty($vo['image']) ? '/api/proof/recharge/' . rawurlencode((string)($vo['order_number'] ?? '')) . '/view' : '';
 
         }
@@ -392,7 +392,7 @@ class AdminList
         $par[] = ['order_number|wallet_address', 'like', '%' . $search . '%'];
         $data = Withdrawal::where($par)->order($column??'id', $dir??'desc')->order('id', 'asc')->limit($start, $length)->select();
         foreach($data as $key => $vo) {
-            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile')->find($vo['uid']);
+            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile,on_line_status')->find($vo['uid']);
         }
         $totalRecords = (int)Withdrawal::where($basePar)->count();
         $totalDisplay = (int)Withdrawal::where($par)->count();
@@ -447,7 +447,7 @@ class AdminList
             }
         }
         foreach($data as $key => $vo) {
-            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile')->find($vo['uid']);
+            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile,on_line_status')->find($vo['uid']);
 
             $order_info = '';
             foreach ($vo['order_info'] as $item) {
@@ -555,7 +555,7 @@ class AdminList
             }
         }
         foreach($data as $key => $vo) {
-            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile')->find($vo['uid']);
+            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile,on_line_status')->find($vo['uid']);
 
             $order_info = '';
             foreach ($vo['order_info'] as $item) {
@@ -700,7 +700,7 @@ class AdminList
         $par[] = ['name|mobile|wx_account|zfb_account', 'like', '%' . $search . '%'];
         $data = BankCard::where($par)->order($column??'id', $dir??'desc')->order('id', 'asc')->limit($start, $length)->select();
         foreach($data as $key => $vo) {
-            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile')->find($vo['uid']);
+            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile,on_line_status')->find($vo['uid']);
 
         }
         $totalRecords = (int)BankCard::where($basePar)->count();
@@ -791,7 +791,7 @@ class AdminList
         $par[] = ['order_number', 'like', '%' . $search . '%'];
         $data = RebateRecord::where($par)->order($column??'id', $dir??'desc')->order('id', 'asc')->limit($start, $length)->select();
         foreach($data as $key => $vo) {
-            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile')->find($vo['uid']);
+            $vo['user_info'] = UserModel::field('id,avatar,nickname,mobile,on_line_status')->find($vo['uid']);
         }
         foreach($data as $key => $vo) {
             $vo['t_user_info'] = UserModel::field('id,avatar,nickname,mobile')->find($vo['tid']);

@@ -36,15 +36,15 @@
                                     <div class="col-md-3">
                                         <label class="form-label">兑换类型</label>
                                         <select class="form-select" name="exchange_type[]">
-                                            <option value="coupon" {{if condition="($item.type|default='coupon') == 'coupon'"}}selected{{/if}}>优惠券</option>
-                                            <option value="physical" {{if condition="($item.type|default='coupon') == 'physical'"}}selected{{/if}}>实物</option>
+                                            <option value="coupon" {{if condition="(isset($item['type'])?$item['type']:'coupon') == 'coupon'"}}selected{{/if}}>优惠券</option>
+                                            <option value="physical" {{if condition="(isset($item['type'])?$item['type']:'coupon') == 'physical'"}}selected{{/if}}>实物</option>
                                         </select>
                                     </div>
                                     <div class="col-md-3">
                                         <label class="form-label">状态</label>
                                         <select class="form-select" name="exchange_enabled[]">
-                                            <option value="1" {{if condition="intval($item.enabled|default=0) === 1"}}selected{{/if}}>启用</option>
-                                            <option value="0" {{if condition="intval($item.enabled|default=0) !== 1"}}selected{{/if}}>停用</option>
+                                            <option value="1" {{if condition="intval(isset($item['enabled'])?$item['enabled']:0) === 1"}}selected{{/if}}>启用</option>
+                                            <option value="0" {{if condition="intval(isset($item['enabled'])?$item['enabled']:0) !== 1"}}selected{{/if}}>停用</option>
                                         </select>
                                     </div>
                                     <div class="col-md-3">
