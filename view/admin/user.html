@@ -232,13 +232,11 @@
                         targets: 1,
                         orderable: false,
                         render: function (data, type, row) {
-            window._userRowData[row.id] = row;
-            var detailBtn = '<a class="menu-link text-primary fw-bold" onclick="showUserDetail(' + row.id + ')">用户详情</a>';
-
+                            window._userRowData[row.id] = row;
                             const parentAvatar = escapeHtml(row.t_user_info?.avatar || '__ADMIN__/media/avatars/blank.png');
                             const parentNickname = escapeHtml(row.t_user_info?.nickname || '');
                             if(row.t_user_info){
-                                            var _actionHtml = `
+                                return `
                                 <div class="cursor-pointer symbol symbol-35px" data-kt-menu-trigger="{default: 'click', lg: 'hover'}" data-kt-menu-attach="parent" data-kt-menu-placement="bottom-end">
                                     <img src="${parentAvatar}" class="rounded-3" alt="user">
                                 </div>
@@ -248,7 +246,6 @@
                             }
                         },
                     },
-                    {
                         targets: 2,
                         orderable: false,
                         render: function (avatar) {
