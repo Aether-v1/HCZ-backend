@@ -504,6 +504,20 @@ class Admin
         if (!is_array($decodedItems)) {
             $decodedItems = [];
         }
+        // 给每个兑换项预设默认值，避免模板中复杂 isset 判断导致编译错误
+        foreach ($decodedItems as &$item) {
+            $item['type'] = $item['type'] ?? 'coupon';
+            $item['enabled'] = $item['enabled'] ?? 1;
+            $item['id'] = $item['id'] ?? '';
+            $item['points'] = $item['points'] ?? '1';
+            $item['title'] = $item['title'] ?? '';
+            $item['stock'] = $item['stock'] ?? '0';
+            $item['coupon_amount'] = $item['coupon_amount'] ?? '0';
+            $item['sku'] = $item['sku'] ?? '';
+            $item['image'] = $item['image'] ?? '';
+            $item['description'] = $item['description'] ?? '';
+        }
+        unset($item);
         View::assign('points_exchange_items', $decodedItems);
         View::assign('points_exchange_notice', (string)(getConfig('points_exchange_notice') ?: '兑换申请提交后，客服会尽快处理。'));
         return View::fetch();
