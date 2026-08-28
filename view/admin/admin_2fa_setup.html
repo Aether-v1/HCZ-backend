@@ -1,4 +1,4 @@
-{{include file="layout/admin_header" web_title="2FA认证绑定"/}}
+﻿{{include file="layout/admin_header" web_title="2FA认证绑定"/}}
 
 <div class="d-flex flex-column flex-column-fluid">
     <div id="kt_app_content" class="app-content flex-column-fluid py-3 py-lg-6">
@@ -155,9 +155,9 @@
 function copyBackupKey() {
     const key = document.getElementById('backup-key').textContent.replace(/\s/g, '');
     navigator.clipboard.writeText(key).then(() => {
-        alert('备用密钥已复制到剪贴板');
+        toastr.success('备用密钥已复制到剪贴板');
     }).catch(err => {
-        console.error('无法复制内容: ', err);
+        toastr.error('复制失败，请手动复制');
     });
 }
 
@@ -188,14 +188,14 @@ function verifyAndComplete() {
     });
     
     if (code.length !== 6) {
-        alert('请输入完整的6位验证码');
+        toastr.warning('请输入完整的6位验证码');
         return;
     }
     
     // 模拟验证成功
     document.getElementById('step2-progress').style.width = '100%';
     setTimeout(() => {
-        alert('2FA认证绑定成功！');
+        toastr.success('2FA认证绑定成功！');
         // 可以在这里跳转到其他页面
     }, 500);
 }
