@@ -1,70 +1,70 @@
-{{include file="layout/admin_header" web_title="分站订单"}}
+﻿{{include file="layout/admin_header" web_title="分站订单"}}
 <div id="kt_content_container" class="app-container container-fluid">
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">
-        <div class="d-flex flex-wrap gap-3 align-items-center">
-          <input type="text" id="keyword" class="form-control form-control-solid w-250px" placeholder="搜索订单号 / 商品 / 下单信息">
-          <select id="status" class="form-select form-select-solid w-140px">
-            <option value="">订单状态</option>
-            <option value="0">待充值</option>
-            <option value="1">充值中</option>
-            <option value="2">已完成</option>
-            <option value="3">已取消</option>
-          </select>
-          <select id="confirm_status" class="form-select form-select-solid w-140px">
-            <option value="">确认状态</option>
-            <option value="0">未完成</option>
-            <option value="1">待确认</option>
-            <option value="2">已确认</option>
-            <option value="3">未收到</option>
-          </select>
-          <select id="limit" class="form-select form-select-solid w-125px">
-            <option value="10">10条/页</option>
-            <option value="20" selected>20条/页</option>
-            <option value="50">50条/页</option>
-            <option value="100">100条/页</option>
-          </select>
-          <button class="btn btn-primary" type="button" onclick="reloadList(1)">查询</button>
-        </div>
-      </div>
-      <div class="card-toolbar">
-        <div class="d-flex gap-2 align-items-center">
-          <button class="btn btn-sm btn-light" type="button" onclick="batchAudit(0)">批量待充值</button>
-          <button class="btn btn-sm btn-light-warning" type="button" onclick="batchAudit(1)">批量充值中</button>
-          <button class="btn btn-sm btn-light-success" type="button" onclick="batchAudit(2)">批量已完成</button>
-          <button class="btn btn-sm btn-light-danger" type="button" onclick="batchAudit(3)">批量已取消</button>
-          <button class="btn btn-sm btn-primary" type="button" onclick="batchSetAmountReceived()">批量实际到账</button>
-        </div>
-      </div>
-    </div>
-    <div class="card-body pb-5">
-      <table class="table align-middle table-row-dashed fs-6 gy-5">
-        <thead>
-          <tr class="text-start text-gray-400 fw-bold fs-7 text-uppercase gs-0">
-            <th class="w-10px pe-2"><label class="form-check form-check-sm form-check-custom form-check-solid"><input class="form-check-input" type="checkbox" id="check_all" onclick="toggleAll(this.checked)"></label></th>
-            <th>订单编号</th>
-            <th>归属用户</th>
-            <th>下单信息</th>
-            <th>当前费率</th>
-            <th>订单状态</th>
-            <th>确认状态</th>
-            <th>创建时间</th>
-            <th class="text-end">操作</th>
-          </tr>
-        </thead>
-        <tbody id="table_body"></tbody>
-      </table>
-      <div class="d-flex justify-content-between align-items-center mt-5 flex-wrap gap-3">
-        <div class="text-muted" id="pager_text">--</div>
-        <div class="d-flex gap-2 align-items-center">
-          <button class="btn btn-sm btn-light" type="button" id="prev_btn" onclick="changePage(-1)">上一页</button>
-          <span class="badge badge-light-primary" id="page_no">1 / 1</span>
-          <button class="btn btn-sm btn-light" type="button" id="next_btn" onclick="changePage(1)">下一页</button>
-        </div>
-      </div>
-    </div>
-  </div>
+ <div class="card">
+ <div class="card-header">
+ <div class="card-title">
+ <div class="d-flex flex-wrap gap-3 align-items-center">
+ <input type="text" id="keyword" class="form-control form-control-solid w-250px" placeholder="搜索订单号 / 商品 / 下单信息">
+ <select id="status" class="form-select form-select-solid w-140px">
+ <option value="">订单状态</option>
+ <option value="0">待充值</option>
+ <option value="1">充值中</option>
+ <option value="2">已完成</option>
+ <option value="3">已取消</option>
+ </select>
+ <select id="confirm_status" class="form-select form-select-solid w-140px">
+ <option value="">确认状态</option>
+ <option value="0">未完成</option>
+ <option value="1">待确认</option>
+ <option value="2">已确认</option>
+ <option value="3">未收到</option>
+ </select>
+ <select id="limit" class="form-select form-select-solid w-125px">
+ <option value="10">10条/页</option>
+ <option value="20" selected>20条/页</option>
+ <option value="50">50条/页</option>
+ <option value="100">100条/页</option>
+ </select>
+ <button class="btn btn-primary" type="button" onclick="reloadList(1)">查询</button>
+ </div>
+ </div>
+ <div class="card-toolbar">
+ <div class="d-flex gap-2 align-items-center">
+ <button class="btn btn-sm btn-light" type="button" onclick="batchAudit(0)">批量待充值</button>
+ <button class="btn btn-sm btn-light-warning" type="button" onclick="batchAudit(1)">批量充值中</button>
+ <button class="btn btn-sm btn-light-success" type="button" onclick="batchAudit(2)">批量已完成</button>
+ <button class="btn btn-sm btn-light-danger" type="button" onclick="batchAudit(3)">批量已取消</button>
+ <button class="btn btn-sm btn-primary" type="button" onclick="batchSetAmountReceived()">批量实际到账</button>
+ </div>
+ </div>
+ </div>
+ <div class="card-body pb-5">
+ <table class="table align-middle table-row-dashed fs-6 gy-5">
+ <thead>
+ <tr class="text-start text-gray-400 fw-bold fs-7 text-uppercase gs-0">
+ <th class="w-10px pe-2"><label class="form-check form-check-sm form-check-custom form-check-solid"><input class="form-check-input" type="checkbox" id="check_all" onclick="toggleAll(this.checked)"></label></th>
+ <th>订单编号</th>
+ <th>归属用户</th>
+ <th>下单信息</th>
+ <th>当前费率</th>
+ <th>订单状态</th>
+ <th>确认状态</th>
+ <th>创建时间</th>
+ <th class="text-end">操作</th>
+ </tr>
+ </thead>
+ <tbody id="table_body"></tbody>
+ </table>
+ <div class="d-flex justify-content-between align-items-center mt-5 flex-wrap gap-3">
+ <div class="text-muted" id="pager_text">--</div>
+ <div class="d-flex gap-2 align-items-center">
+ <button class="btn btn-sm btn-light" type="button" id="prev_btn" onclick="changePage(-1)">上一页</button>
+ <span class="badge badge-light-primary" id="page_no">1 / 1</span>
+ <button class="btn btn-sm btn-light" type="button" id="next_btn" onclick="changePage(1)">下一页</button>
+ </div>
+ </div>
+ </div>
+ </div>
 </div>
 {{include file="layout/admin_footer"/}}
 <script>
@@ -74,8 +74,8 @@ let page=1,total=0;
 function esc(v){return String(v??'').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));}
 function toggleAll(checked){$('.row-check').prop('checked',checked)}
 function checkedIds(){return $('.row-check:checked').map((_,el)=>$(el).val()).get()}
-function statusBadge(v){v=Number(v||0); if(v===1) return '<span class="badge badge-outline badge-warning">充值中</span>'; if(v===2) return '<span class="badge badge-outline badge-success">已完成</span>'; if(v===3) return '<span class="badge badge-outline badge-danger">已取消</span>'; return '<span class="badge badge-outline badge-primary">待充值</span>';}
-function confirmBadge(v){v=Number(v||0); if(v===1) return '<span class="badge badge-outline badge-warning">待确认</span>'; if(v===2) return '<span class="badge badge-outline badge-success">已确认</span>'; if(v===3) return '<span class="badge badge-outline badge-danger">未收到</span>'; return '<span class="badge badge-outline badge-dark">未完成</span>';}
+function statusBadge(v){v=Number(v||0); if(v===1) return '<span class="badge badge-light-warning">充值中</span>'; if(v===2) return '<span class="badge badge-light-success">已完成</span>'; if(v===3) return '<span class="badge badge-light-danger">已取消</span>'; return '<span class="badge badge-light-primary">待充值</span>';}
+function confirmBadge(v){v=Number(v||0); if(v===1) return '<span class="badge badge-light-warning">待确认</span>'; if(v===2) return '<span class="badge badge-light-success">已确认</span>'; if(v===3) return '<span class="badge badge-light-danger">未收到</span>'; return '<span class="badge badge-light-dark">未完成</span>';}
 function parseRechargeInfo(orderInfo){ const lines=[]; const push=(label,val)=>{ const v=String(val??'').trim(); if(!v) return; lines.push(`<div class="text-muted fs-7">${esc(label)}：${esc(v)}</div>`); }; if(Array.isArray(orderInfo)){ orderInfo.forEach(item=>{ const str=String(item??'').trim(); const m=str.match(/^\[(.*?)\](.*)$/); if(m){ push(m[1],m[2]); } else if(str){ lines.push(`<div class=\"text-muted fs-7\">${esc(str)}</div>`); } }); return lines.join(''); } if(orderInfo && typeof orderInfo==='object'){ Object.keys(orderInfo).forEach(key=>push(key, orderInfo[key])); return lines.join(''); } const str=String(orderInfo??'').trim(); if(str){ lines.push(`<div class="text-muted fs-7">${esc(str)}</div>`); } return lines.join(''); }
 function orderInfo(row){ const name = row.product_info?.name || row.product_info?.['name'] || ''; const rechargeInfo = parseRechargeInfo(row.order_info); return `<div class="fw-bold">${esc(name) || '充值订单'}</div>${rechargeInfo}<div class="text-muted fs-7">金额：${esc(row.amount_money||'0')}</div><div class="text-muted fs-7">实际到账：${esc(row.amount_received||'0')}</div>`; }
 function actionMenu(row){ let actions=`<a class="dropdown-item" href="javascript:void(0)" onclick="setAmountReceived(${row.id})">设置实际到账</a>`; if(Number(row.status)===0){ actions+=`<a class="dropdown-item" href="javascript:void(0)" onclick="audit(1,${row.id})">充值中</a><a class="dropdown-item" href="javascript:void(0)" onclick="audit(2,${row.id})">已完成</a><a class="dropdown-item" href="javascript:void(0)" onclick="audit(3,${row.id})">已取消</a>`;} else if(Number(row.status)===1){ actions+=`<a class="dropdown-item" href="javascript:void(0)" onclick="audit(2,${row.id})">已完成</a><a class="dropdown-item" href="javascript:void(0)" onclick="audit(3,${row.id})">已取消</a><a class="dropdown-item" href="javascript:void(0)" onclick="audit(0,${row.id})">待充值</a>`;} else if(Number(row.status)===2 && Number(row.confirm_status)===3){ actions+=`<a class="dropdown-item" href="javascript:void(0)" onclick="audit(2,${row.id},'confirm_status')">已收到</a><a class="dropdown-item" href="javascript:void(0)" onclick="audit(3,${row.id},'confirm_status')">已取消</a>`;} return `<div class="dropdown"><button class="btn btn-sm btn-light-primary dropdown-toggle" data-bs-toggle="dropdown" type="button">操作</button><div class="dropdown-menu dropdown-menu-end">${actions}</div></div>`; }
