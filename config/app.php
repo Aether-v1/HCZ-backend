@@ -110,6 +110,8 @@ return [
         'expire'     => 7200,
         'except'     => [
             'api/auth/login',
+            'admin/auth/login_check',
+            'login_check',
             // Telegram webhook uses the real route registered in route/app.php.
             'robot/webhook',
             'api/callback/*',
