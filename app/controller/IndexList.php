@@ -419,7 +419,7 @@ class IndexList
                     ]
                 ]
             ]);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             return json(['code' => 500, 'msg' => '获取积分信息失败：' . $e->getMessage()]);
         }
     }
@@ -472,7 +472,7 @@ class IndexList
                     'new_continuous_days' => $userPoints->continuous_days
                 ]
             ]);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             // 回滚事务
             $this->app->db->rollback();
             Log::error('签到失败：' . $e->getMessage());
@@ -515,7 +515,7 @@ class IndexList
                     'page_size' => $pageSize
                 ]
             ]);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             return json(['code' => 500, 'msg' => '获取积分记录失败：' . $e->getMessage()]);
         }
     }

@@ -152,7 +152,7 @@ trait UtilityActions
                 'url' => (string)($stored['public_path'] ?? ''),
                 'path' => (string)($stored['relative_path'] ?? ''),
             ]);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             return show(500, 'error', $e->getMessage());
         }
     }

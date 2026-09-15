@@ -120,6 +120,11 @@ class PointsService
 
                 // 5.3 更新用户表积分信息（cz_user表）
                 $user = User::lock(true)->where('id', $userId)->find(); // 加锁防止并发问题
+                if (!$user) {
+                    Db::rollback();
+                    Log::error("签到失败：用户不存在", ['user_id' => $userId]);
+                    return ['code' => 0, 'msg' => '用户不存在'];
+                }
                 $user->points_balance += $points; // 当前积分余额增加
                 $user->month_earned += $points; // 本月获得积分增加
                 $user->total_earned += $points; // 累计获得积分增加
@@ -150,7 +155,7 @@ class PointsService
                     'total_points' => $user->points_balance
                 ];
 
-            } catch (DbException $e) {
+            } catch (\Throwable $e) {
                 // 回滚事务
                 Db::rollback();
                 Log::error("签到事务回滚", [
@@ -168,7 +173,7 @@ class PointsService
                 'error' => $e->getMessage()
             ]);
             return ['code' => 0, 'msg' => '系统错误，获取用户信息失败'];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("签到过程异常", [
                 'user_id' => $userId,
                 'error' => $e->getMessage(),
@@ -200,26 +205,29 @@ public function deductPoints($userId, $points, $reason = '积分扣除')
     }
 
     try {
-        // 验证用户是否存在并获取当前积分
-        $user = User::lock(true)->where('id', $userId)->find(); // 加锁防止并发问题
-        if (!$user) {
-            Log::error("积分扣除失败：用户不存在", ['user_id' => $userId]);
-            return ['code' => 0, 'msg' => '用户不存在'];
-        }
-
-        // 验证积分是否充足
-        if ($user->points_balance < $points) {
-            Log::error("积分扣除失败：积分不足", [
-                'user_id' => $userId,
-                'required' => $points,
-                'balance' => $user->points_balance
-            ]);
-            return ['code' => 0, 'msg' => '积分余额不足'];
-        }
-
-        // 开启事务
+        // 开启事务（必须先于行锁，确保 FOR UPDATE 在活跃事务内持锁）
         Db::startTrans();
+
         try {
+            // 验证用户是否存在并获取当前积分（事务内加锁读取最新余额）
+            $user = User::lock(true)->where('id', $userId)->find(); // 加锁防止并发问题
+            if (!$user) {
+                Db::rollback();
+                Log::error("积分扣除失败：用户不存在", ['user_id' => $userId]);
+                return ['code' => 0, 'msg' => '用户不存在'];
+            }
+
+            // 验证积分是否充足（使用事务内加锁读取的最新余额）
+            if ($user->points_balance < $points) {
+                Db::rollback();
+                Log::error("积分扣除失败：积分不足", [
+                    'user_id' => $userId,
+                    'required' => $points,
+                    'balance' => $user->points_balance
+                ]);
+                return ['code' => 0, 'msg' => '积分余额不足'];
+            }
+
             // 1. 更新用户积分余额
             $user->points_balance -= $points;
             $user->month_used += $points;
@@ -254,7 +262,7 @@ public function deductPoints($userId, $points, $reason = '积分扣除')
                 'remaining_points' => $user->points_balance
             ];
 
-        } catch (DbException $e) {
+        } catch (\Throwable $e) {
             // 回滚事务
             Db::rollback();
             Log::error("积分扣除事务回滚", [
@@ -279,7 +287,7 @@ public function deductPoints($userId, $points, $reason = '积分扣除')
  * @param string $reason 增加原因
  * @return array 操作结果
  */
-public function addPoints($userId, $points, $reason = '积分增加')
+public function addPoints($userId, $points, $reason = '积分增加', $refundKey = null)
 {
     // 验证参数
     if (!is_numeric($userId) || (int)$userId != $userId) {
@@ -295,16 +303,18 @@ public function addPoints($userId, $points, $reason = '积分增加')
     }
 
     try {
-        // 验证用户是否存在
-        $user = User::lock(true)->where('id', $userId)->find(); // 加锁防止并发问题
-        if (!$user) {
-            Log::error("积分增加失败：用户不存在", ['user_id' => $userId]);
-            return ['code' => 0, 'msg' => '用户不存在'];
-        }
-
-        // 开启事务
+        // 开启事务（必须先于行锁，确保 FOR UPDATE 在活跃事务内持锁）
         Db::startTrans();
+
         try {
+            // 验证用户是否存在（事务内加锁读取）
+            $user = User::lock(true)->where('id', $userId)->find(); // 加锁防止并发问题
+            if (!$user) {
+                Db::rollback();
+                Log::error("积分增加失败：用户不存在", ['user_id' => $userId]);
+                return ['code' => 0, 'msg' => '用户不存在'];
+            }
+
             // 1. 更新用户积分余额
             $user->points_balance += $points;
             $user->month_earned += $points;
@@ -320,6 +330,9 @@ public function addPoints($userId, $points, $reason = '积分增加')
             $pointsRecord->reason = $reason;
             $pointsRecord->type = self::SIGN_IN_TYPE; // 使用签到的"获得"类型
             $pointsRecord->create_time = date('Y-m-d H:i:s');
+            if ($refundKey !== null) {
+                $pointsRecord->refund_key = $refundKey;
+            }
 
             if (!$pointsRecord->save()) {
                 throw new DbException('积分增加记录保存失败');
@@ -339,7 +352,7 @@ public function addPoints($userId, $points, $reason = '积分增加')
                 'new_balance' => $user->points_balance
             ];
 
-        } catch (DbException $e) {
+        } catch (\Throwable $e) {
             // 回滚事务
             Db::rollback();
             Log::error("积分增加事务回滚", [

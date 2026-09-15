@@ -112,245 +112,206 @@ class Notify
 
     public function api_callback_bepusdt()
     {
-        $rawBody = (string)$this->request->getContent();
+        $rawBody = file_get_contents('php://input');
         $payload = json_decode($rawBody, true);
-        $service = new BepusdtService();
-
         if (!is_array($payload)) {
-            Log::error('bepusdt notify invalid json');
+            Log::warning('bepusdt callback invalid json', ['raw' => substr($rawBody, 0, 500)]);
             return response('fail', 400);
         }
 
-        if (!$service->verifyNotify($payload)) {
-            Log::error('bepusdt notify verify failed', [
-                'order_number' => (string)($payload['order_id'] ?? ''),
-                'status' => (string)($payload['status'] ?? ''),
-            ]);
+        $orderId = trim((string) ($payload['order_id'] ?? ''));
+        $providerStatus = (int) ($payload['status'] ?? 0);
+        $paidAmount = (float) ($payload['actual_amount'] ?? ($payload['amount'] ?? 0));
+
+        Log::info('bepusdt callback received', [
+            'order_id' => $orderId,
+            'provider_status' => $providerStatus,
+            'paid_amount' => $paidAmount,
+            'payload_keys' => implode(',', array_keys($payload)),
+        ]);
+
+        if ($orderId === '') {
+            Log::warning('bepusdt callback missing order_id');
             return response('fail', 400);
         }
 
-        $orderNumber = (string)($payload['order_id'] ?? '');
-        $status = (int)($payload['status'] ?? 0);
-        $paidAmount = (float)($payload['actual_amount'] ?? ($payload['amount'] ?? 0));
-
-        if ($orderNumber === '') {
-            Log::error('bepusdt notify missing order_id', [
-                'status' => (string)($payload['status'] ?? ''),
-            ]);
-            return response('fail', 400);
-        }
-
-        Db::startTrans();
+        // 签名验证（保留原有校验，不弱化）
         try {
-            $recharge = Recharge::where('order_number', $orderNumber)->lock(true)->find();
-            if (!$recharge) {
-                throw new Exception('充值单不存在');
-            }
-
-            $localStatus = (int)($recharge['status'] ?? 0);
-
-
-            if ($localStatus === 3) {
-
-
-                Db::commit();
-
-
-                return response('ok', 200);
-
-
-            }
-
-
-
-            if ($localStatus === 2) {
-
-
-                Log::warning('bepusdt notify rejected: recharge already cancelled, no fund change allowed', [
-
-
-                    'order_number' => $orderNumber,
-
-
-                    'gateway_status' => $status,
-
-
-                    'uid' => (int)($recharge['uid'] ?? 0),
-
-
-                    'amount' => (float)($recharge['amount'] ?? 0),
-
-
-                    'paid_amount' => $paidAmount,
-
-
+            $verifyResult = (new BepusdtService())->verifyNotify($payload);
+            if ($verifyResult !== true) {
+                Log::warning('bepusdt callback signature invalid', [
+                    'order_id' => $orderId,
+                    'verify_result' => is_string($verifyResult) ? $verifyResult : 'unknown',
                 ]);
+                return response('fail', 400);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('bepusdt callback signature verify exception', [
+                'order_id' => $orderId,
+                'error' => $e->getMessage(),
+            ]);
+            return response('fail', 400);
+        }
 
+        $settlementResult = null;
+        try {
+            Db::startTrans();
 
-                Db::commit();
-
-
-                return response('ok', 200);
-
-
+            $recharge = Recharge::where('order_number', $orderId)->lock(true)->find();
+            if (!$recharge) {
+                Log::warning('bepusdt callback recharge not found', ['order_id' => $orderId]);
+                Db::rollback();
+                return response('fail', 500);
             }
 
-            if ($status === 1) {
+            $localStatus = (int) ($recharge['status'] ?? 0);
+
+            // ===== Provider status=1: 待支付 =====
+            // 更新 gateway 信息，不入账（正确，用户尚未付款）
+            if ($providerStatus === 1) {
                 $recharge->gateway = 'bepusdt';
-                $recharge->gateway_status = '1';
                 $recharge->gateway_trade_id = $this->getGatewayTradeId($payload);
                 $recharge->gateway_token = $this->hashGatewayToken($payload['token'] ?? '');
-                $recharge->gateway_txid = $this->maskGatewayTxid($payload['block_transaction_id'] ?? '');
+                $recharge->gateway_status = '1';
+                $recharge->gateway_txid = $this->maskGatewayTxid($payload['transaction_id'] ?? ($payload['txid'] ?? ''));
                 $recharge->gateway_notify_payload = $this->buildGatewayNotifyPayload($payload);
                 $recharge->save();
-
                 Db::commit();
+                Log::info('bepusdt callback pending updated', ['order_id' => $orderId]);
                 return response('ok', 200);
             }
 
-            if ($status === 3) {
+            // ===== Provider status=3: 已过期 =====
+            // Provider 端订单过期，若本地仍 PENDING 则标记 EXPIRED
+            if ($providerStatus === 3) {
                 $recharge->gateway = 'bepusdt';
-                $recharge->gateway_status = '3';
                 $recharge->gateway_trade_id = $this->getGatewayTradeId($payload);
                 $recharge->gateway_token = $this->hashGatewayToken($payload['token'] ?? '');
-                $recharge->gateway_txid = $this->maskGatewayTxid($payload['block_transaction_id'] ?? '');
+                $recharge->gateway_status = '3';
+                $recharge->gateway_txid = $this->maskGatewayTxid($payload['transaction_id'] ?? ($payload['txid'] ?? ''));
                 $recharge->gateway_notify_payload = $this->buildGatewayNotifyPayload($payload);
-                if ((int)($recharge['status'] ?? 0) === 0) {
-                    $recharge->status = 2;
+                if ($localStatus === Recharge::STATUS_PENDING) {
+                    $recharge->status = Recharge::STATUS_EXPIRED;
                     $recharge->cancel_time = date('Y-m-d H:i:s');
+                    $recharge->cancel_source = Recharge::CANCEL_SOURCE_PROVIDER_EXPIRED;
+                    Log::info('bepusdt callback provider expired, marked local expired', [
+                        'order_id' => $orderId,
+                    ]);
                 }
                 $recharge->save();
-
                 Db::commit();
                 return response('ok', 200);
             }
 
-            if ($status !== 2) {
-
-
-                throw new Exception('未知回调状态: ' . $status);
-
-
-            }
-
-
-
-            if ($localStatus !== 0) {
-
-
-                Log::warning('bepusdt notify rejected: payment success but local recharge status is not pending', [
-
-
-                    'order_number' => $orderNumber,
-
-
-                    'local_status' => $localStatus,
-
-
-                    'uid' => (int)($recharge['uid'] ?? 0),
-
-
-                    'amount' => (float)($recharge['amount'] ?? 0),
-
-
+            // ===== Provider status=2: 支付成功（核心入账路径）=====
+            if ($providerStatus !== 2) {
+                Log::warning('bepusdt callback unknown provider status', [
+                    'order_id' => $orderId,
+                    'provider_status' => $providerStatus,
                 ]);
-
-
-                Db::commit();
-
-
-                return response('ok', 200);
-
-
+                Db::rollback();
+                return response('fail', 500);
             }
 
-
-
-            $amount = round((float)($recharge['amount'] ?? 0), 2);
+            // BEpusdt 金额验证：USDT 计价，paidAmount >= amount（少付拒绝）
+            $amount = round((float) ($recharge['amount'] ?? 0), 2);
             if ($amount <= 0) {
-                throw new Exception('充值金额异常');
+                Log::error('bepusdt callback invalid local amount', [
+                    'order_id' => $orderId,
+                    'amount' => $amount,
+                ]);
+                Db::rollback();
+                return response('fail', 500);
             }
-
             if ($paidAmount < $amount) {
-                throw new Exception('回调金额不足');
+                Log::error('bepusdt callback amount insufficient', [
+                    'order_id' => $orderId,
+                    'paid_amount' => $paidAmount,
+                    'local_amount' => $amount,
+                ]);
+                Db::rollback();
+                return response('fail', 500);
             }
 
-            $user = $this->directLockUser((int)($recharge['uid'] ?? 0));
-            if (!$user) {
-                throw new Exception('用户不存在');
-            }
-
-            $balanceBefore = (float)($user['balance'] ?? 0);
-
-            $recharge->gateway = 'bepusdt';
-            $recharge->status = 3;
-            $recharge->submit_time = $recharge['submit_time'] ?: date('Y-m-d H:i:s');
-            $recharge->paid_time = date('Y-m-d H:i:s');
-            $recharge->complete_time = date('Y-m-d H:i:s');
-            $recharge->gateway_trade_id = $this->getGatewayTradeId($payload);
-            $recharge->gateway_token = $this->hashGatewayToken($payload['token'] ?? '');
-            $recharge->gateway_status = (string)$status;
-            $recharge->gateway_actual_amount = $paidAmount;
-            $recharge->gateway_txid = $this->maskGatewayTxid($payload['block_transaction_id'] ?? '');
-            $recharge->gateway_notify_payload = $this->buildGatewayNotifyPayload($payload);
-            $recharge->save();
-
-            $ledgerResult = (new UserFundLedgerService())->changeLockedUserWallet(
-                $user,
-                UserFundLedgerService::WALLET_BALANCE,
-                $amount,
+            // 调用统一 Settlement Boundary
+            // PENDING(0) 和 EXPIRED(2, cancel_source 允许自动恢复) 都会被 settle
+            // PAID(3) → ALREADY_PAID 幂等
+            // 其他状态 → NOT_SETTLEABLE（rollback + 返回 fail，不静默丢单）
+            $settlement = (new \app\service\RechargeSettlementService())->settleLocked(
+                $recharge,
+                'notify_bepusdt',
                 [
-                    'biz_type' => 'recharge',
-                    'biz_id' => (int)($recharge['id'] ?? 0),
-                    'biz_no' => (string)($recharge['order_number'] ?? ''),
-                    'order_number' => (string)($recharge['order_number'] ?? ''),
-                    'change_type' => 'recharge_paid',
-                    'operator_type' => 'system',
-                    'operator_id' => 0,
-                    'status' => 'done',
-                    'request_no' => 'recharge_paid:' . (string)($recharge['order_number'] ?? ''),
-                    'remark' => '链上回调充值到账',
-                    'idempotent' => true,
-                    'extra' => [
-                        'source' => 'notify_bepusdt_paid',
-                        'gateway' => 'bepusdt',
-                    ],
+                    'gateway' => 'bepusdt',
+                    'gateway_trade_id' => $this->getGatewayTradeId($payload),
+                    'gateway_status' => '2',
+                    'gateway_actual_amount' => $paidAmount > 0 ? $paidAmount : null,
+                    'gateway_txid' => $this->maskGatewayTxid($payload['transaction_id'] ?? ($payload['txid'] ?? '')),
+                    'gateway_notify_payload' => $this->buildGatewayNotifyPayload($payload),
                 ]
             );
-            $walletSnapshot = (array)($ledgerResult['wallet_snapshot'] ?? []);
-            $balanceAfter = array_key_exists('balance', $walletSnapshot)
-                ? round((float)($walletSnapshot['balance'] ?? 0), 2)
-                : round((float)($user['balance'] ?? ($balanceBefore + $amount)), 2);
-            $this->directWriteBalanceLog([
-                'uid' => (int)($user['id'] ?? 0),
-                'scene' => 'recharge_paid',
-                'amount' => $amount,
-                'balance_before' => $balanceBefore,
-                'balance_after' => $balanceAfter,
-                'biz_id' => (int)($recharge['id'] ?? 0),
-                'order_number' => (string)($recharge['order_number'] ?? ''),
-                'remark' => '链上回调充值到账',
-            ]);
 
-            $rechargeSnapshot = $recharge->toArray();
-            Db::commit();
-            try {
-                (new OrderTelegramNotifier())->notifyWalletRechargePaid($rechargeSnapshot);
-            } catch (\Throwable $notifyException) {
-                Log::error('wallet recharge notify failed', [
-                    'recharge_id' => (int)($rechargeSnapshot['id'] ?? 0),
-                    'order_no' => (string)($rechargeSnapshot['order_number'] ?? ''),
-                    'uid' => (int)($rechargeSnapshot['uid'] ?? 0),
-                    'action' => 'wallet_recharge_paid_notify',
-                    'error_message' => $notifyException->getMessage(),
+            $settlementResult = $settlement;
+
+            // ACK 语义与业务处理分离
+            if (!(new \app\service\RechargeSettlementService())->shouldAckSuccess($settlement['result'])) {
+                Log::warning('bepusdt callback settlement not ackable', [
+                    'order_id' => $orderId,
+                    'settlement_result' => $settlement['result'],
+                    'settlement_message' => $settlement['message'] ?? '',
+                    'local_status' => $localStatus,
+                    'cancel_source' => (string) ($recharge['cancel_source'] ?? ''),
+                ]);
+                Db::rollback();
+                return response('fail', 500);
+            }
+
+            // 仅在新入账成功时写展示用 balance_log
+            if ($settlement['result'] === \app\service\RechargeSettlementService::RESULT_SETTLED) {
+                $this->directWriteBalanceLog([
+                    'uid' => (int) ($recharge['uid'] ?? 0),
+                    'scene' => 'recharge_paid',
+                    'amount' => $amount,
+                    'balance_before' => (float) ($settlement['balance_before'] ?? 0),
+                    'balance_after' => (float) ($settlement['balance_after'] ?? 0),
+                    'biz_id' => (int) ($recharge['id'] ?? 0),
+                    'order_number' => (string) ($recharge['order_number'] ?? ''),
+                    'remark' => 'bepusdt recharge paid',
+                    'operator_id' => 0,
                 ]);
             }
+
+            Db::commit();
+
+            // Telegram 通知在事务外发送（网络调用不应阻塞 DB 事务）
+            if ($settlement['result'] === \app\service\RechargeSettlementService::RESULT_SETTLED) {
+                try {
+                    (new \app\service\telegram\OrderTelegramNotifier())->notifyWalletRechargePaid(
+                        (int) ($recharge['uid'] ?? 0),
+                        (string) ($recharge['order_number'] ?? ''),
+                        $amount
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('bepusdt callback telegram notify failed', [
+                        'order_id' => $orderId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            Log::info('bepusdt callback processed', [
+                'order_id' => $orderId,
+                'settlement_result' => $settlement['result'],
+                'amount' => $amount,
+            ]);
+
             return response('ok', 200);
+
         } catch (\Throwable $e) {
             Db::rollback();
-            Log::error('bepusdt notify error: ' . $e->getMessage(), [
-                'order_number' => $orderNumber,
-                'status' => (string)($payload['status'] ?? ''),
+            Log::error('bepusdt callback exception', [
+                'order_id' => $orderId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
             return response('fail', 500);
         }

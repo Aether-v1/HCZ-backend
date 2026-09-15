@@ -3,6 +3,9 @@
 use think\middleware\SessionInit;
 
 return [
+    // R1.4 P2-01 修复：RequestIdMiddleware 必须在实际全局中间件链第一个位置
+    // （此前仅注册在 config/middleware.php，但 ThinkPHP 8 实际只加载 app/middleware.php）
+     \app\middleware\RequestIdMiddleware::class,
     // 全局请求缓存
     // \think\middleware\CheckRequestCache::class,
     // 多语言加载

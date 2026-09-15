@@ -372,7 +372,7 @@ function getIpCity(string $ip = '127.0.0.1', $province = null): string
             return $hello[1] . ' - ' . $hello[2];
         }
         return $hello[1];
-    } catch (Exception $e) {
+    } catch (\Throwable $e) {
         return $e->getMessage();
     }
 }
@@ -491,7 +491,7 @@ function order_display_received_cny($order)
     if ($amountReceived > 0) {
         return $amountReceived;
     }
-    if ((int)($order['status'] ?? 0) === 2) {
+    if ((int)($order['status'] ?? 0) === \app\model\Order::STATUS_COMPLETED) {
         return round((float)($order['amount_money'] ?? 0), 2);
     }
     return 0.00;

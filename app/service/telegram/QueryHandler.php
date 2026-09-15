@@ -3,6 +3,7 @@ namespace app\service\telegram;
 
 use app\service\TelegramService;
 use app\service\PointsService;
+use app\service\RefundIntentService;
 use think\facade\Log;
 use think\facade\Cache;
 use think\facade\Queue;
@@ -148,7 +149,7 @@ class QueryHandler
             
             // 尝试返还积分
             if (isset($userId, $checkPoints)) {
-                \app\common\library\TelegramHelper::refundPoints($userId, $checkPoints, $phoneNumber);
+                \app\common\library\TelegramHelper::refundPoints($userId, $checkPoints, $phoneNumber, $messageId);
             }
             
             $errorMsg = "话费查询失败：" . $e->getMessage() . "，已为您返还积分。";
@@ -240,7 +241,7 @@ class QueryHandler
             
             // 尝试返还积分
             if (isset($userId, $checkPoints)) {
-                \app\common\library\TelegramHelper::refundPoints($userId, $checkPoints, $accountNumber);
+                \app\common\library\TelegramHelper::refundPoints($userId, $checkPoints, $accountNumber, $messageId);
             }
             
             $errorMsg = "电费查询失败：" . $e->getMessage() . "，已为您返还积分。";
@@ -617,51 +618,26 @@ class QueryHandler
             return ['code' => 1, 'msg' => '无需返还积分'];
         }
 
+        // INFO-022-A: 使用 DB Outbox 持久化返还义务，crash 后 Worker 可恢复
         $refundKey = $this->getBatchRefundCacheKey($traceId);
-        $ttl = (int) $this->telegramService->getConstant('batch_trace_ttl', 172800);
 
         try {
-            $reserved = Cache::store('redis')->handler()->set($refundKey, (string) time(), ['nx', 'ex' => $ttl]);
-            if (!$reserved) {
-                Log::warning('批量查询积分返还已执行，跳过重复返还', [
-                    'user_id' => $userId,
-                    'trace_id' => $traceId,
-                    'points' => $points,
-                ]);
-                return ['code' => 1, 'msg' => '积分已返还'];
-            }
-        } catch (\Throwable $e) {
-            Log::error('批量查询积分返还幂等锁失败', [
-                'user_id' => $userId,
-                'trace_id' => $traceId,
-                'points' => $points,
-                'error' => $e->getMessage(),
-            ]);
-            return ['code' => 0, 'msg' => '积分返还幂等校验失败'];
-        }
+            $intentService = new RefundIntentService();
+            $result = $intentService->createAndProcess($refundKey, $userId, $points, $reason);
 
-        try {
-            $result = $pointsService->addPoints($userId, $points, $reason);
-            if (($result['code'] ?? 0) != 1) {
-                Log::error('批量查询积分返还失败', [
-                    'user_id' => $userId,
-                    'trace_id' => $traceId,
-                    'points' => $points,
-                    'result_message' => $result['msg'] ?? null,
+            if (($result['code'] ?? 0) == 1) {
+                // 返还成功后记录 batch trace（与原行为一致）
+                $this->storeBatchTrace($traceId, [
+                    'status' => 'refunded',
+                    'refund_points' => $points,
+                    'refund_reason' => $reason,
+                    'refunded_at' => time(),
                 ]);
-                return $result;
             }
-
-            $this->storeBatchTrace($traceId, [
-                'status' => 'refunded',
-                'refund_points' => $points,
-                'refund_reason' => $reason,
-                'refunded_at' => time(),
-            ]);
 
             return $result;
         } catch (\Throwable $e) {
-            Log::error('批量查询积分返还异常', [
+            Log::error('批量查询积分返还 Outbox 处理异常', [
                 'user_id' => $userId,
                 'trace_id' => $traceId,
                 'points' => $points,

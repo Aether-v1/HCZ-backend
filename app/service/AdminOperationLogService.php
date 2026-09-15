@@ -44,6 +44,61 @@ class AdminOperationLogService
         }
     }
 
+    /**
+     * 关键审计记录（失败时抛出异常，用于事务原子性场景）
+     *
+     * 与 record() 的区别：
+     * - record() = best-effort，失败时只记日志不抛出（适用于普通后台操作）
+     * - recordCritical() = atomic，失败时抛出异常（适用于资金结算等需要事务回滚的场景）
+     *
+     * 调用方应将本方法置于 Db::transaction 内，审计失败时异常向外传播触发 rollback。
+     * 敏感字段（password/TOTP/secret/token）绝不进入 audit payload，沿用现有脱敏规则。
+     *
+     * @param string $action
+     * @param string $module
+     * @param string $content
+     * @param array $options
+     * @return void
+     * @throws \RuntimeException 审计写入失败时抛出，保留原始异常作为 previous
+     */
+    public function recordCritical(string $action, string $module, string $content, array $options = []): void
+    {
+        try {
+            // 优先从 options 获取 admin 身份（调用方已传入时不触发 Session 初始化）
+            $adminId = (int)($options['admin_id'] ?? 0);
+            $adminUsername = (string)($options['admin_username'] ?? '');
+
+            // 仅当 admin_id 未从 options 传入时，才从 Session 获取完整身份
+            if ($adminId <= 0) {
+                $admin = $options['admin'] ?? Session::get('admin', []);
+                $adminId = (int)($admin['id'] ?? 0);
+                if ($adminUsername === '') {
+                    $adminUsername = (string)($admin['account'] ?? ($admin['name'] ?? ''));
+                }
+            }
+
+            AdminOperationLog::create([
+                'admin_id' => $adminId,
+                'admin_username' => $this->limit($adminUsername, 100),
+                'action' => $this->limit(trim($action), 100),
+                'module' => $this->limit(trim($module), 100),
+                'target_id' => isset($options['target_id']) && $options['target_id'] !== '' ? (int)$options['target_id'] : null,
+                'target_type' => $this->nullOrLimit($options['target_type'] ?? null, 100),
+                'content' => $this->sanitizeRecordContent($content !== '' ? $content : $action, trim($module)),
+                'ip' => $this->limit((string)($options['ip'] ?? $this->request->ip()), 64),
+                'user_agent' => $this->limit((string)($options['user_agent'] ?? $this->request->header('user-agent', '')), 255),
+                'create_time' => date('Y-m-d H:i:s'),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('critical admin operation log write error: ' . $e->getMessage(), [
+                'action' => $action,
+                'module' => $module,
+            ]);
+            // 关键审计：不吞异常，向外传播触发事务回滚
+            throw new \RuntimeException('Critical audit log write failed: ' . $e->getMessage(), 0, $e);
+        }
+    }
+
     public function summarizeChanges(array $changedFields, array $labels = []): string
     {
         $parts = [];

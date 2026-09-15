@@ -2,8 +2,10 @@
 namespace app\common\library;
 
 use app\service\PointsService;
+use app\service\RefundIntentService;
 use think\facade\Config;
 use think\facade\Log;
+use think\facade\Cache;
 use app\service\TelegramService;
 
 class TelegramHelper
@@ -519,36 +521,41 @@ public static function validateTelegramRequest()
     /**
      * 返还积分
      */
-    public static function refundPoints($userId, $points, $phoneNumber)
+    public static function refundPoints($userId, $points, $phoneNumber, $messageId = null)
     {
-        try {
-            $pointsService = new PointsService();
-            
-            // 第一次尝试
-            $addResult = $pointsService->addPoints(
-                $userId, 
-                $points, 
-                "查询手机号{$phoneNumber}话费失败，返还积分"
-            );
-            
-            if ($addResult['code'] == 1) {
-                return true;
+        // INFO-022-A: 单查返还使用 DB Outbox 持久化返还义务，crash 后 Worker 可恢复
+        // INFO-019-A: 幂等键 message_id + phone/account
+        if ($messageId !== null && $messageId !== '') {
+            $refundKey = "tg:single:refund:{$messageId}:{$phoneNumber}";
+            try {
+                $intentService = new RefundIntentService();
+                $result = $intentService->createAndProcess(
+                    $refundKey,
+                    (int)$userId,
+                    (int)$points,
+                    "查询手机号{$phoneNumber}话费失败，返还积分"
+                );
+                return ($result['code'] ?? 0) == 1;
+            } catch (\Throwable $e) {
+                Log::critical('单查积分返还 Outbox 处理失败', [
+                    'message_id' => $messageId,
+                    'phone' => $phoneNumber,
+                    'user_id' => $userId,
+                    'points' => $points,
+                    'error' => $e->getMessage(),
+                ]);
+                return false;
             }
-            
-            // 第二次尝试
-            usleep(500000);
-            $addResult = $pointsService->addPoints(
-                $userId, 
-                $points, 
-                "查询手机号{$phoneNumber}话费失败，二次返还积分"
-            );
-            
-            return $addResult['code'] == 1;
-            
-        } catch (\Exception $e) {
-            Log::critical('积分返还失败: ' . $e->getMessage());
-            return false;
         }
+
+        // F15: 无 messageId 无法建立幂等身份。不能静默直接 addPoints（会绕过 Outbox，
+        // 且在 webhook 重放时可能重复返还）。fail-closed：明确失败 + critical 日志，由运营介入。
+        Log::critical('单查积分返还缺少messageId，拒绝静默直接返还（需人工处理）', [
+            'user_id' => $userId,
+            'points' => $points,
+            'phone' => $phoneNumber,
+        ]);
+        return false;
     }
     
     /**

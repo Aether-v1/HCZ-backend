@@ -57,7 +57,7 @@ class C2CFundSafetyTest extends DbTestCase
             'nickname' => '测试卖家',
             'invite_code' => 'SEL' . substr(uniqid(), -6),
             'balance' => 1000.00,
-            'frozen_amount' => 0,
+            'frozen_amount' => 1000.00,
             'status' => 1,
         ])->id;
 
@@ -69,7 +69,7 @@ class C2CFundSafetyTest extends DbTestCase
             'nickname' => '测试买家',
             'invite_code' => 'BUY' . substr(uniqid(), -6),
             'balance' => 1000.00,
-            'frozen_amount' => 0,
+            'frozen_amount' => 1000.00,
             'status' => 1,
         ])->id;
 
@@ -186,7 +186,7 @@ class C2CFundSafetyTest extends DbTestCase
         $service = new TransactionOrderService();
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('挂单剩余数量不足');
-        $service->releaseBySeller((int)$order->id, $this->sellerUid);
+        $service->releaseBySeller($this->sellerUid, (int)$order->id);
     }
 
     /**
@@ -216,7 +216,7 @@ class C2CFundSafetyTest extends DbTestCase
         $service = new TransactionOrderService();
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('手续费异常');
-        $service->releaseBySeller((int)$order->id, $this->sellerUid);
+        $service->releaseBySeller($this->sellerUid, (int)$order->id);
     }
 
     /**
@@ -246,7 +246,7 @@ class C2CFundSafetyTest extends DbTestCase
         $service = new TransactionOrderService();
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('手续费异常');
-        $service->releaseBySeller((int)$order->id, $this->sellerUid);
+        $service->releaseBySeller($this->sellerUid, (int)$order->id);
     }
 
     /**
@@ -276,7 +276,7 @@ class C2CFundSafetyTest extends DbTestCase
         $service = new TransactionOrderService();
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('金额不匹配');
-        $service->releaseBySeller((int)$order->id, $this->sellerUid);
+        $service->releaseBySeller($this->sellerUid, (int)$order->id);
     }
 
     /**
@@ -305,10 +305,10 @@ class C2CFundSafetyTest extends DbTestCase
 
         $service = new TransactionOrderService();
         // 第一次放币应成功
-        $service->releaseBySeller((int)$order->id, $this->sellerUid);
+        $service->releaseBySeller($this->sellerUid, (int)$order->id);
 
         // 第二次放币应失败（status 已变为 3）
         $this->expectException(\Exception::class);
-        $service->releaseBySeller((int)$order->id, $this->sellerUid);
+        $service->releaseBySeller($this->sellerUid, (int)$order->id);
     }
 }

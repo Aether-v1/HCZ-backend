@@ -44,3 +44,26 @@ composer.phar
 
 # PHPUnit
 .phpunit.result.cache
+
+# Temporary / diagnostic scripts
+_*.php
+hcz_r16b_*.php
+fix_schema_*.php
+check_cron_*.php
+vps_migration*.php
+
+# VPS / deployment debug scripts
+vps_*.sh
+bt_*.sh
+local_seed_check.sh
+export_seed.bat
+
+# SQL data / seed files
+*.sql
+
+# Secure keys / local key material
+/secure-keys/
+
+# Legacy / mock scripts
+hcz_p6_acceptance.sh
+server.js

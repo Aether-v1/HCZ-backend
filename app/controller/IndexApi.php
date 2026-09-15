@@ -773,7 +773,7 @@ class IndexApi
                 'expire' => $csrfConfig['expire'],
                 'token_name' => $csrfConfig['token_name']
             ]);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             $this->logApiException('get_csrf_token', $e);
             return show(500, 'error', '系统繁忙，请稍后再试');
         }
@@ -2160,7 +2160,7 @@ private function apiFromLegacyResult(mixed $result, string $successMessage = '�
             if (!$order) {
                 throw new Exception('订单不存在');
             }
-            if ((int)$order['status'] !== 0) {
+            if ((int)$order['status'] !== \app\model\Order::STATUS_PENDING) {
                 throw new Exception('当前订单不可取消');
             }
             $user = $this->directLockUser($uid);
@@ -2211,7 +2211,7 @@ private function apiFromLegacyResult(mixed $result, string $successMessage = '�
                     'operator_id' => 0,
                 ]);
             }
-            $order->status = 3;
+            $order->status = \app\model\Order::STATUS_CANCELLED;
             $order->save();
             $orderSnapshot = $order->toArray();
             Db::commit();

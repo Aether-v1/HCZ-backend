@@ -194,8 +194,12 @@ Route::group(getConfig('backstage_entrance'), static function () {
     Route::get('login', 'Admin/login');
     // 后台登录验证
     Route::post('login_check', 'AdminApi/login_check');
+    // B10-32: NEW route - Auth Controller 独立入口（行为等价，admin.Auth/login_check，action 名保持 login_check 兼容 AdminAuth 白名单）
+    Route::post('admin/auth/login_check', 'admin.Auth/login_check');
     // 防被动登出：后台退出改为 POST，避免第三方页面通过 GET 链接或图片触发退出。
     Route::post('logout', 'AdminApi/logout');
+    // B10-32: NEW route - Auth Controller 独立入口（行为等价，admin.Auth/logout）
+    Route::post('admin/auth/logout', 'admin.Auth/logout');
     // 系统设置
     Route::get('setting', 'Admin/setting');
     // 系统设置提交
@@ -206,6 +210,8 @@ Route::group(getConfig('backstage_entrance'), static function () {
     Route::post('account_post/:action', 'AdminApi/account_post');
     // 管理员2FA请求
     Route::post('twofa_post/:action', 'AdminApi/twofa_post');
+    // B10-32: NEW route - Auth Controller 独立入口（行为等价，admin.Auth/twofa_post）
+    Route::post('admin/auth/twofa/:action', 'admin.Auth/twofa_post');
     // 私有导出下载接口
     Route::get('export_download', 'AdminApi/export_download');
 
@@ -280,7 +286,6 @@ Route::group(getConfig('backstage_entrance'), static function () {
     Route::get('points_exchange_orders_json', 'AdminApi/points_exchange_orders_json');
     Route::post('points_exchange_order_post/:action', 'AdminApi/points_exchange_order_post');
     // 积分管理操作
-    Route::post('points_management_post/:action', 'AdminApi/points_management_post');
     Route::post('points_post/:action', 'AdminApi/points_post');
     Route::get('points_records_json', 'AdminApi/points_records_json');
     // 积分管理列表
@@ -351,4 +356,42 @@ Route::group(getConfig('backstage_entrance'), static function () {
     Route::post('admin_footer/:action', 'AdminApi/admin_footer');
     // 图片上传
     Route::post('upload_post', 'AdminApi/upload_post');
+
+    // B04 域控制器骨架（薄转发到 AdminApi，行为等价；旧 AdminApi 路由保留）
+    Route::post('admin/slide_post/:action', 'admin.Slide/slide_post');
+    Route::post('admin/bank_card_post/:action', 'admin.BankCard/bank_card_post');
+    Route::post('admin/account_post/:action', 'admin.Account/account_post');
+    Route::post('admin/upload_post', 'admin.Upload/upload_post');
+    Route::post('admin/setting_post/:action', 'admin.Setting/setting_post');
+    Route::post('admin/admin_footer/:action', 'admin.Setting/admin_footer');
+    Route::get('admin/export_download', 'admin.Export/export_download');
+
+    // B06 Message 域控制器（承载真实业务；旧 AdminApi 路由保留，双路并存）
+    Route::post('admin/message/send', 'admin.Message/message_send');
+    Route::get('admin/message/detail', 'admin.Message/message_detail');
+    Route::post('admin/message/pin', 'admin.Message/message_pin');
+    Route::post('admin/message/delete', 'admin.Message/message_delete');
+Route::post('admin/product/:action', 'admin.Product/product_post');
+Route::post('admin/transaction-order/:action', 'admin.TransactionOrder/transaction_order_post');
+Route::post('admin/transaction-product/:action', 'admin.TransactionProduct/transaction_product_post');
+// B08 User 域控制器（user_post 非资金 action；balance 保持 AdminApi Frozen，不进入本控制器）
+Route::post('admin/user/:action', 'admin.User/user_post');
+// B09 Admin 域控制器（admin_post 非资金 action add_modify/info/del；旧 admin_post 路由保留，双路并存）
+Route::post('admin/admin/:action', 'admin.Admin/admin_post');
+// B10-05 Points 域只读查询（points_records_json 迁移；旧 route 保留，双路并存）
+Route::get('admin/points-records', 'admin.PointsRecords/points_records_json');
+// B10-21 Points 域只读查询（points_exchange_orders_json 迁移；旧 route 保留，双路并存）
+Route::get('admin/points-exchange-orders', 'admin.PointsExchangeOrders/points_exchange_orders_json');
+    // A5.2a Admin Recovery API（非资金入口：list/detail/create/approve/reject）
+    // settle endpoint 在 A5.2b 才允许加入
+    // 部署修正（2026-09-10）：去掉冗余 'admin/' 前缀 —— 在 backstage_entrance group 内注册
+    // 'admin/recovery/*' 会与 Route::get('admin', ...) 页面路由冲突（route_complete_match=false
+    // 前缀匹配吞掉后续路径），导致 Recovery 被 Admin::admin() 截获而不可达；
+    // 实际路径 = {backstage_entrance}/recovery/*（如 /admin/recovery/list）。
+    Route::get('recovery/list', 'admin.Recovery/list');
+    Route::get('recovery/detail', 'admin.Recovery/detail');
+    Route::post('recovery/create', 'admin.Recovery/create');
+    Route::post('recovery/approve', 'admin.Recovery/approve');
+    Route::post('recovery/reject', 'admin.Recovery/reject');
+    Route::post('recovery/settle', 'admin.Recovery/settle');
 });

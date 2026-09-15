@@ -210,7 +210,6 @@ trait PointsActions
         }
 
         try {
-            $this->ensurePointsTaskClaimTable();
             $task = $this->buildPointsTask($definitions[$taskKey], $userId, $today);
             if (empty($task['enabled'])) {
                 return show(400, 'error', '任务已停用');
@@ -362,7 +361,6 @@ trait PointsActions
 
     protected function buildPointsTasks(int $userId, string $today): array
     {
-        $this->ensurePointsTaskClaimTable();
         return array_map(function ($definition) use ($userId, $today) {
             return $this->buildPointsTask($definition, $userId, $today);
         }, $this->getPointsTaskDefinitions());
@@ -447,34 +445,6 @@ trait PointsActions
         return 'once:' . $task['key'];
     }
 
-    protected function ensurePointsTaskClaimTable(): void
-    {
-        static $ensured = false;
-        if ($ensured) {
-            return;
-        }
-
-        $table = Db::name('points_task_claim')->getTable();
-        Db::execute("CREATE TABLE IF NOT EXISTS `{$table}` (
-            `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
-            `uid` int(11) unsigned NOT NULL DEFAULT '0',
-            `task_key` varchar(64) NOT NULL DEFAULT '',
-            `claim_key` varchar(128) NOT NULL DEFAULT '',
-            `task_type` varchar(16) NOT NULL DEFAULT '',
-            `task_date` date DEFAULT NULL,
-            `points` int(11) NOT NULL DEFAULT '0',
-            `status` tinyint(1) NOT NULL DEFAULT '1',
-            `create_time` datetime DEFAULT NULL,
-            `update_time` datetime DEFAULT NULL,
-            PRIMARY KEY (`id`),
-            UNIQUE KEY `uniq_uid_claim_key` (`uid`,`claim_key`),
-            KEY `idx_uid_task` (`uid`,`task_key`),
-            KEY `idx_task_date` (`task_key`,`task_date`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-        $ensured = true;
-    }
-
     protected function isDuplicateClaimException(\Throwable $e): bool
     {
         return str_contains($e->getMessage(), 'Duplicate entry')
@@ -522,9 +492,7 @@ trait PointsActions
         $configStock    = max(0, (int)($item['stock'] ?? 0));
 
         try {
-            $this->ensurePointsExchangeOrderTable();
-
-            // 库存校验（计算已用库存，0 = 不限）
+                        // 库存校验（计算已用库存，0 = 不限）
             if ($configStock > 0) {
                 $usedCount = Db::name('points_exchange_order')
                     ->where('item_id', $itemId)
@@ -616,34 +584,6 @@ trait PointsActions
             ]);
             return show(500, 'error', $e->getMessage() ?: '兑换失败，请稍后重试');
         }
-    }
-
-    protected function ensurePointsExchangeOrderTable(): void
-    {
-        static $ensuredExchange = false;
-        if ($ensuredExchange) {
-            return;
-        }
-
-        $table = Db::name('points_exchange_order')->getTable();
-        Db::execute("CREATE TABLE IF NOT EXISTS `{$table}` (
-            `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
-            `uid` int(11) unsigned NOT NULL DEFAULT '0',
-            `item_id` varchar(64) NOT NULL DEFAULT '',
-            `item_type` varchar(16) NOT NULL DEFAULT 'coupon',
-            `item_title` varchar(128) NOT NULL DEFAULT '',
-            `points` int(11) NOT NULL DEFAULT '0',
-            `status` tinyint(1) NOT NULL DEFAULT '0' COMMENT '0=待处理 1=已发放 2=已拒绝',
-            `remark` varchar(256) NOT NULL DEFAULT '',
-            `create_time` datetime DEFAULT NULL,
-            `update_time` datetime DEFAULT NULL,
-            PRIMARY KEY (`id`),
-            KEY `idx_uid` (`uid`),
-            KEY `idx_item_status` (`item_id`,`status`),
-            KEY `idx_status` (`status`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-        $ensuredExchange = true;
     }
 
     protected function getUserCheckinInfo(int $userId): array

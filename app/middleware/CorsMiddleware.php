@@ -27,10 +27,12 @@ class CorsMiddleware
     protected string $allowMethods = 'GET, POST, PUT, DELETE, OPTIONS';
 
     /** 允许的请求头（必须包含前端实际发送的 X-CSRF-Token、Cache-Control、Pragma） */
-    protected string $allowHeaders = 'Content-Type, X-Requested-With, X-CSRF-Token, Cache-Control, Pragma';
+    protected string $allowHeaders = 'Content-Type, X-Requested-With, X-CSRF-Token, Cache-Control, Pragma, Authorization, X-Request-ID';
 
     /** 允许携带凭证 */
     protected string $allowCredentials = 'true';
+
+    protected string $exposeHeaders = 'X-Request-ID';
 
     /** 预检结果缓存时间（秒） */
     protected string $maxAge = '86400';
@@ -61,6 +63,7 @@ class CorsMiddleware
             'Access-Control-Allow-Credentials' => $this->allowCredentials,
             'Access-Control-Allow-Methods'     => $this->allowMethods,
             'Access-Control-Allow-Headers'     => $this->allowHeaders,
+            'Access-Control-Expose-Headers'   => $this->exposeHeaders,
             'Access-Control-Max-Age'           => $this->maxAge,
         ]);
 

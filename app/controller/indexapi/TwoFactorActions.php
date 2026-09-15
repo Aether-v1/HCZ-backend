@@ -199,7 +199,7 @@ trait TwoFactorActions
                 'has_recovery_codes' => count($this->getRecoveryCodeHashes((string)$user->twofa_recovery_codes)) > 0 ? 1 : 0,
                 'recovery_code_count' => count($this->getRecoveryCodeHashes((string)$user->twofa_recovery_codes)),
             ]);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             $this->logApiException('twofa_status', $e);
             return show(500, 'error', '系统繁忙，请稍后再试');
         }

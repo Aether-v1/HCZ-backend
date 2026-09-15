@@ -18,7 +18,7 @@ class SubstationSettlementService
             if (!$order) {
                 throw new Exception('订单不存在');
             }
-            if ((int)($order['status'] ?? 0) !== 2) {
+            if ((int)($order['status'] ?? 0) !== \app\model\Order::STATUS_COMPLETED) {
                 throw new Exception('订单未完成，不能结算分站收益');
             }
             if ((int)($order['substation_income_status'] ?? 0) === 1) {

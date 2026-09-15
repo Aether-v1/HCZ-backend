@@ -63,7 +63,7 @@ class Index
     public function index()
     {
         
-        View::assign('Product_list', Product::where('status', 1)->where('type', 1)->order('sort', 'desc')->select());
+        View::assign('Product_list', Product::where('status', Product::STATUS_ENABLED)->where('type', 1)->order('sort', 'desc')->select());
 
         View::assign('b_product', Product::find(getConfig('a_recommend_id')));
         View::assign('a_product', Product::find(getConfig('b_recommend_id')));

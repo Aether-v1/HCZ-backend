@@ -92,7 +92,7 @@ class TimerManager
      */
     public function handleListTimersCommand($chatId)
     {
-        $timers = $this->getAllTimers($chatId);
+        $timers = $this->getAllTimers($chatId, true);
         
         if (empty($timers)) {
             $this->telegramService->sendBasicReply($chatId, "当前没有定时任务");
@@ -106,7 +106,8 @@ class TimerManager
                 ? $timer['time'] 
                 : date('Y-m-d H:i', $timer['execute_time']);
             
-            $message .= "ID: {$timer['id']}\n";
+            $statusText = ($timer['status'] ?? 'active') === 'failed' ? ' [failed]' : '';
+            $message .= "ID: {$timer['id']}{$statusText}\n";
             $message .= "类型: {$typeText}\n";
             $message .= "时间: {$timeText}\n";
             $message .= "消息: {$timer['message']}\n\n";
@@ -136,40 +137,134 @@ class TimerManager
     }
     
     /**
-     * 处理定时消息发送
+     * 处理定时消息发送（B03-T：per-timer Redis claim + send 返回值检查 + retry/backoff）
+     *
+     * Delivery Guarantee: AT-LEAST-ONCE（Redis claim 仅并发控制，不保证 exactly-once）
      */
     public function processTimers()
     {
         try {
             $timers = $this->getAllTimers();
             $currentTime = time();
-            
+            $redis = Cache::store('redis')->handler();
+
             foreach ($timers as $timer) {
-                if ($timer['execute_time'] <= $currentTime) {
-                    // 发送定时消息
-                    $this->telegramService->sendBasicReply($timer['chat_id'], $timer['message']);
-                    
-                    $timerKey = $this->telegramService->getCachePrefix() . "timer:{$timer['id']}";
-                    
-                    // 处理一次性任务 - 删除
-                    if ($timer['type'] === $this->telegramService->getConstant('timer_type_once', 'once')) {
-                        $this->deleteTimer($timer['chat_id'], $timer['id']);
+                if ($timer['execute_time'] > $currentTime) {
+                    continue; // 未到期
+                }
+                // 失败重试等待：未到 next_retry_at 则跳过（避免高频重试）
+                if (isset($timer['next_retry_at']) && $timer['next_retry_at'] > $currentTime) {
+                    continue;
+                }
+
+                $timerId = $timer['id'];
+
+                // 1. per-timer Redis claim（SET key owner_token NX EX 120）；claim 失败=他实例持有，跳过
+                $ownerToken = $this->acquireClaim($timerId, $redis);
+                if ($ownerToken === null) {
+                    continue;
+                }
+
+                try {
+                    // 2. 发送并检查返回值（bool）
+                    $sent = $this->telegramService->sendBasicReply($timer['chat_id'], $timer['message']);
+
+                    if ($sent) {
+                        // 成功：commit timer state
+                        if ($timer['type'] === $this->telegramService->getConstant('timer_type_once', 'once')) {
+                            $this->deleteTimer($timer['chat_id'], $timerId);
+                        } else if ($timer['type'] === $this->telegramService->getConstant('timer_type_daily', 'daily')) {
+                            $timer['execute_time'] = strtotime('+1 day', $timer['execute_time']);
+                            // 成功推进时刷新 TTL（daily 长期有效，不因原始 30 天 TTL 消失）
+                            Cache::store('redis')->set(
+                                $this->telegramService->getCachePrefix() . "timer:{$timerId}",
+                                $timer,
+                                30 * 86400
+                            );
+                        }
+                    } else {
+                        // 失败：不删除、不推进，进入 retry/backoff
+                        $this->recordSendFailure($timer, $redis);
                     }
-                    // 处理每日任务 - 更新下次执行时间
-                    else if ($timer['type'] === $this->telegramService->getConstant('timer_type_daily', 'daily')) {
-                        $timer['execute_time'] = strtotime('+1 day', $timer['execute_time']);
-                        Cache::store('redis')->set($timerKey, $timer, 30 * 86400);
-                    }
+                } finally {
+                    // 3. 释放 claim：Lua compare-and-delete（仅 owner 可释放；crash 时由 TTL 兜底）
+                    $this->releaseClaim($timerId, $ownerToken, $redis);
                 }
             }
-            
+
             return true;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('处理定时消息失败', ['error' => $e->getMessage()]);
             return false;
         }
     }
-    
+
+    /**
+     * 获取 per-timer claim：SET key owner_token NX EX 120
+     *
+     * @return string|null 成功返回 owner_token；他实例持有 claim 时返回 null
+     */
+    private function acquireClaim($timerId, $redis)
+    {
+        $claimKey = $this->telegramService->getCachePrefix() . "timer_claim:{$timerId}";
+        $ownerToken = uniqid('tok_', true) . '_' . bin2hex(random_bytes(8));
+        $ok = $redis->rawCommand('SET', $claimKey, $ownerToken, 'NX', 'EX', 120);
+        return $ok ? $ownerToken : null;
+    }
+
+    /**
+     * 释放 claim：Lua GET -> compare owner_token -> DEL（原子，防止误释放他实例 claim）
+     */
+    private function releaseClaim($timerId, $ownerToken, $redis)
+    {
+        $claimKey = $this->telegramService->getCachePrefix() . "timer_claim:{$timerId}";
+        $lua = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+        try {
+            $redis->eval($lua, [$claimKey, $ownerToken], 1);
+        } catch (\Throwable $e) {
+            // 释放失败由 claim TTL（120s）自动兜底
+            Log::warning('释放 timer claim 失败（TTL 将自动过期兜底）', [
+                'timer_id' => $timerId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 记录发送失败并安排重试（attempts / last_attempt / next_retry_at / status）
+     * backoff：attempt1 -> +60s；attempt2 -> +300s；attempt3 -> +3600s；max=3 -> status=failed（不无限重试）
+     */
+    private function recordSendFailure($timer, $redis)
+    {
+        $timerId = $timer['id'];
+        $attempts = (int)($timer['attempts'] ?? 0) + 1;
+        $timer['attempts'] = $attempts;
+        $timer['last_attempt'] = time();
+
+        $backoffMap = [1 => 60, 2 => 300, 3 => 3600];
+        $maxAttempts = 3;
+
+        if ($attempts >= $maxAttempts) {
+            $timer['status'] = 'failed'; // 不无限重试；failed timer 保留数据供查看/删除
+            $timer['next_retry_at'] = 0;
+        } else {
+            $timer['status'] = 'active';
+            $timer['next_retry_at'] = time() + ($backoffMap[$attempts] ?? 3600);
+        }
+
+        Cache::store('redis')->set(
+            $this->telegramService->getCachePrefix() . "timer:{$timerId}",
+            $timer,
+            30 * 86400
+        );
+
+        Log::warning('定时消息发送失败，已安排重试', [
+            'timer_id' => $timerId,
+            'attempts' => $attempts,
+            'next_retry_at' => $timer['next_retry_at'],
+            'status' => $timer['status'],
+        ]);
+    }    
     /**
      * 保存定时任务
      */
@@ -190,7 +285,7 @@ class TimerManager
     /**
      * 获取所有定时任务
      */
-    private function getAllTimers($chatId = null)
+    private function getAllTimers($chatId = null, $includeFailed = false)
     {
         $listKey = $this->telegramService->getCachePrefix() . $this->telegramService->getConstant('timer_list_key', 'tg_timers_list');
         $timerIds = Cache::store('redis')->get($listKey, []);
@@ -200,7 +295,9 @@ class TimerManager
             $timerKey = $this->telegramService->getCachePrefix() . "timer:{$timerId}";
             $timer = Cache::store('redis')->get($timerKey);
             
-            if ($timer && $timer['status'] === 'active') {
+            $isActive = $timer && ($timer['status'] ?? '') === 'active';
+            $isFailed = $includeFailed && $timer && ($timer['status'] ?? '') === 'failed';
+            if ($isActive || $isFailed) {
                 // 如果指定了chatId，只返回该聊天的任务
                 if ($chatId === null || $timer['chat_id'] == $chatId) {
                     $timers[] = $timer;

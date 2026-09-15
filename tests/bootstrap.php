@@ -21,3 +21,14 @@ $app->initialize();
 
 // 测试环境标记
 define('HCZ_TESTING', true);
+
+// R1.6d-b: Test-only Session backend override.
+// Production config/session.php uses type=cache, store=redis.
+// In tests, override to file driver to eliminate non-essential Redis dependency.
+// This ONLY applies under HCZ_TESTING (PHPUnit bootstrap), never in production runtime.
+if (defined('HCZ_TESTING') && HCZ_TESTING) {
+    $sessionConfig = config('session');
+    $sessionConfig['type'] = 'file';
+    $sessionConfig['store'] = null;
+    config(['session' => $sessionConfig]);
+}

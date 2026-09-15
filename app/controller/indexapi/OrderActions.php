@@ -115,7 +115,7 @@ protected function handleOutOrderPost(string $action)
                 return show(500, 'error', '订单不可取消');
 
             case 'del':
-                if ($order_info && $order_info['status'] == 2) {
+                if ($order_info && $order_info['status'] == \app\model\Order::STATUS_COMPLETED) {
                     // F2 修复：不再物理删除，改为用户侧软删除（保留订单记录用于对账/退款）
                     if (!Order::supportsUserSoftDelete()) {
                         return show(500, 'error', '订单软删除尚未启用，请先执行数据库升级');
@@ -242,22 +242,22 @@ protected function handleOutOrderPost(string $action)
         if ($statusKey !== '' && $statusKey !== 'all') {
             switch ($statusKey) {
                 case 'pending_charge':
-                    $query->where('status', 0);
+                    $query->where('status', \app\model\Order::STATUS_PENDING);
                     break;
                 case 'processing':
-                    $query->where('status', 1);
+                    $query->where('status', \app\model\Order::STATUS_PROCESSING);
                     break;
                 case 'pending_confirm':
-                    $query->where('status', 2)->where('confirm_status', 1);
+                    $query->where('status', \app\model\Order::STATUS_COMPLETED)->where('confirm_status', 1);
                     break;
                 case 'completed':
-                    $query->where('status', 2)->where('confirm_status', 'in', '0,2');
+                    $query->where('status', \app\model\Order::STATUS_COMPLETED)->where('confirm_status', 'in', '0,2');
                     break;
                 case 'not_received':
-                    $query->where('status', 2)->where('confirm_status', 3);
+                    $query->where('status', \app\model\Order::STATUS_COMPLETED)->where('confirm_status', 3);
                     break;
                 case 'cancelled':
-                    $query->where('status', 3);
+                    $query->where('status', \app\model\Order::STATUS_CANCELLED);
                     break;
                 default:
                     return $this->apiError('status_key 参数有误', 400);

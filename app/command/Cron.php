@@ -7,6 +7,7 @@ use app\model\Order;
 use app\model\Recharge;
 use app\model\TransactionOrder;
 use app\service\ProductOrderService;
+use app\service\RefundIntentService;
 use think\console\Command;
 use think\console\Input;
 use think\console\input\Option;
@@ -19,13 +20,32 @@ class Cron extends Command
     {
         $this->setName('cron')
             ->addOption('data', null, Option::VALUE_NONE, '执行订单/充值数据维护')
+            ->addOption('refund', null, Option::VALUE_NONE, '执行积分返还意图恢复（INFO-022-A Outbox Worker）')
             ->setDescription('系统数据处理');
     }
 
     protected function execute(Input $input, Output $output): void
     {
+        // INFO-022-A: 积分返还意图恢复 Worker（Outbox crash recovery）
+        if ($input->getOption('refund')) {
+            try {
+                $result = $this->processRefundIntents();
+                $output->writeln(sprintf(
+                    '返还意图处理完成: 处理 %d 条, 成功 %d 条, 失败 %d 条, 回收 stale lease %d 条',
+                    $result['processed'],
+                    $result['succeeded'],
+                    $result['failed'],
+                    $result['reclaimed']
+                ));
+            } catch (\Throwable $e) {
+                $output->writeln('返还意图处理失败: ' . $e->getMessage());
+                Log::error('cron_refund_intents_failed', ['message' => $e->getMessage()]);
+            }
+            return;
+        }
+
         if (!$input->getOption('data')) {
-            $output->writeln('请使用 --data 执行数据维护任务');
+            $output->writeln('请使用 --data 执行数据维护任务，或 --refund 执行积分返还意图恢复');
             return;
         }
 
@@ -48,22 +68,26 @@ class Cron extends Command
         $now = time();
         $currentTime = date('Y-m-d H:i:s', $now);
 
-        $transactionOrdersCancelled = (int) TransactionOrder::where('status', 0)
+        $transactionOrdersCancelled = (int) TransactionOrder::where('status', TransactionOrder::STATUS_PENDING)
             ->where('create_time', '<', date('Y-m-d H:i:s', $now - 20 * 60))
             ->update([
-                'status' => 2,
+                'status' => TransactionOrder::STATUS_CANCELLED,
                 'cancel_time' => $currentTime,
             ]);
 
-        $rechargesCancelled = (int) Recharge::where('status', 0)
+        // Pre-R1 Batch A: status=2 语义变更为 EXPIRED（支付窗口超时，但 Provider 仍可能已收款）
+        // 迟到付款经过签名+金额验证后仍可通过 RechargeSettlementService 入账。
+        // cancel_source='cron' 区分 Cron 超时与用户主动取消（后者不自动入账）。
+        $rechargesCancelled = (int) Recharge::where('status', Recharge::STATUS_PENDING)
             ->where('create_time', '<', date('Y-m-d H:i:s', $now - 20 * 60))
             ->update([
-                'status' => 2,
+                'status' => Recharge::STATUS_EXPIRED,
                 'cancel_time' => $currentTime,
+                'cancel_source' => Recharge::CANCEL_SOURCE_CRON,
             ]);
 
         $ordersAutoConfirmed = 0;
-        $autoConfirmOrders = Order::where('status', 2)
+        $autoConfirmOrders = Order::where('status', \app\model\Order::STATUS_COMPLETED)
             ->where('confirm_status', 1)
             ->where('complete_time', '<', date('Y-m-d H:i:s', $now - 10 * 60))
             ->select();
@@ -117,5 +141,19 @@ class Cron extends Command
             'orders_auto_confirmed' => $ordersAutoConfirmed,
             'orders_archived' => $ordersArchived,
         ];
+    }
+
+    /**
+     * INFO-022-A: 处理待恢复的积分返还意图（Outbox Worker）
+     *
+     * 流程：回收 stale lease → 原子 claim pending intent → 调用 PointsService::addPoints(refundKey)
+     * 同一 refund_key 最多成功增加一次积分（refund_intent.uk_refund_key + points_record.uk_refund_key 双层唯一约束）。
+     *
+     * @return array{processed:int, succeeded:int, failed:int, reclaimed:int}
+     */
+    private function processRefundIntents(): array
+    {
+        $intentService = new RefundIntentService();
+        return $intentService->processPendingIntents(RefundIntentService::BATCH_SIZE);
     }
 }

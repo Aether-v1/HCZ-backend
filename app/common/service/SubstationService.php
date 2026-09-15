@@ -205,7 +205,7 @@ class SubstationService
                 throw new Exception('提交审核失败');
             }
             if ($auditType === 1) {
-                $substation->status = 1;
+                $substation->status = Substation::STATUS_SUBMITTED;
                 $substation->update_time = date('Y-m-d H:i:s');
                 $substation->save();
             }

@@ -694,7 +694,7 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 		}
 
 		$substation = Substation::where('uid', $uid)->find();
-		if ($substation && (int) ($substation['status'] ?? 0) === 2) {
+		if ($substation && (int) ($substation['status'] ?? 0) === Substation::STATUS_APPROVED) {
 			return 'svip';
 		}
 
@@ -1153,8 +1153,9 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 			return response('success', 200);
 		}
 
+		$settlementResult = null;
 		try {
-			Db::transaction(function () use ($orderNumber, $params) {
+			Db::transaction(function () use ($orderNumber, $params, $tradeStatus, &$settlementResult) {
 				$recharge = Recharge::where('order_number', $orderNumber)->lock(true)->find();
 				if (!$recharge) {
 					Log::warning('epay notify recharge not found', [
@@ -1162,51 +1163,8 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 					]);
 					throw new Exception('Recharge not found');
 				}
-				$localStatus = (int) ($recharge['status'] ?? 0);
 
-				if ($localStatus === 3) {
-
-				    return;
-
-				}
-
-
-				if ($localStatus === 2) {
-
-				    Log::warning('epay notify rejected: recharge already cancelled, no fund change allowed', [
-
-				        'order_number' => $orderNumber,
-
-				        'recharge_id' => (int) ($recharge['id'] ?? 0),
-
-				        'uid' => (int) ($recharge['uid'] ?? 0),
-
-				        'amount' => (float) ($recharge['amount'] ?? 0),
-
-				        'trade_status' => $tradeStatus ?? 'unknown',
-
-				    ]);
-
-				    return;
-
-				}
-
-
-				if ($localStatus !== 0) {
-
-				    Log::warning('epay notify rejected: payment success but local recharge status is not pending', [
-
-				        'order_number' => $orderNumber,
-
-				        'local_status' => $localStatus,
-
-				        'uid' => (int) ($recharge['uid'] ?? 0),
-
-				    ]);
-
-				    return;
-
-				}
+				// 验证这是 EPay 订单（保留原有校验，不弱化）
 				$payType = (string) ($recharge['pay_type'] ?? '');
 				$gateway = (string) ($recharge['gateway'] ?? '');
 				if ($payType !== '2' && $gateway !== 'epay') {
@@ -1216,19 +1174,11 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 						'pay_type' => $payType,
 						'gateway' => $gateway,
 					]);
-					return;
+					throw new Exception('Not an epay recharge');
 				}
 
-				$user = $this->directLockUser((int) ($recharge['uid'] ?? 0));
-				if (!$user) {
-					throw new Exception('User not found');
-				}
-
+				// EPay 特有金额验证：CNY 计价，与 gateway_actual_amount 比较，容差 0.01
 				$amount = round((float) ($recharge['amount'] ?? 0), 2);
-				if ($amount <= 0) {
-					throw new Exception('Invalid recharge amount');
-				}
-
 				$callbackMoney = round((float) (
 					$params['money']
 					?? $params['actual_amount']
@@ -1254,60 +1204,48 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 					]);
 					throw new Exception('Invalid callback amount');
 				}
-				$balanceBefore = round((float) ($user['balance'] ?? 0), 2);
 
-				$recharge->gateway = 'epay';
-				$recharge->status = 3;
-				if (empty($recharge['submit_time'])) {
-					$recharge->submit_time = date('Y-m-d H:i:s');
-				}
-				$recharge->paid_time = date('Y-m-d H:i:s');
-				$recharge->complete_time = date('Y-m-d H:i:s');
-				$recharge->gateway_trade_id = (string) ($params['trade_no'] ?? '');
-				$recharge->gateway_status = (string) ($params['trade_status'] ?? $params['status'] ?? '');
-				$recharge->gateway_actual_amount = $callbackMoney > 0 ? $callbackMoney : (float) ($recharge['gateway_actual_amount'] ?? 0);
-				$recharge->gateway_notify_payload = json_encode($params, JSON_UNESCAPED_UNICODE);
-				$recharge->save();
-
-				$ledgerResult = (new UserFundLedgerService())->changeLockedUserWallet(
-					$user,
-					UserFundLedgerService::WALLET_BALANCE,
-					$amount,
+				// 调用统一 Settlement Boundary
+				$settlement = (new \app\service\RechargeSettlementService())->settleLocked(
+					$recharge,
+					'notify_epay',
 					[
-						'biz_type' => 'recharge',
-						'biz_id' => (int) ($recharge['id'] ?? 0),
-						'biz_no' => (string) ($recharge['order_number'] ?? ''),
-						'order_number' => (string) ($recharge['order_number'] ?? ''),
-						'change_type' => 'recharge_paid',
-						'operator_type' => 'system',
-						'operator_id' => 0,
-						'status' => 'done',
-						'request_no' => 'recharge_paid:' . (string) ($recharge['order_number'] ?? ''),
-						'remark' => 'epay recharge paid',
-						'idempotent' => true,
-						'extra' => [
-							'source' => 'handleEpayNotifyUrl',
-							'gateway' => 'epay',
-						],
+						'gateway' => 'epay',
+						'gateway_trade_id' => (string) ($params['trade_no'] ?? ''),
+						'gateway_status' => (string) ($params['trade_status'] ?? $params['status'] ?? ''),
+						'gateway_actual_amount' => $callbackMoney > 0 ? $callbackMoney : null,
+						'gateway_notify_payload' => json_encode($params, JSON_UNESCAPED_UNICODE),
 					]
 				);
 
-				$walletSnapshot = (array) ($ledgerResult['wallet_snapshot'] ?? []);
-				$balanceAfter = array_key_exists('balance', $walletSnapshot)
-					? round((float) ($walletSnapshot['balance'] ?? 0), 2)
-					: round($balanceBefore + $amount, 2);
+				$settlementResult = $settlement;
 
-				$this->directWriteBalanceLog([
-					'uid' => (int) ($user['id'] ?? 0),
-					'scene' => 'recharge_paid',
-					'amount' => $amount,
-					'balance_before' => $balanceBefore,
-					'balance_after' => $balanceAfter,
-					'biz_id' => (int) ($recharge['id'] ?? 0),
-					'order_number' => (string) ($recharge['order_number'] ?? ''),
-					'remark' => 'epay recharge paid',
-					'operator_id' => 0,
-				]);
+				// ACK 语义与业务处理分离
+				if (!(new \app\service\RechargeSettlementService())->shouldAckSuccess($settlement['result'])) {
+					Log::warning('epay notify settlement not ackable', [
+						'order_number' => $orderNumber,
+						'settlement_result' => $settlement['result'],
+						'settlement_message' => $settlement['message'] ?? '',
+						'local_status' => (int) ($recharge['status'] ?? 0),
+						'cancel_source' => (string) ($recharge['cancel_source'] ?? ''),
+					]);
+					throw new Exception('Settlement not ackable: ' . $settlement['result'] . ' - ' . ($settlement['message'] ?? ''));
+				}
+
+				// 仅在新入账成功时写展示用 balance_log
+				if ($settlement['result'] === \app\service\RechargeSettlementService::RESULT_SETTLED) {
+					$this->directWriteBalanceLog([
+						'uid' => (int) ($recharge['uid'] ?? 0),
+						'scene' => 'recharge_paid',
+						'amount' => $amount,
+						'balance_before' => (float) ($settlement['balance_before'] ?? 0),
+						'balance_after' => (float) ($settlement['balance_after'] ?? 0),
+						'biz_id' => (int) ($recharge['id'] ?? 0),
+						'order_number' => (string) ($recharge['order_number'] ?? ''),
+						'remark' => 'epay recharge paid',
+						'operator_id' => 0,
+					]);
+				}
 			});
 		} catch (\Throwable $e) {
 			$this->logApiException('epay_notify', $e, [
@@ -1319,6 +1257,7 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 		Log::info('epay notify processed', [
 			'order_number' => $orderNumber,
 			'trade_status' => $tradeStatus,
+			'settlement_result' => $settlementResult['result'] ?? 'unknown',
 		]);
 
 		return response('success', 200);
@@ -1670,14 +1609,19 @@ private function directFinanceBalanceChangeTypeLabel(string $changeType): string
 		}
 
 		if ($action === 'cancel') {
-			$recharge->status = 2;
+			// Pre-R1 Batch A.1: 用户主动取消必须显式标记 cancel_source='user'
+			// 与 Cron 自动过期(cancel_source='cron')区分：
+			//   cron 过期 → 允许经过验证的迟到付款自动入账
+			//   user 取消 → 不自动入账，需人工审核
+			$recharge->status = Recharge::STATUS_EXPIRED;
 			$recharge->cancel_time = date('Y-m-d H:i:s');
+			$recharge->cancel_source = Recharge::CANCEL_SOURCE_USER;
 			$recharge->save();
 
 			return show(200, 'success', 'Success', [
 				'order_number' => (string) ($recharge['order_number'] ?? ''),
-				'status' => 2,
-				'status_text' => $this->directFinanceRechargeStatusText(2),
+				'status' => Recharge::STATUS_EXPIRED,
+				'status_text' => $this->directFinanceRechargeStatusText(Recharge::STATUS_EXPIRED),
 			]);
 		}
 

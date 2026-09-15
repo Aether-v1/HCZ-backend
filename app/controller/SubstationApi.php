@@ -182,7 +182,7 @@ class SubstationApi
                     throw new Exception('提交审核失败');
                 }
 
-                $substation->status = 1;
+                $substation->status = Substation::STATUS_SUBMITTED;
                 $substation->reject_reason = null;
                 $substation->update_time = date('Y-m-d H:i:s');
                 if ($substation->save() === false) {
@@ -224,7 +224,7 @@ class SubstationApi
         return show(200, 'success', '查询成功', [
             'substation_id' => (int)($substation['id'] ?? 0),
             'status' => (int)($substation['status'] ?? 0),
-            'paid_open' => in_array((int)($substation['status'] ?? 0), [1, 2, 3, 5], true) ? 1 : 0,
+            'paid_open' => in_array((int)($substation['status'] ?? 0), [Substation::STATUS_SUBMITTED, Substation::STATUS_APPROVED, Substation::STATUS_REJECTED, Substation::STATUS_ACTIVATED], true) ? 1 : 0,
             'reject_reason' => (string)($substation['reject_reason'] ?? ''),
             'domain_reject_reason' => $domainRejectReason,
             'has_pending_audit' => $pending ? 1 : 0,
@@ -254,13 +254,13 @@ class SubstationApi
                 }
 
                 $status = (int)($substation['status'] ?? 0);
-                if ($status === 2) {
+                if ($status === Substation::STATUS_APPROVED) {
                     throw new Exception('分站已开通，无需重复支付');
                 }
-                if ($status === 4) {
+                if ($status === Substation::STATUS_SUSPENDED) {
                     throw new Exception('分站已被禁用，请联系客服');
                 }
-                if (in_array($status, [1, 3, 5], true)) {
+                if (in_array($status, [Substation::STATUS_SUBMITTED, Substation::STATUS_REJECTED, Substation::STATUS_ACTIVATED], true)) {
                     if ((int)($user['agent_status'] ?? 0) !== 1) {
                         $user->agent_status = 1;
                         $user->save();
@@ -308,7 +308,7 @@ class SubstationApi
                     );
                 }
 
-                $substation->status = 5;
+                $substation->status = Substation::STATUS_ACTIVATED;
                 $substation->reject_reason = null;
                 $substation->update_time = date('Y-m-d H:i:s');
                 if ($substation->save() === false) {
@@ -359,7 +359,7 @@ class SubstationApi
                 if (!$substation || (int)($substation['id'] ?? 0) <= 0) {
                     throw new Exception('分站不存在');
                 }
-                if ((int)($substation['status'] ?? 0) !== 2) {
+                if ((int)($substation['status'] ?? 0) !== Substation::STATUS_APPROVED) {
                     throw new Exception('分站未开通，暂不可修改资料');
                 }
 
@@ -453,7 +453,7 @@ class SubstationApi
     {
         try {
             $substation = SubstationService::getOrCreateByUid((int)$this->user_info['id']);
-            $rows = Product::where('status', 1)->order('sort', 'asc')->order('id', 'desc')->select();
+            $rows = Product::where('status', Product::STATUS_ENABLED)->order('sort', 'asc')->order('id', 'desc')->select();
             $list = [];
             foreach ($rows as $product) {
                 $tiers = SubstationPriceService::listTiersForProduct((int)$this->user_info['id'], (int)$substation['id'], (int)$product['id']);
@@ -595,10 +595,10 @@ class SubstationApi
                     throw new Exception('分站不存在');
                 }
                 $status = (int)($substation['status'] ?? 0);
-                if ($status === 4) {
+                if ($status === Substation::STATUS_SUSPENDED) {
                     throw new Exception('分站已被冻结，暂不可划转');
                 }
-                if ($status !== 2) {
+                if ($status !== Substation::STATUS_APPROVED) {
                     throw new Exception('分站未开通，暂不可划转');
                 }
 

@@ -22,6 +22,8 @@ use app\model\UserMessage;
 use app\model\UserBalanceLog;
 use app\model\PointsRecord;
 use app\service\AdminOperationLogService;
+use app\service\ExportService;
+use app\service\AuthorizationService;
 use app\service\LoginRateLimiter;
 use app\service\ProductOrderService;
 use app\service\UploadService;
@@ -59,7 +61,7 @@ use think\facade\Log; // 引入日志类
 use Yurun\Util\HttpRequest;
 use yzh52521\filesystem\facade\Filesystem;
 
-class AdminApi
+class AdminApi extends \app\BaseController
 {
     /**
      * Request实例
@@ -82,6 +84,7 @@ class AdminApi
 
     public function __construct(App $app)
     {
+        parent::__construct($app);
         $this->app = $app;
         $this->request = $this->app->request;
         // 将当前登录管理员信息写入至私有属性
@@ -164,98 +167,20 @@ class AdminApi
 
     private function safeExcel($value): string
     {
-        // 防 Excel 公式注入：对导出单元格前缀为 = + - @ 的文本加单引号。
-        $value = (string)$value;
-        if (preg_match('/^[=+\-@]/', $value)) {
-            return "'" . $value;
-        }
-
-        return $value;
-    }
-
-    private function cleanupExpiredExportFiles(): void
-    {
-        // 防导出文件泄露：清理 runtime/export 中超过 10 分钟的临时导出文件。
-        $directory = rtrim($this->app->getRuntimePath(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'export';
-        if (!is_dir($directory)) {
-            return;
-        }
-
-        $expireBefore = time() - 600;
-        foreach ((array)glob($directory . DIRECTORY_SEPARATOR . 'export_*.xls') as $filePath) {
-            if (!is_string($filePath) || !is_file($filePath)) {
-                continue;
-            }
-
-            $modifiedAt = @filemtime($filePath);
-            if ($modifiedAt !== false && $modifiedAt <= $expireBefore) {
-                @unlink($filePath);
-            }
-        }
+        // B05-C: 委托 ExportService（行为等价，供红区 order_post 兼容调用）。
+        return app(ExportService::class)->safeExcel($value);
     }
 
     private function createPrivateExportDownload(Spreadsheet $spreadsheet, string $scene = 'order_export'): string
     {
-        // 防导出文件泄露：导出文件落到 runtime/export 私有目录，并通过一次性下载接口访问。
-        $this->cleanupExpiredExportFiles();
-        $directory = rtrim($this->app->getRuntimePath(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'export';
-        if (!is_dir($directory)) {
-            mkdir($directory, 0700, true);
-        }
-
-        $adminId = (int)($this->admin_info['id'] ?? 0);
-        $timestamp = date('YmdHis');
-        $random = bin2hex(random_bytes(4));
-        $downloadName = 'export_' . $adminId . '_' . $timestamp . '_' . $random . '.xls';
-        $absolutePath = $directory . DIRECTORY_SEPARATOR . $downloadName;
-
-        $writer = new Xls($spreadsheet);
-        $writer->save($absolutePath);
-
-        $token = bin2hex(random_bytes(16));
-        $cacheKey = 'admin_export_download:' . $token;
-        Cache::set($cacheKey, [
-            'admin_id' => $adminId,
-            'path' => $absolutePath,
-            'name' => $downloadName,
-            'scene' => $scene,
-        ], 600);
-
-        Log::info('admin export file created', [
-            'admin_id' => $adminId,
-            'scene' => $scene,
-            'path' => $absolutePath,
-        ]);
-
-        return '/' . trim((string)getConfig('backstage_entrance'), '/') . '/export_download?token=' . rawurlencode($token);
+        // B05-C: 委托 ExportService（行为等价；admin_id 从当前登录上下文传入）。
+        return app(ExportService::class)->createPrivateExportDownload($spreadsheet, $scene, (int)($this->admin_info['id'] ?? 0));
     }
 
     public function export_download()
     {
-        // 防导出文件泄露：下载只允许通过后台私有接口读取 runtime/export 中的临时文件。
-        $this->cleanupExpiredExportFiles();
-        $token = trim((string)$this->request->get('token', ''));
-        if ($token === '') {
-            return show(500, 'error', '导出文件不存在');
-        }
-
-        $cacheKey = 'admin_export_download:' . $token;
-        $record = Cache::get($cacheKey);
-        if (!is_array($record) || empty($record['path']) || empty($record['name'])) {
-            return show(500, 'error', '导出文件不存在或已过期');
-        }
-
-        if ((int)($record['admin_id'] ?? 0) !== (int)($this->admin_info['id'] ?? 0)) {
-            return show(500, 'error', '无权下载该导出文件');
-        }
-
-        $absolutePath = (string)$record['path'];
-        if (!is_file($absolutePath)) {
-            Cache::delete($cacheKey);
-            return show(500, 'error', '导出文件不存在或已过期');
-        }
-
-        return download($absolutePath, (string)$record['name']);
+        // B05-C: 业务实现已迁移至 admin\Export 控制器（承载 ExportService）；本入口反向薄转发保持旧路由兼容。
+        return app(\app\controller\admin\Export::class)->export_download();
     }
 
     private function directAllowedConfigKeys(): array
@@ -311,12 +236,6 @@ class AdminApi
         return $normalized === '' ? '0' : $normalized;
     }
 
-    private function directCsrfTokenName(): string
-    {
-        $csrfConfig = (array)config('app.csrf');
-
-        return (string)($csrfConfig['token_name'] ?? '_csrf_token');
-    }
 
     private function directAllowedConfigMetaKeys(): array
     {
@@ -331,23 +250,7 @@ class AdminApi
         return ['admin_password', 'twofa_code', 'verify_code'];
     }
 
-    private function directCurrentRequestPath(): string
-    {
-        return trim(str_replace('\\', '/', (string)$this->request->pathinfo()), '/');
-    }
 
-    private function directRequestPathMatches(string $relativePath): bool
-    {
-        $currentPath = strtolower($this->directCurrentRequestPath());
-        $relativePath = strtolower(trim(str_replace('\\', '/', $relativePath), '/'));
-        if ($relativePath === '') {
-            return false;
-        }
-
-        return $currentPath === $relativePath
-            || str_ends_with($currentPath, '/' . $relativePath)
-            || str_contains($currentPath, '/' . $relativePath . '/');
-    }
 
     private function directIsAllowedConfigReferer(string $referer): bool
     {
@@ -378,394 +281,11 @@ class AdminApi
         return false;
     }
 
-    private function directValidateOptionalCsrfToken(): bool
-    {
-        $tokenName = $this->directCsrfTokenName();
-        $requestToken = trim((string)$this->request->post($tokenName, $this->request->post('__token__', '')));
-        if ($requestToken === '') {
-            $requestToken = trim((string)$this->request->header('X-CSRF-Token', ''));
-        }
-        if ($requestToken === '') {
-            return true;
-        }
 
-        $sessionToken = (string)Session::get($tokenName, '');
-
-        return $sessionToken !== '' && hash_equals($sessionToken, $requestToken);
-    }
-
-    private function directValidateRequiredCsrfToken(): bool
-    {
-        $tokenName = $this->directCsrfTokenName();
-        $requestToken = trim((string)$this->request->post($tokenName, $this->request->post('__token__', '')));
-        if ($requestToken === '') {
-            $requestToken = trim((string)$this->request->header('X-CSRF-Token', ''));
-        }
-        if ($requestToken === '') {
-            return false;
-        }
-
-        $sessionToken = (string)Session::get($tokenName, '');
-
-        return $sessionToken !== '' && hash_equals($sessionToken, $requestToken);
-    }
-
-    private function clearPendingAdminTwofaSetup(): void
-    {
-        Session::delete('admin_twofa_temp_secret');
-        Session::delete('admin_twofa_temp_recovery_codes');
-        Session::delete('admin_twofa_temp_admin_id');
-    }
-
-    private function generateAdminRecoveryCodes(int $count = 8, int $length = 8): array
-    {
-        $codes = [];
-        $chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        $maxIndex = strlen($chars) - 1;
-
-        for ($i = 0; $i < $count; $i++) {
-            $code = '';
-            for ($j = 0; $j < $length; $j++) {
-                $code .= $chars[random_int(0, $maxIndex)];
-            }
-            $codes[] = $code;
-        }
-
-        return $codes;
-    }
-
-    private function hashAdminRecoveryCodes(array $recoveryCodes): string
-    {
-        $hashes = [];
-        foreach ($recoveryCodes as $code) {
-            $hashes[] = password_hash((string)$code, PASSWORD_BCRYPT);
-        }
-
-        return (string)json_encode($hashes, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    }
-
-    private function getAdminRecoveryCodeHashes(string $stored): array
-    {
-        $stored = trim($stored);
-        if ($stored === '') {
-            return [];
-        }
-
-        $decoded = json_decode($stored, true);
-        if (!is_array($decoded)) {
-            return [];
-        }
-
-        $hashes = [];
-        foreach ($decoded as $value) {
-            if (!is_string($value) || trim($value) === '') {
-                continue;
-            }
-
-            $normalizedValue = strtoupper(trim($value));
-            $hashes[] = password_get_info($value)['algo'] === 0
-                ? password_hash($normalizedValue, PASSWORD_BCRYPT)
-                : $value;
-        }
-
-        return $hashes;
-    }
-
-    private function consumeAdminRecoveryCode(AdminModel $admin, string $recoveryCode, string $purpose = 'general'): array
-    {
-        $recoveryCode = strtoupper(trim($recoveryCode));
-        if ($recoveryCode === '') {
-            return ['ok' => false, 'message' => '请输入恢复码'];
-        }
-
-        $hashes = $this->getAdminRecoveryCodeHashes((string)($admin->twofa_recovery_codes ?? ''));
-        if ($hashes === []) {
-            return ['ok' => false, 'message' => '当前账号没有可用恢复码'];
-        }
-
-        $matchedIndex = null;
-        foreach ($hashes as $index => $hash) {
-            if (password_verify($recoveryCode, (string)$hash)) {
-                $matchedIndex = $index;
-                break;
-            }
-        }
-
-        if ($matchedIndex === null) {
-            return ['ok' => false, 'message' => '恢复码无效'];
-        }
-
-        unset($hashes[$matchedIndex]);
-        $remainingHashes = array_values($hashes);
-        $admin->twofa_recovery_codes = (string)json_encode($remainingHashes, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $admin->save();
-
-        Log::info('admin 2fa recovery code consumed', [
-            'admin_id' => (int)($admin->id ?? 0),
-            'purpose' => $purpose,
-            'remaining_count' => count($remainingHashes),
-        ]);
-
-        return [
-            'ok' => true,
-            'message' => '恢复码验证成功，该恢复码已失效',
-            'mode' => 'recovery',
-            'remaining_count' => count($remainingHashes),
-        ];
-    }
-
-    private function encryptAdminData(string $data): string
-    {
-        $key = $this->requireEncryptionKey();
-        $iv = random_bytes(openssl_cipher_iv_length('aes-256-cbc'));
-        $encrypted = openssl_encrypt($data, 'aes-256-cbc', $key, 0, $iv);
-        if (!is_string($encrypted) || $encrypted === '') {
-            throw new Exception('敏感数据加密失败');
-        }
-
-        return base64_encode($iv . $encrypted);
-    }
-
-    private function decryptAdminData(string $data): string
-    {
-        $key = $this->requireEncryptionKey();
-        $decoded = base64_decode($data, true);
-        if ($decoded === false) {
-            throw new Exception('敏感数据格式无效');
-        }
-
-        $ivLength = openssl_cipher_iv_length('aes-256-cbc');
-        if (strlen($decoded) <= $ivLength) {
-            throw new Exception('敏感数据格式无效');
-        }
-
-        $iv = substr($decoded, 0, $ivLength);
-        $encrypted = substr($decoded, $ivLength);
-        $decrypted = openssl_decrypt($encrypted, 'aes-256-cbc', $key, 0, $iv);
-
-        if (!is_string($decrypted)) {
-            throw new Exception('敏感数据解密失败');
-        }
-
-        return $decrypted;
-    }
-
-    private function validateAdminTwofaCodeInput(string $code): ?string
-    {
-        if ($code === '') {
-            return '请输入二步验证码';
-        }
-
-        if (!preg_match('/^\d{6}$/', $code)) {
-            return '请输入6位二步验证码';
-        }
-
-        return null;
-    }
-
-    private function verifyAdminTwofaCode(AdminModel $admin, string $code, int $window = 2): array
-    {
-        $inputError = $this->validateAdminTwofaCodeInput($code);
-        if ($inputError !== null) {
-            return ['ok' => false, 'message' => $inputError];
-        }
-
-        if (empty($admin->twofa_enabled) || empty($admin->twofa_secret)) {
-            return ['ok' => false, 'message' => '当前管理员未正确配置2FA'];
-        }
-
-        try {
-            $secret = $this->decryptAdminData((string)$admin->twofa_secret);
-            if ($secret === '') {
-                return ['ok' => false, 'message' => '2FA密钥异常，请重新绑定'];
-            }
-
-            $twofa = new TwoFactorAuth();
-            if (!$twofa->verifyCode($secret, $code, $window)) {
-                return ['ok' => false, 'message' => '二步验证码不正确'];
-            }
-        } catch (\Throwable $e) {
-            Log::warning('admin 2fa verify failed: ' . $e->getMessage(), [
-                'admin_id' => (int)($admin->id ?? 0),
-                'line' => $e->getLine(),
-            ]);
-            return ['ok' => false, 'message' => '2FA验证失败，请稍后重试'];
-        }
-
-        return ['ok' => true, 'message' => 'ok', 'mode' => 'twofa'];
-    }
-
-    private function verifyAdminTwofaOrRecovery(AdminModel $admin, array $postInfo, string $purpose = 'general'): array
-    {
-        $twofaCode = trim((string)($postInfo['twofa_code'] ?? ''));
-        $recoveryCode = strtoupper(trim((string)($postInfo['recovery_code'] ?? '')));
-        $verificationCode = trim((string)($postInfo['verification_code'] ?? ''));
-
-        if ($verificationCode !== '') {
-            if (preg_match('/^\d{6}$/', $verificationCode)) {
-                $twofaCode = $verificationCode;
-            } else {
-                $recoveryCode = strtoupper($verificationCode);
-            }
-        }
-
-        if ($twofaCode !== '' && $recoveryCode !== '') {
-            return ['ok' => false, 'message' => '请只输入一种验证方式'];
-        }
-
-        if ($twofaCode !== '') {
-            return $this->verifyAdminTwofaCode($admin, $twofaCode);
-        }
-
-        if ($recoveryCode !== '') {
-            return $this->consumeAdminRecoveryCode($admin, $recoveryCode, $purpose);
-        }
-
-        return ['ok' => false, 'message' => '请输入二步验证码或恢复码'];
-    }
-
-    private function detectAdminLoginVerificationAttempt(string $verificationCode): string
-    {
-        $verificationCode = trim($verificationCode);
-        if ($verificationCode === '') {
-            return 'missing';
-        }
-
-        return preg_match('/^\d{6}$/', $verificationCode) ? 'twofa' : 'recovery';
-    }
-
-    private function beginAdminTwofaSetup(AdminModel $admin, bool $allowReset = false): array
-    {
-        $this->requireEncryptionKey();
-
-        if (!$allowReset && ($admin->twofa_enabled || !empty($admin->twofa_secret))) {
-            throw new \RuntimeException('您已开启2FA认证，无需重复设置');
-        }
-
-        $twofa = new TwoFactorAuth();
-        $secret = $twofa->createSecret();
-        $issuer = trim((string)($this->config['name'] ?? $this->config['site_name'] ?? 'Admin Panel'));
-        if ($issuer === '') {
-            $issuer = 'Admin Panel';
-        }
-
-        $account = trim((string)($admin->account ?? 'admin_' . (int)($admin->id ?? 0)));
-        $label = $issuer . ':' . $account;
-        $qrCodeUrl = $twofa->getQRCodeImageAsDataUri($label, $secret, 300);
-        $recoveryCodes = $this->generateAdminRecoveryCodes(8);
-
-        $this->clearPendingAdminTwofaSetup();
-        Session::set('admin_twofa_temp_secret', $secret);
-        Session::set('admin_twofa_temp_recovery_codes', $recoveryCodes);
-        Session::set('admin_twofa_temp_admin_id', (int)$admin->id);
-
-        return [
-            'secret' => $secret,
-            'qr_code' => $qrCodeUrl,
-        ];
-    }
-
-    private function requireEncryptionKey(): string
-    {
-        if ($this->encryptionKeyLoaded) {
-            return $this->encryptionKey;
-        }
-
-        $this->encryptionKey = SecurityKeyResolver::resolveDataEncryptionKey();
-        $this->encryptionKeyLoaded = true;
-
-        return $this->encryptionKey;
-    }
 
     private function directValidateSensitiveOperation(array $postInfo, string $scene): array
     {
-        $adminId = (int)($this->admin_info['id'] ?? 0);
-        $admin = $adminId > 0 ? AdminModel::find($adminId) : null;
-        if (!$admin) {
-            return ['ok' => false, 'message' => '管理员未登录'];
-        }
-
-        if (!empty($admin->twofa_enabled)) {
-            $twofaCode = trim((string)($postInfo['twofa_code'] ?? $postInfo['verify_code'] ?? ''));
-            $verified = $this->verifyAdminTwofaCode($admin, $twofaCode);
-            if (empty($verified['ok'])) {
-                Log::warning('admin sensitive action missing 2fa', ['scene' => $scene, 'admin_id' => $adminId, 'ip' => (string)$this->request->ip()]);
-                return ['ok' => false, 'message' => (string)($verified['message'] ?? '二步验证码不正确')];
-            }
-
-            return ['ok' => true, 'mode' => 'twofa'];
-        }
-
-        $adminPassword = trim((string)($postInfo['admin_password'] ?? ''));
-        if ($adminPassword === '') {
-            Log::warning('admin sensitive action missing password', ['scene' => $scene, 'admin_id' => $adminId, 'ip' => (string)$this->request->ip()]);
-            return ['ok' => false, 'message' => '请输入当前管理员密码'];
-        }
-
-        if (!password_verify($adminPassword . (string)($admin->salt ?? ''), (string)($admin->password ?? ''))) {
-            Log::warning('admin sensitive action invalid password', ['scene' => $scene, 'admin_id' => $adminId, 'ip' => (string)$this->request->ip()]);
-            return ['ok' => false, 'message' => '当前管理员密码错误'];
-        }
-
-        return ['ok' => true, 'mode' => 'password'];
-    }
-
-    private function directHasAdminPermission(string $permission): bool
-    {
-        $adminId = (int)($this->admin_info['id'] ?? 0);
-        if ($adminId === 1) {
-            return true;
-        }
-
-        if ($adminId <= 0) {
-            return false;
-        }
-
-        return power((string)($this->admin_info['power'] ?? ''), $permission) != 2;
-    }
-
-    private function directDenyAdminPermission(string $permission)
-    {
-        Log::warning('admin permission denied', [
-            'admin_id' => (int)($this->admin_info['id'] ?? 0),
-            'permission' => $permission,
-            'ip' => (string)$this->request->ip(),
-            'path' => $this->directCurrentRequestPath(),
-        ]);
-
-        return show(403, 'error', '权限不足');
-    }
-
-    private function directGetAllowedAdminPowerList(): array
-    {
-        return [
-            "用户列表", "支付管理", "充值业务 - 产品列表", "查询业务 - 产品列表",
-            "充值业务 - 订单列表", "查询业务 - 订单列表", "交易挂单数据", "交易订单数据",
-            "充值订单记录", "提现订单记录", "返佣记录", "首页轮播图",
-            "积分管理", "管理员列表", "操作记录", "系统设置管理"
-        ];
-    }
-
-    private function directValidateAdminPowerValue(string $power): array
-    {
-        $allowed = $this->directGetAllowedAdminPowerList();
-        if (trim($power) === '') {
-            return ['ok' => true, 'message' => '', 'cleaned' => ''];
-        }
-        $items = preg_split('/[,，]/', $power);
-        $items = array_map('trim', $items);
-        $items = array_filter($items, function ($v) { return $v !== ''; });
-        $items = array_values($items);
-        $invalid = array_diff($items, $allowed);
-        if (!empty($invalid)) {
-            return ['ok' => false, 'message' => '包含非法权限项：' . implode('、', $invalid), 'cleaned' => ''];
-        }
-        return ['ok' => true, 'message' => '', 'cleaned' => implode(',', $items)];
-    }
-
-    private function directIsCurrentAdminSuperAdmin(): bool
-    {
-        return (int)($this->admin_info['id'] ?? 0) === 1;
+        return app(\app\service\AdminSensitiveOperationGuard::class)->verifySensitiveOperation($postInfo, $scene);
     }
 
     private function directMaskSensitiveLogValue(string $key, mixed $value): string
@@ -842,39 +362,9 @@ class AdminApi
         ][$status] ?? '未知状态';
     }
 
-    private function rotateSessionForAdminLogin(array $adminData): void
-    {
-        Session::delete('admin');
-        $this->clearPendingAdminTwofaSetup();
-        Session::regenerate(true);
-        Session::set('admin', $adminData);
-    }
-
-    private function destroyAdminSession(): void
-    {
-        $preserved = [];
-        foreach (['user'] as $key) {
-            if (Session::has($key)) {
-                $preserved[$key] = Session::get($key);
-            }
-        }
-
-        Session::delete('admin');
-    $this->clearPendingAdminTwofaSetup();
-        Session::clear();
-        Session::destroy();
-
-        foreach ($preserved as $key => $value) {
-            Session::set($key, $value);
-        }
-    }
-
     private function directLockUser(int $uid)
     {
-        if ($uid <= 0) {
-            return null;
-        }
-        return UserModel::where('id', $uid)->lock(true)->find();
+        return app(\app\service\UserService::class)->lockById($uid);
     }
 
     private function directAdminAdjustBalanceWithLedger($user, float $amount, int $bizId, string $bizNo, string $changeType, string $remark): array
@@ -1158,7 +648,7 @@ class AdminApi
             $order->settlement_refund_time = $settlement['settlement_refund_time'];
             $order->settlement_operator_id = $settlement['settlement_operator_id'];
             $order->operator_id = (int)($this->admin_info['id'] ?? 0);
-            $order->status = 2;
+            $order->status = \app\model\Order::STATUS_COMPLETED;
             $order->confirm_status = 1;
             $order->complete_time = date('Y-m-d H:i:s');
             $order->save();
@@ -1180,8 +670,24 @@ class AdminApi
                     'error_message' => $notifyException->getMessage(),
                 ]);
             }
-            rebate((string)($order['order_number'] ?? ''));
-            SubstationSettlementService::settleCompletedOrder((int)$order['id'], (int)($this->admin_info['id'] ?? 0));
+            try {
+                rebate((string)($order['order_number'] ?? ''));
+            } catch (\Throwable $e) {
+                Log::error('order complete rebate failed', [
+                    'order_id' => (int)($order['id'] ?? $orderId),
+                    'order_number' => (string)($order['order_number'] ?? ''),
+                    'error' => $e->getMessage(),
+                ]);
+            }
+            try {
+                SubstationSettlementService::settleCompletedOrder((int)$order['id'], (int)($this->admin_info['id'] ?? 0));
+            } catch (\Throwable $e) {
+                Log::error('order complete settlement failed', [
+                    'order_id' => (int)($order['id'] ?? $orderId),
+                    'order_number' => (string)($order['order_number'] ?? ''),
+                    'error' => $e->getMessage(),
+                ]);
+            }
             $this->directWriteAdminOperationLog('审核订单', '订单管理', '订单号：' . (string)($order['order_number'] ?? '') . '，UID：' . (int)($order['uid'] ?? 0) . '，订单状态：' . $this->directOrderStatusText($originalStatus) . ' -> ' . $this->directOrderStatusText((int)($order['status'] ?? 0)) . '，确认状态：' . $this->directOrderConfirmStatusText($originalConfirmStatus) . ' -> ' . $this->directOrderConfirmStatusText((int)($order['confirm_status'] ?? 0)) . '，实际到账：' . (string)($order['amount_received'] ?? '未设置') . '，退款：' . number_format($refundUsdt, 2) . ' USDT', [
                 'target_id' => (int)($order['id'] ?? 0),
                 'target_type' => 'order',
@@ -1216,7 +722,7 @@ class AdminApi
             if ($refundUsdt > 0) {
                 $this->directRefundProductOrderCancelToBalance($user, $order, $refundUsdt);
             }
-            $order->status = 3;
+            $order->status = \app\model\Order::STATUS_CANCELLED;
             $order->operator_id = (int)($this->admin_info['id'] ?? 0);
             $order->save();
             $orderSnapshot = $order->toArray();
@@ -1242,198 +748,17 @@ class AdminApi
         ]);
     }
 
-    private function handleTransactionProductOperate(array $post_info)
-    {
-        // 预读（不加锁）获取卖家 uid，用于统一锁顺序 seller → product
-        $preRead = TransactionProduct::find($post_info['id']);
-        if(!$preRead || !in_array((int)$preRead['status'], [1, 2], true)){
-            return show(500, 'error', '操作异常');
-        }
-        try {
-            Db::startTrans();
-            // 统一锁顺序：先锁 seller，再锁 product
-            // 避免与 releaseBySeller(order→seller→product) 形成 product↔seller 循环等待死锁
-            $seller = $this->directLockUser((int)$preRead['uid']);
-            if (!$seller) {
-                throw new Exception('用户不存在');
-            }
-            $TransactionProduct_info = TransactionProduct::where('id', $post_info['id'])->lock(true)->find();
-            if (!$TransactionProduct_info || !in_array((int)$TransactionProduct_info['status'], [1, 2], true)) {
-                Db::rollback();
-                return show(500, 'error', '操作异常');
-            }
 
-            // 关闭挂单(status=3)前必须检查活跃订单：存在待汇款(0)或已汇款(1)订单时禁止关闭
-            if ((int)$post_info['status'] === 3) {
-                $activeCommitted = (float)Db::name('transaction_order')
-                    ->where('pid', (int)$TransactionProduct_info['id'])
-                    ->whereIn('status', [0, 1])
-                    ->lock(true)
-                    ->sum('pay_amount');
-                if ($activeCommitted > 0.005) {
-                    Db::rollback();
-                    return show(500, 'error', '该挂单存在进行中的交易订单（占用 ' . $activeCommitted . ' USDT），无法关闭，请先处理订单');
-                }
-            }
 
-            $TransactionProduct_info->status = $post_info['status'];
-            $TransactionProduct_info->save();
 
-            if($post_info['status'] == 3){
-                $refundAmount = (float)($TransactionProduct_info['sell_account'] ?? 0);
-                if ($refundAmount > 0) {
-                    $this->releaseTransactionListingByAdmin($seller, $TransactionProduct_info, $refundAmount, 0.0);
-                }
-            }
-                Db::commit();
-                return show(200, 'success', '操作成功');
-            } catch (\Throwable $e) {
-                Db::rollback();
-                Log::error('admin transaction_product_post operate error: ' . $e->getMessage(), ['id' => (int)($post_info['id'] ?? 0)]);
-                return show(500, 'error', '操作异常');
-            }
-    }
-
-    private function transactionListingBizNo($listing): string
-    {
-        return 'listing:' . (int)($listing['id'] ?? 0);
-    }
-
-    private function releaseTransactionListingByAdmin($user, $listing, float $amount, ?float $targetSellAccount = 0.0): array
-    {
-        $bizNo = $this->transactionListingBizNo($listing);
-
-        return (new UserFundLedgerService())->transferLockedUserWallet(
-            $user,
-            UserFundLedgerService::WALLET_FROZEN,
-            UserFundLedgerService::WALLET_BALANCE,
-            round($amount, 2),
-            [
-                'biz_type' => 'transaction_listing',
-                'biz_id' => (int)($listing['id'] ?? 0),
-                'biz_no' => $bizNo,
-                'order_number' => $bizNo,
-                'out_change_type' => 'transaction_listing_release',
-                'in_change_type' => 'transaction_listing_release',
-                'operator_type' => 'admin',
-                'operator_id' => (int)($this->admin_info['id'] ?? 0),
-                'status' => 'done',
-                'request_no' => 'transaction_listing_release:' . $bizNo . ':target:' . number_format((float)$targetSellAccount, 2, '.', ''),
-                'remark' => 'transaction listing release',
-                'idempotent' => true,
-                'extra' => [
-                    'source' => 'admin_transaction_listing_release',
-                    'target_sell_account' => $targetSellAccount,
-                ],
-            ]
-        );
-    }
-    private function handleTransactionProductDelete(array $post_info)
-    {
-        // 预读（不加锁）获取卖家 uid，用于统一锁顺序 seller → product
-        $preRead = TransactionProduct::find($post_info['id']);
-        if (!$preRead) {
-            return show(404, 'error', '挂单不存在');
-        }
-        try {
-            Db::startTrans();
-            // 统一锁顺序：先锁 seller，再锁 product
-            $seller = $this->directLockUser((int)$preRead['uid']);
-            if (!$seller) {
-                throw new Exception('卖家用户不存在');
-            }
-            $TransactionProduct_info = TransactionProduct::where('id', $post_info['id'])->lock(true)->find();
-            if (!$TransactionProduct_info) {
-                Db::rollback();
-                return show(404, 'error', '挂单不存在');
-            }
-
-            // 检查活跃订单：存在待汇款(0)或已汇款(1)订单时禁止删除
-            $activeCommitted = (float)Db::name('transaction_order')
-                ->where('pid', (int)$TransactionProduct_info['id'])
-                ->whereIn('status', [0, 1])
-                ->lock(true)
-                ->sum('pay_amount');
-            if ($activeCommitted > 0.005) {
-                Db::rollback();
-                return show(500, 'error', '该挂单存在进行中的交易订单（占用 ' . $activeCommitted . ' USDT），无法删除');
-            }
-
-            // 退还剩余冻结资金（seller 已锁定）
-            $refundAmount = (float)($TransactionProduct_info['sell_account'] ?? 0);
-            if ($refundAmount > 0.005) {
-                $this->releaseTransactionListingByAdmin($seller, $TransactionProduct_info, $refundAmount, 0.0);
-            }
-
-            TransactionProduct::destroy($post_info['id']);
-            Db::commit();
-            return show(200, 'success', '删除成功');
-        } catch (\Throwable $e) {
-            Db::rollback();
-            Log::error('admin transaction_product_post del error: ' . $e->getMessage(), ['id' => (int)($post_info['id'] ?? 0)]);
-            return show(500, 'error', '删除失败');
-        }
-    }
-
-    private function handleTransactionProductDeleteBatch(array $post_info)
-    {
-        try {
-            Db::startTrans();
-            $ids = is_array($post_info['ids'] ?? null) ? $post_info['ids'] : [];
-            if (empty($ids)) {
-                Db::rollback();
-                return show(500, 'error', '请选择要删除的挂单');
-            }
-
-            // 预读所有挂单（不加锁）获取卖家 uid，用于统一锁顺序 seller → product
-            $preReads = TransactionProduct::where('id', 'in', array_map('intval', $ids))->select();
-            if (count($preReads) !== count($ids)) {
-                throw new Exception('部分挂单不存在');
-            }
-
-            foreach ($preReads as $preRead) {
-                // 统一锁顺序：先锁 seller，再锁 product
-                $seller = $this->directLockUser((int)$preRead['uid']);
-                if (!$seller) {
-                    throw new Exception('挂单 #' . (int)$preRead['id'] . ' 卖家用户不存在');
-                }
-                $product = TransactionProduct::where('id', (int)$preRead['id'])->lock(true)->find();
-                if (!$product) {
-                    throw new Exception('挂单不存在: ' . (int)$preRead['id']);
-                }
-
-                // 检查活跃订单
-                $activeCommitted = (float)Db::name('transaction_order')
-                    ->where('pid', (int)$product['id'])
-                    ->whereIn('status', [0, 1])
-                    ->lock(true)
-                    ->sum('pay_amount');
-                if ($activeCommitted > 0.005) {
-                    throw new Exception('挂单 #' . (int)$product['id'] . ' 存在进行中的交易订单（占用 ' . $activeCommitted . ' USDT），无法删除');
-                }
-
-                // 退还剩余冻结资金（seller 已锁定）
-                $refundAmount = (float)($product['sell_account'] ?? 0);
-                if ($refundAmount > 0.005) {
-                    $this->releaseTransactionListingByAdmin($seller, $product, $refundAmount, 0.0);
-                }
-
-                TransactionProduct::destroy((int)$product['id']);
-            }
-
-            Db::commit();
-            return show(200, 'success', '批量删除成功');
-        } catch (\Throwable $e) {
-            Db::rollback();
-            Log::error('admin transaction_product_post batch_del error: ' . $e->getMessage(), ['ids' => $post_info['ids'] ?? []]);
-            return show(500, 'error', $e->getMessage() ?: '批量删除失败');
-        }
-    }
 
     private function handleBalance(array $post_info)
     {
-        if (!$this->directHasAdminPermission('用户列表')) {
-            return $this->directDenyAdminPermission('用户列表');
+        // D3-F1: 余额调整权限按 add/subtract 拆分，admin.user.view 不再能调余额
+        $balanceAction = trim((string)($post_info['add_minus'] ?? ''));
+        $balancePerm = $balanceAction === 'add' ? 'admin.user.balance.add' : ($balanceAction === 'minus' ? 'admin.user.balance.subtract' : '');
+        if ($balancePerm === '' || !$this->authorize($balancePerm)) {
+            return $this->directDenyAdminPermission($balancePerm ?: '余额调整');
         }
         if (!$this->directValidateRequiredCsrfToken()) {
             Log::warning('admin user_post balance invalid csrf blocked', [
@@ -1548,431 +873,9 @@ class AdminApi
         }
     }
 
-    private function handleUserPassword(array $post_info)
-    {
-        if (!$this->directHasAdminPermission('用户列表')) {
-            return $this->directDenyAdminPermission('用户列表');
-        }
-        if (!$this->directValidateRequiredCsrfToken()) {
-            Log::warning('admin user_post password invalid csrf blocked', [
-                'admin_id' => (int)($this->admin_info['id'] ?? 0),
-                'uid' => (int)($post_info['uid'] ?? 0),
-                'ip' => (string)$this->request->ip(),
-                'path' => $this->directCurrentRequestPath(),
-            ]);
-            return show(403, 'error', '密码重置请求校验失败');
-        }
-        $sensitiveValidation = $this->directValidateSensitiveOperation((array)$post_info, 'user_password_reset');
-        if (empty($sensitiveValidation['ok'])) {
-            return show(403, 'error', (string)($sensitiveValidation['message'] ?? '安全验证失败'));
-        }
-
-        $uid = (int)($post_info['uid'] ?? 0);
-        if ($uid <= 0) {
-            return show(500, 'error', '用户参数错误');
-        }
-        $newPassword = (string)($post_info['password'] ?? '');
-        if ($newPassword === '') {
-            return show(500, 'error', '新密码不能为空');
-        }
-
-        try {
-            Db::startTrans();
-            $user_info = $this->directLockUser($uid);
-            if (!$user_info) {
-                Db::rollback();
-                return show(500, 'error', '用户不存在');
-            }
-            $salt = randomkeys(4);
-            $user_info->password = password_hash(($newPassword . $salt), PASSWORD_BCRYPT);
-            $user_info->salt = $salt;
-            $user_info->save();
-            Db::commit();
-
-            $this->directWriteAdminOperationLog('重置用户密码', '用户管理', '用户UID：' . (int)$user_info['id'] . '，账号：' . (string)($user_info['mobile'] ?? '') . '，已由管理员重置登录密码', [
-                'target_id' => (int)$user_info['id'],
-                'target_type' => 'user',
-            ]);
-
-            return show(200, 'success', '修改成功');
-        } catch (\Throwable $e) {
-            Db::rollback();
-            Log::error('admin user_post password error: ' . $e->getMessage(), [
-                'uid' => $uid,
-                'admin_id' => (int)($this->admin_info['id'] ?? 0),
-            ]);
-            return show(500, 'error', '修改失败');
-        }
-    }
-
-    private function handleUserStatusSwitch(array $post_info)
-    {
-        if (!$this->directHasAdminPermission('用户列表')) {
-            return $this->directDenyAdminPermission('用户列表');
-        }
-        if (!$this->directValidateRequiredCsrfToken()) {
-            Log::warning('admin user_post status_switch invalid csrf blocked', [
-                'admin_id' => (int)($this->admin_info['id'] ?? 0),
-                'uid' => (int)($post_info['uid'] ?? 0),
-                'ip' => (string)$this->request->ip(),
-                'path' => $this->directCurrentRequestPath(),
-            ]);
-            return show(403, 'error', '状态切换请求校验失败');
-        }
-
-        $uid = (int)($post_info['uid'] ?? 0);
-        if ($uid <= 0) {
-            return show(500, 'error', '用户参数错误');
-        }
-
-        try {
-            Db::startTrans();
-            $res = $this->directLockUser($uid);
-            if (!$res) {
-                Db::rollback();
-                return show(500, 'error', '用户不存在');
-            }
-            $oldStatus = (int)$res['status'];
-            $newStatus = ($oldStatus === 0) ? 1 : 0;
-            $res->status = $newStatus;
-            $res->save();
-            Db::commit();
-
-            $this->directWriteAdminOperationLog('切换用户状态', '用户管理', '用户UID：' . (int)$res['id'] . '，账号：' . (string)($res['mobile'] ?? '') . '，状态：' . ($oldStatus === 0 ? '禁用' : '启用') . ' -> ' . ($newStatus === 0 ? '禁用' : '启用'), [
-                'target_id' => (int)$res['id'],
-                'target_type' => 'user',
-            ]);
-
-            return show(200, 'success', '状态更新成功');
-        } catch (\Throwable $e) {
-            Db::rollback();
-            Log::error('admin user_post status_switch error: ' . $e->getMessage(), [
-                'uid' => $uid,
-                'admin_id' => (int)($this->admin_info['id'] ?? 0),
-            ]);
-            return show(500, 'error', '状态更新失败');
-        }
-    }
-
-    private function handleUserTwofaUnbind(array $post_info)
-    {
-        if (!$this->directHasAdminPermission('用户列表')) {
-            return $this->directDenyAdminPermission('用户列表');
-        }
-        if (!$this->directValidateRequiredCsrfToken()) {
-            Log::warning('admin user_post twofa_unbind invalid csrf blocked', [
-                'admin_id' => (int)($this->admin_info['id'] ?? 0),
-                'uid' => (int)($post_info['uid'] ?? 0),
-                'ip' => (string)$this->request->ip(),
-                'path' => $this->directCurrentRequestPath(),
-            ]);
-            return show(403, 'error', '解绑请求校验失败');
-        }
-        if (!$this->directRequestPathMatches('user_post/twofa_unbind')) {
-            Log::warning('admin user_post twofa_unbind invalid path blocked', [
-                'admin_id' => (int)($this->admin_info['id'] ?? 0),
-                'uid' => (int)($post_info['uid'] ?? 0),
-                'ip' => (string)$this->request->ip(),
-                'path' => $this->directCurrentRequestPath(),
-            ]);
-            return show(403, 'error', '请求路径错误');
-        }
-
-        $sensitiveValidation = $this->directValidateSensitiveOperation((array)$post_info, 'user_twofa_unbind');
-        if (empty($sensitiveValidation['ok'])) {
-            return show(403, 'error', (string)($sensitiveValidation['message'] ?? '安全验证失败'));
-        }
-
-        try {
-            Db::startTrans();
-            $user_info = $this->directLockUser((int)($post_info['uid'] ?? 0));
-            if (!$user_info) {
-                Db::rollback();
-                return show(500, 'error', '用户不存在');
-            }
-
-            if (empty($user_info['twofa_enabled']) && empty($user_info['twofa_secret']) && empty($user_info['twofa_recovery_codes'])) {
-                Db::rollback();
-                return show(500, 'error', '该用户未启用2FA');
-            }
-
-            $user_info->twofa_enabled = 0;
-            $user_info->twofa_secret = null;
-            $user_info->twofa_recovery_codes = null;
-            $user_info->save();
-
-            Db::commit();
-
-            $this->directWriteAdminOperationLog(
-                '解绑用户2FA',
-                '用户管理',
-                '用户UID：' . (int)$user_info['id'] . '，账号：' . (string)($user_info['mobile'] ?? '') . '，已由管理员强制清空2FA绑定',
-                [
-                    'target_id' => (int)$user_info['id'],
-                    'target_type' => 'user',
-                ]
-            );
-
-            return show(200, 'success', '用户2FA解绑成功');
-        } catch (\Throwable $e) {
-            Db::rollback();
-            Log::error('admin user_post twofa_unbind error: ' . $e->getMessage(), [
-                'uid' => (int)($post_info['uid'] ?? 0),
-                'admin_id' => (int)($this->admin_info['id'] ?? 0),
-            ]);
-            return show(500, 'error', '解绑失败');
-        }
-    }
-
-    private function handleUserRights(array $post_info)
-    {
-        if (!$this->directHasAdminPermission('用户列表')) {
-            return $this->directDenyAdminPermission('用户列表');
-        }
-
-        if (!$this->directValidateRequiredCsrfToken()) {
-            Log::warning('admin user_post rights invalid csrf blocked', [
-                'admin_id' => (int)($this->admin_info['id'] ?? 0),
-                'uid' => (int)($post_info['uid'] ?? 0),
-                'ip' => (string)$this->request->ip(),
-                'path' => $this->directCurrentRequestPath(),
-            ]);
-            return show(403, 'error', '权益请求校验失败');
-        }
-
-        if (!$this->directRequestPathMatches('user_post/rights')) {
-            Log::warning('admin user_post rights invalid path blocked', [
-                'admin_id' => (int)($this->admin_info['id'] ?? 0),
-                'uid' => (int)($post_info['uid'] ?? 0),
-                'ip' => (string)$this->request->ip(),
-                'path' => $this->directCurrentRequestPath(),
-            ]);
-            return show(403, 'error', '请求路径错误');
-        }
-
-        $sensitiveValidation = $this->directValidateSensitiveOperation((array)$post_info, 'user_rights');
-        if (empty($sensitiveValidation['ok'])) {
-            return show(403, 'error', (string)($sensitiveValidation['message'] ?? '安全验证失败'));
-        }
-
-        $uid = (int)($post_info['uid'] ?? 0);
-        $rightsAction = trim((string)($post_info['rights_action'] ?? ''));
-        if ($uid <= 0) {
-            return show(500, 'error', '用户参数错误');
-        }
-
-        $allowedActions = ['vip_open', 'vip_close', 'svip_open', 'svip_close'];
-        if (!in_array($rightsAction, $allowedActions, true)) {
-            return show(500, 'error', '权益操作类型错误');
-        }
-
-        try {
-            $message = Db::transaction(function () use ($uid, $rightsAction) {
-                $user = $this->directLockUser($uid);
-                if (!$user) {
-                    throw new Exception('用户不存在');
-                }
-
-                if ($rightsAction === 'vip_open') {
-                    $user->agent_status = 1;
-                    $user->save();
-                    return 'VIP 已开通';
-                }
-
-                if ($rightsAction === 'vip_close') {
-                    $user->agent_status = 0;
-                    $user->save();
-                    return 'VIP 已关闭';
-                }
-
-                $substation = Substation::where('uid', $uid)->lock(true)->find();
-                if (!$substation) {
-                    $substation = Substation::create([
-                        'uid' => $uid,
-                        'status' => 0,
-                        'wallet_balance' => 0,
-                        'wallet_total_income' => 0,
-                        'wallet_total_transferred' => 0,
-                        'income_balance' => 0,
-                        'create_time' => date('Y-m-d H:i:s'),
-                        'update_time' => date('Y-m-d H:i:s'),
-                    ]);
-                    $substation = Substation::where('id', (int)$substation['id'])->lock(true)->find();
-                }
-
-                if ($rightsAction === 'svip_open') {
-                    $substation->status = 2;
-                    if (trim((string)($substation['open_time'] ?? '')) === '') {
-                        $substation->open_time = date('Y-m-d H:i:s');
-                    }
-                    $substation->reject_reason = null;
-                    $substation->update_time = date('Y-m-d H:i:s');
-                    $substation->save();
-
-                    // 业务规则：SVIP 包含 VIP。
-                    $user->agent_status = 1;
-                    $user->save();
-                    return 'SVIP 已开通（已同步开通 VIP）';
-                }
-
-                $substation->status = 0;
-                $substation->reject_reason = null;
-                $substation->update_time = date('Y-m-d H:i:s');
-                $substation->save();
-                return 'SVIP 已关闭';
-            });
-
-            return show(200, 'success', $message);
-        } catch (\Throwable $e) {
-            Log::error('admin user_post rights error: ' . $e->getMessage(), [
-                'uid' => $uid,
-                'rights_action' => $rightsAction,
-                'admin_id' => (int)($this->admin_info['id'] ?? 0),
-            ]);
-            return show(500, 'error', $e->getMessage() ?: '权益操作失败');
-        }
-    }
-
-    private function directCheckUserPendingBusiness(int $uid): array
-    {
-        if ($uid <= 0) {
-            return ['ok' => false, 'message' => '用户参数错误'];
-        }
-        // 充值订单：status=0 待支付（链上/网关）、status=1 待审核（手动充值）
-        $pendingRecharge = Recharge::where('uid', $uid)->whereIn('status', [0, 1])->count();
-        if ($pendingRecharge > 0) {
-            return ['ok' => false, 'message' => '存在待处理充值订单（' . $pendingRecharge . '笔）'];
-        }
-        // 提现订单：status=0 待审核
-        $pendingWithdrawal = Withdrawal::where('uid', $uid)->where('status', 0)->count();
-        if ($pendingWithdrawal > 0) {
-            return ['ok' => false, 'message' => '存在待审核提现订单（' . $pendingWithdrawal . '笔）'];
-        }
-        // C2C 订单：作为买家 status IN (0,1)
-        $pendingBuyOrder = TransactionOrder::where('uid', $uid)->whereIn('status', [0, 1])->count();
-        if ($pendingBuyOrder > 0) {
-            return ['ok' => false, 'message' => '存在进行中的C2C买入订单（' . $pendingBuyOrder . '笔）'];
-        }
-        // C2C 订单：作为卖家 status IN (0,1)
-        $pendingSellOrder = TransactionOrder::where('sell_uid', $uid)->whereIn('status', [0, 1])->count();
-        if ($pendingSellOrder > 0) {
-            return ['ok' => false, 'message' => '存在进行中的C2C卖出订单（' . $pendingSellOrder . '笔）'];
-        }
-        // 交易挂单：status IN (1,2) 且有剩余可售量（冻结资金未释放）
-        $pendingListing = TransactionProduct::where('uid', $uid)->whereIn('status', [1, 2])->where('sell_account', '>', 0)->count();
-        if ($pendingListing > 0) {
-            return ['ok' => false, 'message' => '存在进行中的交易挂单（' . $pendingListing . '个）'];
-        }
-        // 钱包余额检查：余额/冻结/代理钱包有余额时禁止删除
-        $user = UserModel::where('id', $uid)->field('id,balance,frozen_amount,agent_wallet,mobile')->find();
-        if ($user) {
-            $balance = round((float)($user['balance'] ?? 0), 2);
-            $frozen = round((float)($user['frozen_amount'] ?? 0), 2);
-            $agentWallet = round((float)($user['agent_wallet'] ?? 0), 2);
-            if ($balance > 0.005 || $frozen > 0.005 || $agentWallet > 0.005) {
-                return ['ok' => false, 'message' => '用户钱包存在余额（余额:' . $balance . ' 冻结:' . $frozen . ' 代理钱包:' . $agentWallet . '）'];
-            }
-        }
-        return ['ok' => true, 'message' => ''];
-    }
-
-    private function handleUserDeleteBatch(array $post_info)
-    {
-        if (!$this->directHasAdminPermission('用户列表')) {
-            return $this->directDenyAdminPermission('用户列表');
-        }
-        if (!$this->directValidateRequiredCsrfToken()) {
-            Log::warning('admin user_post dels invalid csrf blocked', [
-                'admin_id' => (int)($this->admin_info['id'] ?? 0),
-                'ids' => $post_info['ids'] ?? [],
-                'ip' => (string)$this->request->ip(),
-                'path' => $this->directCurrentRequestPath(),
-            ]);
-            return show(403, 'error', '删除请求校验失败');
-        }
-
-        $ids = is_array($post_info['ids'] ?? null) ? $post_info['ids'] : [];
-        if (empty($ids)) {
-            return show(500, 'error', '请选择要删除的用户');
-        }
-        $ids = array_map('intval', $ids);
-        $ids = array_filter($ids, fn($id) => $id > 0);
-        if (empty($ids)) {
-            return show(500, 'error', '用户参数错误');
-        }
-
-        // 先全部检查通过，再执行删除（避免删了一半才失败）
-        $failedChecks = [];
-        foreach ($ids as $uid) {
-            $pendingCheck = $this->directCheckUserPendingBusiness($uid);
-            if (empty($pendingCheck['ok'])) {
-                $failedChecks[] = 'UID#' . $uid . '：' . $pendingCheck['message'];
-            }
-        }
-        if (!empty($failedChecks)) {
-            return show(500, 'error', '以下用户无法删除：' . implode('；', $failedChecks));
-        }
-
-        // 全部通过后执行删除
-        $deletedCount = 0;
-        foreach ($ids as $uid) {
-            $user = UserModel::where('id', $uid)->field('id,mobile')->find();
-            if ($user) {
-                UserModel::destroy($uid);
-                $deletedCount++;
-                $this->directWriteAdminOperationLog('删除用户', '用户管理', '用户UID：' . $uid . '，账号：' . (string)($user['mobile'] ?? ''), [
-                    'target_id' => $uid,
-                    'target_type' => 'user',
-                ]);
-            }
-        }
-
-        return show(200, 'success', '删除成功（' . $deletedCount . '个）');
-    }
-
-    private function handleUserDelete(array $post_info)
-    {
-        if (!$this->directHasAdminPermission('用户列表')) {
-            return $this->directDenyAdminPermission('用户列表');
-        }
-        if (!$this->directValidateRequiredCsrfToken()) {
-            Log::warning('admin user_post del invalid csrf blocked', [
-                'admin_id' => (int)($this->admin_info['id'] ?? 0),
-                'uid' => (int)($post_info['id'] ?? 0),
-                'ip' => (string)$this->request->ip(),
-                'path' => $this->directCurrentRequestPath(),
-            ]);
-            return show(403, 'error', '删除请求校验失败');
-        }
-
-        $uid = (int)($post_info['id'] ?? 0);
-        if ($uid <= 0) {
-            return show(500, 'error', '用户参数错误');
-        }
-
-        $pendingCheck = $this->directCheckUserPendingBusiness($uid);
-        if (empty($pendingCheck['ok'])) {
-            return show(500, 'error', $pendingCheck['message'] . '，无法删除');
-        }
-
-        $user = UserModel::where('id', $uid)->field('id,mobile')->find();
-        if (!$user) {
-            return show(500, 'error', '用户不存在');
-        }
-
-        UserModel::destroy($uid);
-
-        $this->directWriteAdminOperationLog('删除用户', '用户管理', '用户UID：' . $uid . '，账号：' . (string)($user['mobile'] ?? ''), [
-            'target_id' => $uid,
-            'target_type' => 'user',
-        ]);
-
-        return show(200, 'success', '删除成功');
-    }
-
     private function handleSetting(array $rawPostData)
     {
-        if (!$this->directHasAdminPermission('系统设置管理')) {
+        if (!$this->authorize('admin.setting.manage')) {
             return $this->directDenyAdminPermission('系统设置管理');
         }
         $allowedConfigKeys = $this->directAllowedConfigKeys();
@@ -2134,7 +1037,7 @@ class AdminApi
                 'default' => $stored['public_path'],
                 'data' => $stored['public_path'],
             ]);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             return show(404, 'error', $e->getMessage());
         }
     }
@@ -2142,24 +1045,7 @@ class AdminApi
 
     public function transaction_product_post(string $action)
     {
-        // P2-004 P1-003: C2C 挂单操作/删除权限检查（覆盖 operate/del/dels）
-        if (!$this->directHasAdminPermission('交易挂单数据')) {
-            return $this->directDenyAdminPermission('交易挂单数据');
-        }
-        $post_info = $this->request->post();
-        switch ($action) {
-            case 'operate':
-                return $this->handleTransactionProductOperate($post_info);
-
-            case 'del':
-                return $this->handleTransactionProductDelete($post_info);
-
-            case 'dels':
-                return $this->handleTransactionProductDeleteBatch($post_info);
-
-            default:
-                return show(500, 'error', '你不对劲');
-        }
+        return app(\app\controller\admin\TransactionProduct::class)->transaction_product_post($action);
     }
 
 public function order_post(string $action)
@@ -2178,15 +1064,28 @@ public function order_post(string $action)
         $ordersForPerm = Order::where('id', 'in', $orderIds)->field('id,type')->select();
         foreach ($ordersForPerm as $orderForPerm) {
             $otype = (int)($orderForPerm['type'] ?? 0);
-            $perm = $otype === 1 ? '充值业务 - 订单列表' : ($otype === 2 ? '查询业务 - 订单列表' : '');
-            if ($perm === '' || !$this->directHasAdminPermission($perm)) {
-                return $this->directDenyAdminPermission($perm ?: '订单管理');
+            $viewPerm = $otype === 1 ? 'admin.order.recharge.view' : ($otype === 2 ? 'admin.order.query.view' : '');
+            if ($viewPerm === '' || !$this->authorize($viewPerm)) {
+                return $this->directDenyAdminPermission($viewPerm ?: '订单管理');
             }
         }
     }
 
+    // D3-F1: order_post 方法级 CSRF 校验
+    if (!$this->directValidateRequiredCsrfToken()) {
+        return show(403, 'error', '订单请求校验失败');
+    }
+
     switch ($action) {
         case 'audit_s':
+            // D3-F1: 批量审核按 complete/cancel 拆分权限
+            $auditSStatus = (int)($post_info['status'] ?? 0);
+            if ($auditSStatus === 2 && !$this->authorize('admin.order.recharge.complete')) {
+                return $this->directDenyAdminPermission('admin.order.recharge.complete');
+            }
+            if ($auditSStatus === 3 && !$this->authorize('admin.order.recharge.cancel')) {
+                return $this->directDenyAdminPermission('admin.order.recharge.cancel');
+            }
             if ((int)$post_info['status'] === 2 || (int)$post_info['status'] === 3) {
                 $data = Order::where('id', 'in', $post_info['ids'])->select();
                 $failedIds = [];
@@ -2249,6 +1148,9 @@ public function order_post(string $action)
             if (!isset($post_info['dz_number']) || !is_numeric($post_info['dz_number']) || $post_info['dz_number'] < 0) {
                 return show(500, 'error', '请输入有效的到账金额');
             }
+            if ($post_info['dz_number'] > 99999999.99) {
+                return show(500, 'error', '到账金额超出合理范围');
+            }
             
             // 处理单个或批量订单
             $ids = $post_info['ids'] ?? $post_info['id'];
@@ -2268,7 +1170,8 @@ public function order_post(string $action)
                 $failedIds = [];
                 
                 foreach ($idArray as $id) {
-                    $order_info = Order::find($id);
+                    // D3-F3: 事务内行锁读取最新订单，防止并发覆盖 amount_received
+                    $order_info = Order::where('id', $id)->lock(true)->find();
                     if ($order_info) {
                         // 记录原始值用于日志
                         $oldValue = $order_info->amount_received;
@@ -2314,7 +1217,7 @@ public function order_post(string $action)
                 } else {
                     return show(500, 'error', '未找到可更新的订单或更新失败');
                 }
-            } catch (Exception $e) {
+            } catch (\Throwable $e) {
                 // 回滚事务
                 Db::rollback();
                 trace("更新到账金额异常：" . $e->getMessage(), 'error');
@@ -2322,6 +1225,14 @@ public function order_post(string $action)
             }
 
         case 'audit':
+            // D3-F1: 订单审核按 complete/cancel 拆分权限
+            $auditOrderStatus = (int)($post_info['status'] ?? 0);
+            if ($auditOrderStatus === 2 && !$this->authorize('admin.order.recharge.complete')) {
+                return $this->directDenyAdminPermission('admin.order.recharge.complete');
+            }
+            if ($auditOrderStatus === 3 && !$this->authorize('admin.order.recharge.cancel')) {
+                return $this->directDenyAdminPermission('admin.order.recharge.cancel');
+            }
             if($post_info['type'] == 'status'){
                 if((int)$post_info['status'] === 2){
                     try {
@@ -2339,20 +1250,37 @@ public function order_post(string $action)
                         return show(500, 'error', $e->getMessage());
                     }
                 }
-                $order_info = Order::find($post_info['id']);
-
-                if($order_info['status'] == 0 || $order_info['status'] == 1){
+                try {
+                    Db::startTrans();
+                    $order_info = Order::where('id', $post_info['id'])->lock(true)->find();
+                    if (!$order_info) {
+                        Db::rollback();
+                        return show(404, 'error', '订单不存在');
+                    }
+                    if (!($order_info['status'] == \app\model\Order::STATUS_PENDING || $order_info['status'] == \app\model\Order::STATUS_PROCESSING)) {
+                        Db::rollback();
+                        return show(500, 'error', '审核异常');
+                    }
                     $oldStatus = (int)($order_info['status'] ?? 0);
                     $oldConfirmStatus = (int)($order_info['confirm_status'] ?? 0);
                     $order_info->status = $post_info['status'];
-                    if($order_info['status'] == 2){
+                    if($order_info['status'] == \app\model\Order::STATUS_COMPLETED){
                         $order_info->confirm_status = 1;
                         $order_info->complete_time = date("Y-m-d H:i:s");
                         // 返佣操作
                         rebate($order_info['order_number']);
                     }
                     $order_info->save();
-                    $this->directWriteAdminOperationLog('审核订单', '订单管理', '订单号：' . (string)($order_info['order_number'] ?? '') . '，状态：' . $this->directOrderStatusText($oldStatus) . ' -> ' . $this->directOrderStatusText((int)$order_info['status']) . '，确认状态：' . $this->directOrderConfirmStatusText($oldConfirmStatus) . ' -> ' . $this->directOrderConfirmStatusText((int)($order_info['confirm_status'] ?? 0)), [
+                    Db::commit();
+                } catch (\Throwable $e) {
+                    Db::rollback();
+                    Log::error('admin order audit status update failed', [
+                        'id' => (int)($post_info['id'] ?? 0),
+                        'error' => $e->getMessage(),
+                    ]);
+                    return show(500, 'error', $e->getMessage());
+                }
+                $this->directWriteAdminOperationLog('审核订单', '订单管理', '订单号：' . (string)($order_info['order_number'] ?? '') . '，状态：' . $this->directOrderStatusText($oldStatus) . ' -> ' . $this->directOrderStatusText((int)$order_info['status']) . '，确认状态：' . $this->directOrderConfirmStatusText($oldConfirmStatus) . ' -> ' . $this->directOrderConfirmStatusText((int)($order_info['confirm_status'] ?? 0)), [
                         'target_id' => (int)($order_info['id'] ?? 0),
                         'target_type' => 'order',
                     ]);
@@ -2370,11 +1298,9 @@ public function order_post(string $action)
                         }
                     }
                     return show(200, 'success', '处理成功');
-                }
-                return show(500, 'error', '审核异常');        
             }else{
                 $order_info = Order::find($post_info['id']);
-                if($order_info['status'] == 2 && $order_info['confirm_status'] == 3){
+                if($order_info['status'] == \app\model\Order::STATUS_COMPLETED && $order_info['confirm_status'] == 3){
                     if($post_info['status'] == 2){
                         try {
                             $updatedOrderSnapshot = (new ProductOrderService())->confirmReceipt(
@@ -2409,7 +1335,7 @@ public function order_post(string $action)
                     }
 
                     if($post_info['status'] == 3){
-                        $order_info->status = 3;
+                        $order_info->status = \app\model\Order::STATUS_CANCELLED;
                         $order_info->save();
                     }
 
@@ -2420,7 +1346,7 @@ public function order_post(string $action)
 
         case 'query':
             $order_info = Order::find($post_info['id']);
-            if($order_info['status'] == 0 || $order_info['status'] == 1){
+            if($order_info['status'] == \app\model\Order::STATUS_PENDING || $order_info['status'] == \app\model\Order::STATUS_PROCESSING){
                 if((int)$post_info['status'] === 2){
                     try {
                         $this->directCompleteRechargeOrder((int)$post_info['id']);
@@ -2437,15 +1363,36 @@ public function order_post(string $action)
                         return show(500, 'error', $e->getMessage());
                     }
                 }
-                $order_info->status = $post_info['status'];
-                if($order_info['status'] == 2){
-                    $order_info->confirm_status = 1;
-                    $order_info->complete_time = date("Y-m-d H:i:s");
-                    
-                    // 返佣操作
-                    rebate($order_info['order_number']);
+                try {
+                    Db::startTrans();
+                    $lockedOrder = Order::where('id', $post_info['id'])->lock(true)->find();
+                    if (!$lockedOrder) {
+                        Db::rollback();
+                        return show(404, 'error', '订单不存在');
+                    }
+                    if (!((int)$lockedOrder['status'] === \app\model\Order::STATUS_PENDING || (int)$lockedOrder['status'] === \app\model\Order::STATUS_PROCESSING)) {
+                        Db::rollback();
+                        return show(500, 'error', '审核异常');
+                    }
+                    $lockedOrder->status = $post_info['status'];
+                    if($lockedOrder['status'] == \app\model\Order::STATUS_COMPLETED){
+                        $lockedOrder->confirm_status = 1;
+                        $lockedOrder->complete_time = date("Y-m-d H:i:s");
+                        
+                        // 返佣操作
+                        rebate($lockedOrder['order_number']);
+                    }
+                    $lockedOrder->save();
+                    Db::commit();
+                    $order_info = $lockedOrder;
+                } catch (\Throwable $e) {
+                    Db::rollback();
+                    Log::error('admin order query status update failed', [
+                        'id' => (int)($post_info['id'] ?? 0),
+                        'error' => $e->getMessage(),
+                    ]);
+                    return show(500, 'error', $e->getMessage());
                 }
-                $order_info->save();
                 if ((int)$post_info['status'] === 1) {
                     try {
                         (new OrderTelegramNotifier())->notifyProductOrderProcessing($order_info->toArray());
@@ -2510,13 +1457,13 @@ public function order_post(string $action)
                 $order_info->export_status = 1;
                 $order_info->save();
                 
-                if($order_info['status'] == 0){
+                if($order_info['status'] == \app\model\Order::STATUS_PENDING){
                     $status = '待充值';
-                }if($order_info['status'] == 1){
+                }if($order_info['status'] == \app\model\Order::STATUS_PROCESSING){
                     $status = '充值中';
-                }if($order_info['status'] == 2){
+                }if($order_info['status'] == \app\model\Order::STATUS_COMPLETED){
                     $status = '已完成';
-                }if($order_info['status'] == 3){
+                }if($order_info['status'] == \app\model\Order::STATUS_CANCELLED){
                     $status = '已取消';
                 }
                 if($order_info['confirm_status'] == 0){
@@ -2598,13 +1545,13 @@ public function order_post(string $action)
                 $order_info = Order::where('id', $row['id'])->find();
                 $order_info->export_status = 1;
                 $order_info->save();
-                if($order_info['status'] == 0){
+                if($order_info['status'] == \app\model\Order::STATUS_PENDING){
                     $status = '待充值';
-                }if($order_info['status'] == 1){
+                }if($order_info['status'] == \app\model\Order::STATUS_PROCESSING){
                     $status = '充值中';
-                }if($order_info['status'] == 2){
+                }if($order_info['status'] == \app\model\Order::STATUS_COMPLETED){
                     $status = '已完成';
-                }if($order_info['status'] == 3){
+                }if($order_info['status'] == \app\model\Order::STATUS_CANCELLED){
                     $status = '已取消';
                 }
                 if($order_info['confirm_status'] == 0){
@@ -2664,26 +1611,40 @@ public function order_post(string $action)
             if (!is_numeric($post_info['amount_received']) || $post_info['amount_received'] < 0) {
                 return show(500, 'error', '请输入有效的实际到账金额');
             }
+            if ($post_info['amount_received'] > 99999999.99) {
+                return show(500, 'error', '实际到账金额超出合理范围');
+            }
             
+            // D3-F3: 新增事务 + 行锁 + 操作日志，防止并发覆盖 amount_received
             try {
-                $order_info = Order::find($post_info['id']);
+                Db::startTrans();
+                $order_info = Order::where('id', $post_info['id'])->lock(true)->find();
                 if (!$order_info) {
+                    Db::rollback();
                     return show(500, 'error', '订单不存在');
                 }
-                
-                // 更新实际到账金额
+                $oldAmountReceived = (string)($order_info['amount_received'] ?? '');
+                $orderNumber = (string)($order_info['order_number'] ?? '');
+                $orderUid = (int)($order_info['uid'] ?? 0);
+                // 更新实际到账金额（使用锁后最新订单对象）
                 $order_info->amount_received = $post_info['amount_received'];
                 $order_info->update_time = date("Y-m-d H:i:s");
                 $order_info->operator_id = $this->admin_info['id'] ?? 0;
-                $order_info->save();
-                
-                // 记录操作日志
-                trace("订单ID:{$post_info['id']} 实际到账金额更新为 {$post_info['amount_received']}", 'info');
-                
+                if ($order_info->save() === false) {
+                    Db::rollback();
+                    return show(500, 'error', '更新失败');
+                }
+                Db::commit();
+                // D3-F3: commit 成功后写操作日志
+                $this->directWriteAdminOperationLog('设置实际到账金额', '订单管理', '订单号：' . $orderNumber . '，用户UID：' . $orderUid . '，实际到账：' . $oldAmountReceived . ' -> ' . (string)$post_info['amount_received'], [
+                    'target_id' => (int)$post_info['id'],
+                    'target_type' => 'order',
+                ]);
                 return show(200, 'success', '实际到账金额设置成功');
-            } catch (Exception $e) {
-                trace("设置实际到账金额异常：" . $e->getMessage(), 'error');
-                return show(500, 'error', '操作失败：' . $e->getMessage());
+            } catch (\Throwable $e) {
+                Db::rollback();
+                Log::error('admin set_amount_received error: ' . $e->getMessage(), ['id' => ($post_info['id'] ?? 0)]);
+                return show(500, 'error', '操作失败');
             }
 
         case 'batch_set_amount_received':
@@ -2695,6 +1656,9 @@ public function order_post(string $action)
             // 验证金额参数
             if (!is_numeric($post_info['amount_received']) || $post_info['amount_received'] < 0) {
                 return show(500, 'error', '请输入有效的实际到账金额');
+            }
+            if ($post_info['amount_received'] > 99999999.99) {
+                return show(500, 'error', '实际到账金额超出合理范围');
             }
             
             // 处理订单ID
@@ -2714,7 +1678,8 @@ public function order_post(string $action)
                 $failedIds = [];
                 
                 foreach ($idArray as $id) {
-                    $order_info = Order::find($id);
+                    // D3-F3: 事务内行锁读取最新订单，防止并发覆盖 amount_received
+                    $order_info = Order::where('id', $id)->lock(true)->find();
                     if ($order_info) {
                         // 更新实际到账金额
                         $order_info->amount_received = $post_info['amount_received'];
@@ -2750,7 +1715,7 @@ public function order_post(string $action)
                 } else {
                     return show(500, 'error', '未找到可更新的订单或更新失败');
                 }
-            } catch (Exception $e) {
+            } catch (\Throwable $e) {
                 // 回滚事务
                 Db::rollback();
                 trace("批量更新实际到账金额异常：" . $e->getMessage(), 'error');
@@ -2772,20 +1737,89 @@ public function order_post(string $action)
                 $order_info->results = $stored['public_path'];
                 $order_info->save();
                 return show(200, 'success', '上传保存成功');
-            } catch (Exception $e) {
+            } catch (\Throwable $e) {
                 return show(500, 'error', $e->getMessage());
             }
         case 'del':
-            Order::destroy($post_info['id']);
-            return show(200, 'success', '删除成功');
-            
-        case 'dels':
-            
-            $data = Order::where('id', 'in', $post_info['ids'])->select();
-            foreach($data as $key => $vo) {
-                Order::destroy($vo['id']);
+            // D3-F2: 订单删除独立权限 + 事务 + 行锁 + 已完成禁止删除
+            $delOrder = Order::find((int)($post_info['id'] ?? 0));
+            if (!$delOrder) {
+                return show(404, 'error', '订单不存在');
             }
-            return show(200, 'success', '删除成功');
+            $delType = (int)($delOrder['type'] ?? 0);
+            $delPerm = $delType === 1 ? 'admin.order.recharge.delete' : ($delType === 2 ? 'admin.order.query.delete' : '');
+            if ($delPerm === '' || !$this->authorize($delPerm)) {
+                return $this->directDenyAdminPermission($delPerm ?: '订单删除');
+            }
+            try {
+                Db::startTrans();
+                $lockedOrder = Order::where('id', (int)$delOrder['id'])->lock(true)->find();
+                if (!$lockedOrder) {
+                    Db::rollback();
+                    return show(404, 'error', '订单不存在');
+                }
+                // D3-F2: status=2 已完成订单禁止删除（资金已结算/返佣/分站结算/ledger，删除造成审计链断裂）
+                if ((int)$lockedOrder['status'] === \app\model\Order::STATUS_COMPLETED) {
+                    Db::rollback();
+                    return show(500, 'error', '已完成订单不可删除');
+                }
+                $delOrderNumber = (string)($lockedOrder['order_number'] ?? '');
+                $delUid = (int)($lockedOrder['uid'] ?? 0);
+                $delAmount = (float)($lockedOrder['amount_money'] ?? 0);
+                $delTypeText = $delType === 1 ? '充值业务' : ($delType === 2 ? '查询业务' : '未知');
+                Order::destroy((int)$lockedOrder['id']);
+                Db::commit();
+                $this->directWriteAdminOperationLog('删除订单', '订单管理', '订单号：' . $delOrderNumber . '，用户UID：' . $delUid . '，金额：' . number_format($delAmount, 2) . '，订单类型：' . $delTypeText);
+                return show(200, 'success', '删除成功');
+            } catch (\Throwable $e) {
+                Db::rollback();
+                Log::error('admin order_post del error: ' . $e->getMessage(), ['id' => ($post_info['id'] ?? 0)]);
+                return show(500, 'error', $e->getMessage() ?: '删除失败');
+            }
+
+        case 'dels':
+            // D3-F2: 订单批量删除独立权限 + 事务 + 行锁 + 已完成禁止 + 整批原子
+            $idsRaw = $post_info['ids'] ?? [];
+            $delIds = is_array($idsRaw) ? $idsRaw : explode(',', (string)$idsRaw);
+            $delIds = array_filter(array_unique(array_map('intval', $delIds)));
+            if (empty($delIds)) {
+                return show(500, 'error', '请选择要删除的订单');
+            }
+            $delOrders = Order::where('id', 'in', $delIds)->field('id,type,order_number,uid,amount_money,status')->select();
+            if (count($delOrders) !== count($delIds)) {
+                return show(404, 'error', '部分订单不存在');
+            }
+            foreach ($delOrders as $do) {
+                $dt = (int)($do['type'] ?? 0);
+                $dp = $dt === 1 ? 'admin.order.recharge.delete' : ($dt === 2 ? 'admin.order.query.delete' : '');
+                if ($dp === '' || !$this->authorize($dp)) {
+                    return $this->directDenyAdminPermission($dp ?: '订单删除');
+                }
+            }
+            try {
+                Db::startTrans();
+                $deletedOrderNumbers = [];
+                $deletedCount = 0;
+                foreach ($delOrders as $do) {
+                    $locked = Order::where('id', (int)$do['id'])->lock(true)->find();
+                    if (!$locked) {
+                        throw new Exception('订单不存在: ' . (int)$do['id']);
+                    }
+                    if ((int)$locked['status'] === 2) {
+                        throw new Exception('订单号 ' . (string)($locked['order_number'] ?? '') . ' 已完成，不可删除');
+                    }
+                    $deletedOrderNumbers[] = (string)($locked['order_number'] ?? '');
+                    Order::destroy((int)$locked['id']);
+                    $deletedCount++;
+                }
+                Db::commit();
+                $this->directWriteAdminOperationLog('批量删除订单', '订单管理', '删除数量：' . $deletedCount . '，订单号：' . implode(',', $deletedOrderNumbers));
+                return show(200, 'success', '批量删除成功');
+            } catch (\Throwable $e) {
+                Db::rollback();
+                Log::error('admin order_post dels error: ' . $e->getMessage(), ['ids' => $delIds]);
+                return show(500, 'error', $e->getMessage() ?: '批量删除失败');
+            }
             
         default:
             return show(500, 'error', '你不对劲');
@@ -2797,9 +1831,11 @@ public function order_post(string $action)
         $post_info = $this->request->post();
         switch ($action) {
             case 'audit':
-                // P2-004 P1-002: 提现审核权限检查
-                if (!$this->directHasAdminPermission('提现订单记录')) {
-                    return $this->directDenyAdminPermission('提现订单记录');
+                // D3-F1: 提现审核权限按 approve/reject 拆分，view 不再能执行审核
+                $auditStatus = (int)($post_info['status'] ?? 0);
+                $withdrawPerm = $auditStatus === 1 ? 'admin.withdrawal.approve' : ($auditStatus === 2 ? 'admin.withdrawal.reject' : '');
+                if ($withdrawPerm === '' || !$this->authorize($withdrawPerm)) {
+                    return $this->directDenyAdminPermission($withdrawPerm ?: '提现审核');
                 }
                 if (!$this->directValidateRequiredCsrfToken()) {
                     return show(403, 'error', '提现请求校验失败');
@@ -2808,14 +1844,13 @@ public function order_post(string $action)
                 if (empty($sensitiveValidation['ok'])) {
                     return show(403, 'error', (string)($sensitiveValidation['message'] ?? '安全验证失败'));
                 }
-                $auditStatus = (int)($post_info['status'] ?? 0);
                 if (!in_array($auditStatus, [1, 2], true)) {
-                    return show(500, 'error', '瀹℃牳寮傚父');
+                    return show(500, 'error', '审核异常');
                 }
                 try {
                     Db::startTrans();
                     $withdrawal_info = Withdrawal::where('id', $post_info['id'])->lock(true)->find();
-                    if($withdrawal_info && (int)$withdrawal_info['status'] == 0){
+                    if($withdrawal_info && (int)$withdrawal_info['status'] == \app\model\Withdrawal::STATUS_PENDING){
                         $amount = round((float)($withdrawal_info['amount'] ?? 0), 2);
                         if ($amount <= 0) {
                             throw new Exception('提现金额异常');
@@ -2958,6 +1993,10 @@ public function order_post(string $action)
                 }
 
             case 'del':
+                // D3-F1: 提现删除权限检查
+                if (!$this->authorize('admin.withdrawal.delete')) {
+                    return $this->directDenyAdminPermission('admin.withdrawal.delete');
+                }
                 try {
                     Db::startTrans();
                     $withdrawal_info = Withdrawal::where('id', $post_info['id'])->lock(true)->find();
@@ -2966,13 +2005,17 @@ public function order_post(string $action)
                         return show(404, 'error', '提现记录不存在');
                     }
                     // status=0 待审核提现禁止删除：冻结资金尚未处理，删除会导致资金丢失
-                    if ((int)$withdrawal_info['status'] === 0) {
+                    if ((int)$withdrawal_info['status'] === \app\model\Withdrawal::STATUS_PENDING) {
                         Db::rollback();
                         return show(500, 'error', '待审核提现不可删除，请先审核拒绝后再删除');
                     }
                     // status=1(已通过) / status=2(已拒绝) 资金已处理完毕，允许删除
+                    $deletedOrderNumber = (string)($withdrawal_info['order_number'] ?? '');
+                    $deletedUid = (int)($withdrawal_info['uid'] ?? 0);
+                    $deletedAmount = (float)($withdrawal_info['amount'] ?? 0);
                     Withdrawal::destroy((int)$withdrawal_info['id']);
                     Db::commit();
+                    $this->directWriteAdminOperationLog('删除提现记录', '财务管理', '提现单号：' . $deletedOrderNumber . '，用户UID：' . $deletedUid . '，金额：' . number_format($deletedAmount, 2));
                     return show(200, 'success', '删除成功');
                 } catch (\Throwable $e) {
                     Db::rollback();
@@ -2981,6 +2024,10 @@ public function order_post(string $action)
                 }
 
             case 'dels':
+                // D3-F1: 提现批量删除权限检查
+                if (!$this->authorize('admin.withdrawal.delete')) {
+                    return $this->directDenyAdminPermission('admin.withdrawal.delete');
+                }
                 try {
                     Db::startTrans();
                     $ids = is_array($post_info['ids'] ?? null) ? $post_info['ids'] : [];
@@ -2988,18 +2035,23 @@ public function order_post(string $action)
                         Db::rollback();
                         return show(500, 'error', '请选择要删除的提现记录');
                     }
+                    $deletedCount = 0;
+                    $deletedOrderNumbers = [];
                     foreach ($ids as $id) {
                         $withdrawal_info = Withdrawal::where('id', (int)$id)->lock(true)->find();
                         if (!$withdrawal_info) {
                             throw new Exception('提现记录不存在: ' . (int)$id);
                         }
                         // 任何一条 status=0 则整批回滚，一条都不删
-                        if ((int)$withdrawal_info['status'] === 0) {
+                        if ((int)$withdrawal_info['status'] === \app\model\Withdrawal::STATUS_PENDING) {
                             throw new Exception('提现单号 ' . (string)($withdrawal_info['order_number'] ?? '') . ' 待审核，不可删除');
                         }
+                        $deletedOrderNumbers[] = (string)($withdrawal_info['order_number'] ?? '');
                         Withdrawal::destroy((int)$withdrawal_info['id']);
+                        $deletedCount++;
                     }
                     Db::commit();
+                    $this->directWriteAdminOperationLog('批量删除提现记录', '财务管理', '删除数量：' . $deletedCount . '，提现单号：' . implode(',', $deletedOrderNumbers));
                     return show(200, 'success', '批量删除成功');
                 } catch (\Throwable $e) {
                     Db::rollback();
@@ -3016,9 +2068,11 @@ public function order_post(string $action)
         $post_info = $this->request->post();
         switch ($action) {
             case 'audit':
-                // P2-005 P1-006: 充值审核权限检查
-                if (!$this->directHasAdminPermission('充值订单记录')) {
-                    return $this->directDenyAdminPermission('充值订单记录');
+                // D3-F1: 充值审核权限按 approve/reject 拆分，view 不再能执行审核
+                $auditStatus = (int)($post_info['status'] ?? 0);
+                $rechargePerm = $auditStatus === 1 ? 'admin.recharge.approve' : ($auditStatus === 2 ? 'admin.recharge.reject' : '');
+                if ($rechargePerm === '' || !$this->authorize($rechargePerm)) {
+                    return $this->directDenyAdminPermission($rechargePerm ?: '充值审核');
                 }
                 if (!$this->directValidateRequiredCsrfToken()) {
                     return show(403, 'error', '充值请求校验失败');
@@ -3027,7 +2081,6 @@ public function order_post(string $action)
                 if (empty($sensitiveValidation['ok'])) {
                     return show(403, 'error', (string)($sensitiveValidation['message'] ?? '安全验证失败'));
                 }
-                $auditStatus = (int)($post_info['status'] ?? 0);
                 if (!in_array($auditStatus, [1, 2], true)) {
                     return show(500, 'error', '审核异常');
                 }
@@ -3124,16 +2177,74 @@ public function order_post(string $action)
                 }
 
             case 'del':
-                Recharge::destroy($post_info['id']);
-                return show(200, 'success', '删除成功');
-                
-                
-            case 'dels':
-                $data = Recharge::where('id', 'in', $post_info['ids'])->select();
-                foreach($data as $key => $vo) {
-                    Recharge::destroy($vo['id']);
+                // D3-F1: 充值删除权限检查
+                if (!$this->authorize('admin.recharge.delete')) {
+                    return $this->directDenyAdminPermission('admin.recharge.delete');
                 }
-                return show(200, 'success', '删除成功');
+                // D3-F2: 新增事务 + 行锁
+                try {
+                    Db::startTrans();
+                    $rechargeInfo = Recharge::where('id', (int)($post_info['id'] ?? 0))->lock(true)->find();
+                    if (!$rechargeInfo) {
+                        Db::rollback();
+                        return show(404, 'error', '充值记录不存在');
+                    }
+                    // D3-F1: status=1 待审核充值禁止删除（用户可能已付款，删除会导致资金丢失）
+                    if ((int)$rechargeInfo['status'] === 1) {
+                        Db::rollback();
+                        return show(500, 'error', '待审核充值不可删除，请先审核后再操作');
+                    }
+                    $deletedOrderNumber = (string)($rechargeInfo['order_number'] ?? '');
+                    $deletedUid = (int)($rechargeInfo['uid'] ?? 0);
+                    $deletedAmount = (float)($rechargeInfo['amount'] ?? 0);
+                    Recharge::destroy((int)$rechargeInfo['id']);
+                    Db::commit();
+                    $this->directWriteAdminOperationLog('删除充值记录', '财务管理', '充值单号：' . $deletedOrderNumber . '，用户UID：' . $deletedUid . '，金额：' . number_format($deletedAmount, 2));
+                    return show(200, 'success', '删除成功');
+                } catch (\Throwable $e) {
+                    Db::rollback();
+                    Log::error('admin recharge_post del error: ' . $e->getMessage(), ['id' => ($post_info['id'] ?? 0)]);
+                    return show(500, 'error', $e->getMessage() ?: '删除失败');
+                }
+
+            case 'dels':
+                // D3-F1: 充值批量删除权限检查
+                if (!$this->authorize('admin.recharge.delete')) {
+                    return $this->directDenyAdminPermission('admin.recharge.delete');
+                }
+                $idsRaw = $post_info['ids'] ?? [];
+                $ids = is_array($idsRaw) ? $idsRaw : explode(',', (string)$idsRaw);
+                $ids = array_filter(array_unique(array_map('intval', $ids)));
+                if (empty($ids)) {
+                    return show(500, 'error', '请选择要删除的充值记录');
+                }
+                // D3-F2: 新增事务 + 行锁 + 整批原子
+                try {
+                    Db::startTrans();
+                    $data = Recharge::where('id', 'in', $ids)->lock(true)->select();
+                    if (count($data) !== count($ids)) {
+                        Db::rollback();
+                        return show(404, 'error', '部分充值记录不存在');
+                    }
+                    $deletedCount = 0;
+                    $deletedOrderNumbers = [];
+                    foreach ($data as $vo) {
+                        // D3-F1: 任何一条 status=1 待审核则整批回滚
+                        if ((int)$vo['status'] === 1) {
+                            throw new Exception('充值单号 ' . (string)($vo['order_number'] ?? '') . ' 待审核，不可删除');
+                        }
+                        $deletedOrderNumbers[] = (string)($vo['order_number'] ?? '');
+                        Recharge::destroy((int)$vo['id']);
+                        $deletedCount++;
+                    }
+                    Db::commit();
+                    $this->directWriteAdminOperationLog('批量删除充值记录', '财务管理', '删除数量：' . $deletedCount . '，充值单号：' . implode(',', $deletedOrderNumbers));
+                    return show(200, 'success', '删除成功');
+                } catch (\Throwable $e) {
+                    Db::rollback();
+                    Log::error('admin recharge_post dels error: ' . $e->getMessage(), ['ids' => $ids]);
+                    return show(500, 'error', $e->getMessage() ?: '批量删除失败');
+                }
                 
             default:
                 return show(500, 'error', '你不对劲');
@@ -3145,32 +2256,13 @@ public function order_post(string $action)
 
     public function bank_card_post(string $action)
     {
-        // P2-004 P2-001: 银行卡管理权限检查
-        if (!$this->directHasAdminPermission('支付管理')) {
-            return $this->directDenyAdminPermission('支付管理');
-        }
-        $post_info = $this->request->post();
-        switch ($action) {
-            case 'dels':
-                $data = BankCard::where('id', 'in', $post_info['ids'])->select();
-                $deletedIds = [];
-                foreach($data as $key => $vo) {
-                    BankCard::destroy($vo['id']);
-                    $deletedIds[] = (int)$vo['id'];
-                }
-                $this->directWriteAdminOperationLog('删除银行卡', '支付管理', '批量删除用户银行卡，数量：' . count($deletedIds) . '，ID：' . implode(',', $deletedIds), [
-                    'target_type' => 'bank_card',
-                ]);
-                return show(200, 'success', '删除成功');
-                
-            default:
-                return show(500, 'error', '你不对劲');
-        }
+        // B05-B: 业务实现已迁移至 admin\BankCard，此处反向薄转发（行为等价，Delegation Only）。
+        return app(\app\controller\admin\BankCard::class)->bank_card_post($action);
     }
 
     public function points_post(string $action)
     {
-        if (!$this->directHasAdminPermission('积分管理')) {
+        if (!$this->authorize('admin.points.manage')) {
             return $this->directDenyAdminPermission('积分管理');
         }
 
@@ -3287,80 +2379,14 @@ public function order_post(string $action)
 
     public function points_exchange_orders_json()
     {
-        if (!$this->directHasAdminPermission('积分管理')) {
-            return $this->directDenyAdminPermission('积分管理');
-        }
-
-        $page    = max(1, (int)$this->request->get('page', 1));
-        $limit   = max(1, min(100, (int)$this->request->get('limit', 20)));
-        $status  = $this->request->get('status', '');
-        $keyword = trim((string)$this->request->get('keyword', ''));
-
-        $table = 'points_exchange_order';
-        // 自动建表（如果还没有兑换申请）
-        Db::execute("CREATE TABLE IF NOT EXISTS `cz_points_exchange_order` (
-            `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
-            `uid` int(11) unsigned NOT NULL DEFAULT '0',
-            `item_id` varchar(64) NOT NULL DEFAULT '',
-            `item_type` varchar(16) NOT NULL DEFAULT 'coupon',
-            `item_title` varchar(128) NOT NULL DEFAULT '',
-            `points` int(11) NOT NULL DEFAULT '0',
-            `status` tinyint(1) NOT NULL DEFAULT '0' COMMENT '0=待处理 1=已发放 2=已拒绝',
-            `remark` varchar(256) NOT NULL DEFAULT '',
-            `create_time` datetime DEFAULT NULL,
-            `update_time` datetime DEFAULT NULL,
-            PRIMARY KEY (`id`),
-            KEY `idx_uid` (`uid`),
-            KEY `idx_item_status` (`item_id`,`status`),
-            KEY `idx_status` (`status`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-        $query = Db::name($table)->field('id,uid,item_id,item_type,item_title,points,status,remark,create_time');
-
-        if ($status !== '' && in_array($status, ['0', '1', '2'], true)) {
-            $query->where('status', (int)$status);
-        }
-        if ($keyword !== '') {
-            $matchedUids = UserModel::whereLike('mobile|nickname', '%' . $keyword . '%')->column('id');
-            $query->where(function ($q) use ($keyword, $matchedUids) {
-                $q->whereLike('item_title', '%' . $keyword . '%');
-                if (ctype_digit($keyword)) {
-                    $q->whereOr('uid', (int)$keyword);
-                }
-                if (!empty($matchedUids)) {
-                    $q->whereOr('uid', 'in', $matchedUids);
-                }
-            });
-        }
-
-        $total  = (int)(clone $query)->count();
-        $list   = $query->order('id', 'desc')->page($page, $limit)->select()->toArray();
-        $uids   = array_values(array_unique(array_map(static fn ($r) => (int)($r['uid'] ?? 0), $list)));
-        $userMap = [];
-        if (!empty($uids)) {
-            foreach (UserModel::whereIn('id', $uids)->field('id,mobile,nickname')->select()->toArray() as $u) {
-                $userMap[(int)$u['id']] = $u;
-            }
-        }
-        foreach ($list as &$row) {
-            $u = $userMap[(int)($row['uid'] ?? 0)] ?? [];
-            $row['mobile']   = $u['mobile'] ?? '';
-            $row['nickname'] = $u['nickname'] ?? '';
-        }
-        unset($row);
-
-        return show(200, 'success', '查询成功', [
-            'list'  => $list,
-            'total' => $total,
-            'page'  => $page,
-            'limit' => $limit,
-        ]);
+        // B10-21: points_exchange_orders_json 已迁移至 admin\PointsExchangeOrders，旧入口保持兼容转发
+        return app(\app\controller\admin\PointsExchangeOrders::class)->points_exchange_orders_json();
     }
 
     public function points_exchange_order_post(string $action)
     {
-        if (!$this->directHasAdminPermission('积分管理')) {
-            return $this->directDenyAdminPermission('积分管理');
+        if (!$this->authorize('admin.points.manage')) {
+            return $this->directDenyAdminPermission('admin.points.manage');
         }
 
         if (!$this->directValidateRequiredCsrfToken()) {
@@ -3379,44 +2405,77 @@ public function order_post(string $action)
 
         switch ($action) {
             case 'fulfill':
-                if ((int)$order['status'] !== 0) {
-                    return show(400, 'error', '该订单已处理');
+                // D3-F3: P2 TOCTOU 修复 — 事务内行锁读取最新订单，重新校验状态
+                Db::startTrans();
+                try {
+                    $lockedOrder = Db::name('points_exchange_order')->where('id', $id)->lock(true)->find();
+                    if (!$lockedOrder) {
+                        Db::rollback();
+                        return show(404, 'error', '兑换订单不存在');
+                    }
+                    if ((int)$lockedOrder['status'] !== 0) {
+                        Db::rollback();
+                        return show(400, 'error', '该订单已处理');
+                    }
+                    // D3-F3: UPDATE 增加 status=0 条件，检查 affected rows
+                    $affected = Db::name('points_exchange_order')->where('id', $id)->where('status', 0)->update([
+                        'status'      => 1,
+                        'remark'      => trim((string)($post['remark'] ?? '')),
+                        'update_time' => $now,
+                    ]);
+                    if ($affected !== 1) {
+                        Db::rollback();
+                        return show(400, 'error', '该订单已处理');
+                    }
+                    Db::commit();
+                } catch (\Throwable $e) {
+                    Db::rollback();
+                    Log::error('兑换发放失败: ' . $e->getMessage());
+                    return show(500, 'error', '操作失败');
                 }
-                Db::name('points_exchange_order')->where('id', $id)->update([
-                    'status'      => 1,
-                    'remark'      => trim((string)($post['remark'] ?? '')),
-                    'update_time' => $now,
-                ]);
                 $this->directWriteAdminOperationLog('兑换发放', '积分管理', '发放兑换订单 #' . $id);
                 return show(200, 'success', '已标记为已发放');
 
             case 'reject':
-                if ((int)$order['status'] !== 0) {
-                    return show(400, 'error', '该订单已处理');
-                }
                 $remark = trim((string)($post['remark'] ?? ''));
 
+                // D3-F3: P0 双退修复 — 事务内行锁读取最新订单，禁止事务外状态判断
                 Db::startTrans();
                 try {
-                    Db::name('points_exchange_order')->where('id', $id)->update([
+                    $lockedOrder = Db::name('points_exchange_order')->where('id', $id)->lock(true)->find();
+                    if (!$lockedOrder) {
+                        Db::rollback();
+                        return show(404, 'error', '兑换订单不存在');
+                    }
+                    // D3-F3: 使用锁后最新数据重新校验状态
+                    if ((int)$lockedOrder['status'] !== 0) {
+                        Db::rollback();
+                        return show(400, 'error', '该订单已处理');
+                    }
+                    // D3-F3: UPDATE 增加 status=0 条件，检查 affected rows 防止重复处理
+                    $affected = Db::name('points_exchange_order')->where('id', $id)->where('status', 0)->update([
                         'status'      => 2,
                         'remark'      => $remark,
                         'update_time' => $now,
                     ]);
+                    if ($affected !== 1) {
+                        Db::rollback();
+                        return show(400, 'error', '该订单已处理');
+                    }
 
-                    // 退还积分
-                    $refundPoints = max(0, (int)$order['points']);
+                    // 退还积分（使用锁后订单数据，保留原子增量防 Lost Update）
+                    $refundPoints = max(0, (int)$lockedOrder['points']);
                     if ($refundPoints > 0) {
-                        UserModel::where('id', (int)$order['uid'])->update([
+                        UserModel::where('id', (int)$lockedOrder['uid'])->update([
                             'points_balance' => Db::raw('points_balance + ' . $refundPoints),
                             'month_used'     => Db::raw('GREATEST(0, month_used - ' . $refundPoints . ')'),
                             'update_time'    => $now,
                         ]);
 
                         Db::name('points_record')->insert([
-                            'uid'         => (int)$order['uid'],
+                            'uid'         => (int)$lockedOrder['uid'],
                             'points'      => $refundPoints,
-                            'reason'      => '兑换拒绝退还：' . (string)$order['item_title'],
+                            'reason'      => '兑换拒绝退还：' . (string)$lockedOrder['item_title'],
                             'type'        => 'earned',
                             'create_time' => $now,
                         ]);
@@ -3439,57 +2498,8 @@ public function order_post(string $action)
 
     public function points_records_json()
     {
-        if (!$this->directHasAdminPermission('积分管理')) {
-            return $this->directDenyAdminPermission('积分管理');
-        }
-
-        $page = max(1, (int)$this->request->get('page', 1));
-        $limit = max(1, min(100, (int)$this->request->get('limit', 20)));
-        $keyword = trim((string)$this->request->get('keyword', ''));
-        $type = trim((string)$this->request->get('type', ''));
-
-        $query = PointsRecord::field('id,uid,points,reason,type,create_time');
-
-        if ($type !== '' && in_array($type, ['earned', 'used'], true)) {
-            $query->where('type', $type);
-        }
-        if ($keyword !== '') {
-            $matchedUserIds = UserModel::whereLike('mobile|nickname', '%' . $keyword . '%')->column('id');
-            $query->where(function ($q) use ($keyword, $matchedUserIds) {
-                $q->whereLike('reason', '%' . $keyword . '%');
-                if (ctype_digit($keyword)) {
-                    $q->whereOr('uid', (int)$keyword);
-                }
-                if (!empty($matchedUserIds)) {
-                    $q->whereOr('uid', 'in', $matchedUserIds);
-                }
-            });
-        }
-
-        $totalQuery = clone $query;
-        $total = (int)$totalQuery->count();
-        $list = $query->order('id', 'desc')->page($page, $limit)->select()->toArray();
-        $uids = array_values(array_unique(array_filter(array_map(static fn ($row) => (int)($row['uid'] ?? 0), $list))));
-        $userMap = [];
-        if (!empty($uids)) {
-            $users = UserModel::whereIn('id', $uids)->field('id,mobile,nickname')->select()->toArray();
-            foreach ($users as $user) {
-                $userMap[(int)$user['id']] = $user;
-            }
-        }
-        foreach ($list as &$row) {
-            $user = $userMap[(int)($row['uid'] ?? 0)] ?? [];
-            $row['mobile'] = $user['mobile'] ?? '';
-            $row['nickname'] = $user['nickname'] ?? '';
-        }
-        unset($row);
-
-        return show(200, 'success', '查询成功', [
-            'list' => $list,
-            'total' => $total,
-            'page' => $page,
-            'limit' => $limit,
-        ]);
+        // B10-05: points_records_json 已迁移至 admin\PointsRecords，旧入口保持兼容转发
+        return app(\app\controller\admin\PointsRecords::class)->points_records_json();
     }
 
     private function directSaveConfigValue(string $key, string $value): void
@@ -3508,83 +2518,48 @@ public function order_post(string $action)
 
     public function transaction_order_post(string $action)
     {
-        $post_info = $this->request->post();
-
-        if (!$this->directHasAdminPermission('交易订单数据')) {
-            return $this->directDenyAdminPermission('交易订单数据');
-        }
-
-        switch ($action) {
-            case 'del':
-                $id = (int)($post_info['id'] ?? 0);
-                if ($id <= 0) {
-                    return show(500, 'error', '参数错误');
-                }
-                $order = TransactionOrder::find($id);
-                if (!$order) {
-                    return show(500, 'error', '订单不存在');
-                }
-                $orderNumber = (string)($order['order_number'] ?? '');
-                $orderStatus = (int)($order['status'] ?? 0);
-                $buyerUid = (int)($order['uid'] ?? 0);
-                $sellerUid = (int)($order['seller_uid'] ?? 0);
-                TransactionOrder::destroy($id);
-                $this->directWriteAdminOperationLog('删除交易订单', '交易订单', '订单ID：' . $id . '，订单号：' . $orderNumber . '，买家UID：' . $buyerUid . '，卖家UID：' . $sellerUid . '，删除前状态：' . $orderStatus);
-                return show(200, 'success', '删除成功');
-
-            case 'dels':
-                $idsRaw = $post_info['ids'] ?? '';
-                if (is_array($idsRaw)) {
-                    $ids = array_filter(array_map('intval', $idsRaw), static fn($v) => $v > 0);
-                } else {
-                    $ids = array_filter(array_map('intval', explode(',', (string)$idsRaw)), static fn($v) => $v > 0);
-                }
-                if (empty($ids)) {
-                    return show(500, 'error', '参数错误');
-                }
-                $orders = TransactionOrder::where('id', 'in', $ids)->select();
-                $deletedCount = 0;
-                $orderNumbers = [];
-                foreach ($orders as $vo) {
-                    $orderNumbers[] = (string)($vo['order_number'] ?? '');
-                    TransactionOrder::destroy($vo['id']);
-                    $deletedCount++;
-                }
-                $this->directWriteAdminOperationLog('批量删除交易订单', '交易订单', '删除数量：' . $deletedCount . '，订单ID：' . implode(',', $ids) . '，订单号：' . implode(',', $orderNumbers));
-                return show(200, 'success', '删除成功');
-
-            default:
-                return show(500, 'error', '你不对劲');
-        }
+        return app(\app\controller\admin\TransactionOrder::class)->transaction_order_post($action);
     }
-    
-
     public function rebate_record_post(string $action)
     {
         $post_info = $this->request->post();
 
-        if (!$this->directHasAdminPermission('返佣记录')) {
-            return $this->directDenyAdminPermission('返佣记录');
-        }
-
         switch ($action) {
             case 'del':
+                // D3-F2: 返佣删除独立权限 + 事务 + 行锁
+                if (!$this->authorize('admin.rebate.delete')) {
+                    return $this->directDenyAdminPermission('admin.rebate.delete');
+                }
                 $id = (int)($post_info['id'] ?? 0);
                 if ($id <= 0) {
                     return show(500, 'error', '参数错误');
                 }
-                $record = RebateRecord::find($id);
-                if (!$record) {
-                    return show(500, 'error', '记录不存在');
+                try {
+                    Db::startTrans();
+                    $record = RebateRecord::where('id', $id)->lock(true)->find();
+                    if (!$record) {
+                        Db::rollback();
+                        return show(500, 'error', '记录不存在');
+                    }
+                    $uid = (int)($record['uid'] ?? 0);
+                    $amount = (string)($record['amount'] ?? '');
+                    $orderNumber = (string)($record['order_number'] ?? '');
+                    RebateRecord::destroy($id);
+                    Db::commit();
+                    // 注意：删除返佣记录不回滚已发放的 WALLET_AGENT 资金（Preflight 结论）
+                    $this->directWriteAdminOperationLog('删除返佣记录', '返佣记录', '记录ID：' . $id . '，用户UID：' . $uid . '，关联订单号：' . $orderNumber . '，金额：' . $amount);
+                    return show(200, 'success', '删除成功');
+                } catch (\Throwable $e) {
+                    Db::rollback();
+                    Log::error('admin rebate_record_post del error: ' . $e->getMessage(), ['id' => $id]);
+                    return show(500, 'error', '删除失败');
                 }
-                $uid = (int)($record['uid'] ?? 0);
-                $amount = (string)($record['amount'] ?? '');
-                $orderNumber = (string)($record['order_number'] ?? '');
-                RebateRecord::destroy($id);
-                $this->directWriteAdminOperationLog('删除返佣记录', '返佣记录', '记录ID：' . $id . '，用户UID：' . $uid . '，关联订单号：' . $orderNumber . '，金额：' . $amount);
-                return show(200, 'success', '删除成功');
 
             case 'dels':
+                // D3-F2: 返佣批量删除独立权限 + 事务 + 行锁
+                if (!$this->authorize('admin.rebate.delete')) {
+                    return $this->directDenyAdminPermission('admin.rebate.delete');
+                }
                 $idsRaw = $post_info['ids'] ?? '';
                 if (is_array($idsRaw)) {
                     $ids = array_filter(array_map('intval', $idsRaw), static fn($v) => $v > 0);
@@ -3594,14 +2569,26 @@ public function order_post(string $action)
                 if (empty($ids)) {
                     return show(500, 'error', '参数错误');
                 }
-                $records = RebateRecord::where('id', 'in', $ids)->select();
-                $deletedCount = 0;
-                foreach ($records as $vo) {
-                    RebateRecord::destroy($vo['id']);
-                    $deletedCount++;
+                try {
+                    Db::startTrans();
+                    $records = RebateRecord::where('id', 'in', $ids)->lock(true)->select();
+                    if (count($records) !== count($ids)) {
+                        Db::rollback();
+                        return show(500, 'error', '部分记录不存在');
+                    }
+                    $deletedCount = 0;
+                    foreach ($records as $vo) {
+                        RebateRecord::destroy((int)$vo['id']);
+                        $deletedCount++;
+                    }
+                    Db::commit();
+                    $this->directWriteAdminOperationLog('批量删除返佣记录', '返佣记录', '删除数量：' . $deletedCount . '，记录ID：' . implode(',', $ids));
+                    return show(200, 'success', '删除成功');
+                } catch (\Throwable $e) {
+                    Db::rollback();
+                    Log::error('admin rebate_record_post dels error: ' . $e->getMessage(), ['ids' => $ids]);
+                    return show(500, 'error', '批量删除失败');
                 }
-                $this->directWriteAdminOperationLog('批量删除返佣记录', '返佣记录', '删除数量：' . $deletedCount . '，记录ID：' . implode(',', $ids));
-                return show(200, 'success', '删除成功');
 
             default:
                 return show(500, 'error', '你不对劲');
@@ -3612,837 +2599,56 @@ public function order_post(string $action)
 
     public function slide_post(string $action)
     {
-        $post_info = $this->request->post();
-
-        if (!$this->directHasAdminPermission('首页轮播图')) {
-            return $this->directDenyAdminPermission('首页轮播图');
-        }
-
-        switch ($action) {
-            case 'submit':
-                if(empty($post_info['name'])){
-                    return show(500, 'error', '请输入轮播图名称');
-                }
-                if(empty($post_info['image'])){
-                    return show(500, 'error', '请上传轮播图图片');
-                }
-                $slideId = (int)($post_info['id'] ?? 0);
-                if ($slideId > 0) {
-                    $slide = Slide::find($slideId);
-                    if ($slide) {
-                        $oldName = (string)$slide['name'];
-                        $slide->name = $post_info['name'];
-                        $slide->image = $post_info['image'];
-                        $slide->save();
-                        $this->directWriteAdminOperationLog('修改轮播图', '首页轮播图', '轮播图ID：' . $slideId . '，名称：' . $oldName . ' -> ' . $post_info['name']);
-                        return show(200, 'success', '修改成功');
-                    }
-                }
-                Slide::create([
-                    'name' => $post_info['name'],
-                    'image' => $post_info['image'],
-                ]);
-                $this->directWriteAdminOperationLog('添加轮播图', '首页轮播图', '轮播图名称：' . $post_info['name']);
-                return show(200, 'success', '添加成功');
-
-            case 'del':
-                $id = (int)($post_info['id'] ?? 0);
-                if ($id <= 0) {
-                    return show(500, 'error', '参数错误');
-                }
-                $slide = Slide::find($id);
-                if (!$slide) {
-                    return show(500, 'error', '轮播图不存在');
-                }
-                $slideName = (string)$slide['name'];
-                Slide::destroy($id);
-                $this->directWriteAdminOperationLog('删除轮播图', '首页轮播图', '轮播图ID：' . $id . '，名称：' . $slideName);
-                return show(200, 'success', '删除成功');
-
-            default:
-                return show(500, 'error', '你不对劲');
-        }
+        // B05-B: 业务实现已迁移至 admin\Slide，此处反向薄转发（行为等价，Delegation Only）。
+        return app(\app\controller\admin\Slide::class)->slide_post($action);
     }
     
     public function product_post(string $action)
     {
-        $post_info = $this->request->post();
-        switch ($action) {
-            case 'add_modify':
-                $productType = (int)($post_info['type'] ?? 0);
-                $productPermission = $productType === 1 ? '充值业务 - 产品列表' : ($productType === 2 ? '查询业务 - 产品列表' : '');
-                if ($productPermission === '' || !$this->directHasAdminPermission($productPermission)) {
-                    return $this->directDenyAdminPermission($productPermission ?: '产品管理');
-                }
-                if(empty($post_info['name'])){
-                    return show(500, 'error', '请输入产品名称');
-                }
-                if(empty($post_info['describe'])){
-                    return show(500, 'error', '请输入产品描述');
-                }
-                if($post_info['type'] == 1){
-                    if(empty($post_info['image'])){
-                        return show(500, 'error', '请上传产品图标');
-                    }
-                    if(empty($post_info['mini_recharge_amount'])){
-                        return show(500, 'error', '请输入最低充值金额');
-                    }
-                }else{
-                    if(empty($post_info['quiry_price'])){
-                        return show(500, 'error', '请输入查询价格');
-                    }
-                }
-
-                Db::startTrans();
-                try {
-                    $Product_info = Product::find($post_info['id']??'');
-                    if($Product_info){
-                        $Product_info->name = $post_info['name'];
-                        $Product_info->home_name = $post_info['name'];
-                        $Product_info->describe = $post_info['describe'];
-                        $Product_info->tutorial_content = $post_info['tutorial_content']??null;
-                        $Product_info->image = $post_info['image']??null;
-                        $Product_info->mini_recharge_amount = $post_info['mini_recharge_amount']??null;
-                        $Product_info->kickback_rtion_1 = $post_info['kickback_rtion_1']??null;
-                        $Product_info->kickback_rtion_2 = $post_info['kickback_rtion_2']??null;
-                        $Product_info->kickback_rtion_3 = $post_info['kickback_rtion_3']??null;
-                        $Product_info->kickback_rtion_4 = $post_info['kickback_rtion_4']??null;
-                        $Product_info->kickback_rtion_5 = $post_info['kickback_rtion_5']??null;
-                        $Product_info->kickback_rtion_6 = $post_info['kickback_rtion_6']??null;
-                        $Product_info->kickback_rtion_7 = $post_info['kickback_rtion_7']??null;
-                        $Product_info->kickback_rtion_8 = $post_info['kickback_rtion_8']??null;
-                        $Product_info->kickback_rtion_9 = $post_info['kickback_rtion_9']??null;
-                        $Product_info->kickback_rtion_10 = $post_info['kickback_rtion_10']??null;
-
-                        $Product_info->order_info = $post_info['order_info']??null;
-                        $Product_info->par_value = $post_info['par_value']??null;
-                        $Product_info->discount = $post_info['discount']??null;
-                        $Product_info->quiry_price = $post_info['quiry_price']??null;
-                        $Product_info->batch_status = $post_info['batch_status']??null;
-                        $Product_info->product_type = $post_info['product_type']??null;
-                        $saveRes = $Product_info->save();
-                        if ($saveRes === false) {
-                            throw new \Exception('商品保存失败');
-                        }
-
-                        Db::name('substation_product_tier_price')->where('product_id', (int)$Product_info->id)->delete();
-
-                        Db::commit();
-                        return show(200, 'success', '修改成功');
-                    }
-
-                    Product::create([
-                        'type' => $post_info['type'],
-                        'name' => $post_info['name'],
-                        'describe' => $post_info['describe'],
-                        'tutorial_content' => $post_info['tutorial_content']??null,
-                        'image' => $post_info['image']??null,
-                        'mini_recharge_amount' => $post_info['mini_recharge_amount']??null,
-                        'kickback_rtion_1' => $post_info['kickback_rtion_1']??null,
-                        'kickback_rtion_2' => $post_info['kickback_rtion_2']??null,
-                        'kickback_rtion_3' => $post_info['kickback_rtion_3']??null,
-                        'kickback_rtion_4' => $post_info['kickback_rtion_4']??null,
-                        'kickback_rtion_5' => $post_info['kickback_rtion_5']??null,
-                        'kickback_rtion_6' => $post_info['kickback_rtion_6']??null,
-                        'kickback_rtion_7' => $post_info['kickback_rtion_7']??null,
-                        'kickback_rtion_8' => $post_info['kickback_rtion_8']??null,
-                        'kickback_rtion_9' => $post_info['kickback_rtion_9']??null,
-                        'kickback_rtion_10' => $post_info['kickback_rtion_10']??null,
-
-                        'order_info' => $post_info['order_info']??null,
-                        'par_value' => $post_info['par_value']??null,
-                        'discount' => $post_info['discount']??null,
-                        'quiry_price' => $post_info['quiry_price']??null,
-                        'batch_status' => $post_info['batch_status']??null,
-                        'product_type' => $post_info['product_type'] ?? null,
-                    ]);
-
-                    Db::commit();
-                    return show(200, 'success', '添加成功');
-                } catch (\Throwable $e) {
-                    Db::rollback();
-                    Log::error('product_post add_modify error: ' . $e->getMessage(), [
-                        'id' => (int)($post_info['id'] ?? 0),
-                        'action' => 'add_modify',
-                    ]);
-                    return show(500, 'error', !empty($post_info['id']) ? '修改失败' : '添加失败');
-                }
-
-            case 'info':
-                $res = Product::find($post_info['id']);
-                
-                if($res['type'] == 1){
-                    $order_info_html = '';
-                    foreach($res['order_info'] as $key => $vo_a) {
-                        $selected_1 = $selected_2 = $selected_3 = $selected_4 = '';
-                        if($vo_a['type'] == 1){
-                            $selected_1 = 'selected';
-                        }elseif($vo_a['type'] == 2){
-                            $selected_2 = 'selected';
-                        }elseif($vo_a['type'] == 3){
-                            $selected_3 = 'selected';
-                        }elseif($vo_a['type'] == 4){
-                            $selected_4 = 'selected';
-                        }
-
-                        $order_info_html .= '
-                        <div data-repeater-item order_info_html>
-                            <div class="form-group row mb-3">
-                                <div class="col-md-10">
-                                    <div class="input-group">
-                                        <span class="input-group-text">类型：</span>
-                                        <select class="form-select" id="type" data-placeholder="请选择类型">
-                                            <option value="1" '.$selected_1.'>输入框</option>
-                                            <option value="2" '.$selected_2.'>地区选择（市）</option>
-                                            <option value="3" '.$selected_3.'>地区选择（区）</option>
-                                            <option value="4" '.$selected_4.'>图片上传</option>
-                                        </select>
-                                        <span class="input-group-text">排序：</span>
-                                        <input type="text" class="form-control" id="sort" placeholder="请输入排序" value="'.$vo_a['sort'].'"/>
-                                    </div>
-                                    <div class="input-group">
-                                        <span class="input-group-text">名称：</span>
-                                        <input type="text" class="form-control" id="name" placeholder="请输入名称" value="'.$vo_a['name'].'"/>
-                                    </div>
-                                </div>
-                                <div class="col-md-2">
-                                    <a href="javascript:;" data-repeater-delete class="btn btn-light-danger">
-                                        <i class="ki-duotone ki-trash fs-5"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>
-                                    </a>
-                                </div>
-                            </div>
-                        </div>';
-                    }
-                    $res['order_info_html'] = $order_info_html;
-
-                    $par_value_html = '';
-                    foreach($res['par_value'] as $key => $vo_b) {
-                        $name = $vo_b['name']??'';
-                        $par_value_html .= '
-                        <div data-repeater-item>
-                            <div class="form-group row mb-3">
-                                <div class="col-md-10">
-                                    <div class="input-group">
-                                        <span class="input-group-text">名称：</span>
-                                        <input type="text" class="form-control" id="name" placeholder="请输入名称" value="'.$name.'"/>
-                                        <span class="input-group-text">面值：</span>
-                                        <input type="text" class="form-control" id="value" placeholder="请输入面值" value="'.$vo_b['value'].'"/>
-                                    </div>
-                                </div>
-                                <div class="col-md-2">
-                                    <a href="javascript:;" data-repeater-delete class="btn btn-light-danger">
-                                        <i class="ki-duotone ki-trash fs-5"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>
-                                    </a>
-                                </div>
-                            </div>
-                        </div>';
-                    }
-                    $res['par_value_html'] = $par_value_html;
-                    
-                    $discount_html = '';
-                    foreach($res['discount'] as $key => $vo_c) {
-                        $discount_html .= '
-                        <div data-repeater-item>
-                            <div class="form-group row mb-3">
-                                <div class="col-md-10">
-                                    <div class="input-group">
-                                        <input type="text" id="mini_amount" class="form-control form-control-" placeholder="请输入金额" value="'.$vo_c['mini_amount'].'">
-                                        <span class="input-group-text">~</span>
-                                        <input type="text" id="maxi_amount" class="form-control form-control-" placeholder="请输入金额" value="'.$vo_c['maxi_amount'].'">
-                                        <span class="input-group-text">折扣</span>
-                                        <input type="text" id="discounts" class="form-control form-control-" placeholder="请输入折扣" value="'.$vo_c['discount'].'">
-                                    </div>
-                                </div>
-                                <div class="col-md-2">
-                                    <a href="javascript:;" data-repeater-delete class="btn btn-light-danger">
-                                        <i class="ki-duotone ki-trash fs-5"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>
-                                    </a>
-                                </div>
-                            </div>
-                        </div>';
-                    }
-                    $res['discount_html'] = $discount_html;
-                }
-                return show(200, 'success', '获取信息成功', (array)$res->getData());
-                
-
-            case 'status_switch':
-                $id = (int)($post_info['id'] ?? 0);
-                if ($id <= 0) {
-                    return show(500, 'error', '参数错误');
-                }
-                $res = Product::find($id);
-                if (!$res) {
-                    return show(500, 'error', '产品不存在');
-                }
-                $prodType = (int)$res['type'];
-                $prodPerm = $prodType === 1 ? '充值业务 - 产品列表' : ($prodType === 2 ? '查询业务 - 产品列表' : '');
-                if ($prodPerm === '' || !$this->directHasAdminPermission($prodPerm)) {
-                    return $this->directDenyAdminPermission($prodPerm ?: '产品管理');
-                }
-                $oldStatus = (int)$res['status'];
-                $newStatus = $oldStatus === 0 ? 1 : 0;
-                $res->status = $newStatus;
-                $res->save();
-                $this->directWriteAdminOperationLog('切换产品状态', '产品管理', '产品ID：' . $id . '，产品名称：' . (string)$res['name'] . '，类型：' . $prodType . '，状态：' . $oldStatus . ' -> ' . $newStatus);
-                return show(200, 'success', '状态更新成功');
-
-            case 'sort':
-                $id = (int)($post_info['id'] ?? 0);
-                if ($id <= 0) {
-                    return show(500, 'error', '参数错误');
-                }
-                $res = Product::find($id);
-                if (!$res) {
-                    return show(500, 'error', '产品不存在');
-                }
-                $prodType = (int)$res['type'];
-                $prodPerm = $prodType === 1 ? '充值业务 - 产品列表' : ($prodType === 2 ? '查询业务 - 产品列表' : '');
-                if ($prodPerm === '' || !$this->directHasAdminPermission($prodPerm)) {
-                    return $this->directDenyAdminPermission($prodPerm ?: '产品管理');
-                }
-                $oldSort = (int)$res['sort'];
-                $newSort = (int)($post_info['sort'] ?? 0);
-                $res->sort = $newSort;
-                $res->save();
-                $this->directWriteAdminOperationLog('修改产品排序', '产品管理', '产品ID：' . $id . '，产品名称：' . (string)$res['name'] . '，排序：' . $oldSort . ' -> ' . $newSort);
-                return show(200, 'success', '更新成功');
-
-            case 'del':
-                $id = (int)($post_info['id'] ?? 0);
-                if ($id <= 0) {
-                    return show(500, 'error', '参数错误');
-                }
-                $res = Product::find($id);
-                if (!$res) {
-                    return show(500, 'error', '产品不存在');
-                }
-                $prodType = (int)$res['type'];
-                $prodPerm = $prodType === 1 ? '充值业务 - 产品列表' : ($prodType === 2 ? '查询业务 - 产品列表' : '');
-                if ($prodPerm === '' || !$this->directHasAdminPermission($prodPerm)) {
-                    return $this->directDenyAdminPermission($prodPerm ?: '产品管理');
-                }
-                $productName = (string)$res['name'];
-                Product::destroy($id);
-                $this->directWriteAdminOperationLog('删除产品', '产品管理', '产品ID：' . $id . '，产品名称：' . $productName . '，类型：' . $prodType);
-                return show(200, 'success', '删除成功');
-
-            case 'dels':
-                $idsRaw = $post_info['ids'] ?? '';
-                if (is_array($idsRaw)) {
-                    $ids = array_filter(array_map('intval', $idsRaw), static fn($v) => $v > 0);
-                } else {
-                    $ids = array_filter(array_map('intval', explode(',', (string)$idsRaw)), static fn($v) => $v > 0);
-                }
-                if (empty($ids)) {
-                    return show(500, 'error', '参数错误');
-                }
-                $products = Product::where('id', 'in', $ids)->select();
-                $deletedCount = 0;
-                $productNames = [];
-                foreach ($products as $vo) {
-                    $prodType = (int)$vo['type'];
-                    $prodPerm = $prodType === 1 ? '充值业务 - 产品列表' : ($prodType === 2 ? '查询业务 - 产品列表' : '');
-                    if ($prodPerm === '' || !$this->directHasAdminPermission($prodPerm)) {
-                        return $this->directDenyAdminPermission($prodPerm ?: '产品管理');
-                    }
-                    $productNames[] = (string)$vo['name'];
-                    Product::destroy($vo['id']);
-                    $deletedCount++;
-                }
-                $this->directWriteAdminOperationLog('批量删除产品', '产品管理', '删除数量：' . $deletedCount . '，产品ID：' . implode(',', $ids) . '，产品名称：' . implode(',', $productNames));
-                return show(200, 'success', '删除成功');
-                
-            default:
-                return show(500, 'error', '你不对劲');
-        }
+        return app(\app\controller\admin\Product::class)->product_post($action);
     }
-
-
     public function user_post(string $action)
     {
         $post_info = $this->request->post();
         switch ($action) {
             case 'balance':
                 return $this->handleBalance($post_info);
-            
+
             case 'password':
-                return $this->handleUserPassword($post_info);
-
             case 'status_switch':
-                return $this->handleUserStatusSwitch($post_info);
-
             case 'twofa_unbind':
-                return $this->handleUserTwofaUnbind($post_info);
-
             case 'rights':
-                return $this->handleUserRights($post_info);
-
             case 'dels':
-                return $this->handleUserDeleteBatch($post_info);
-            
             case 'del':
-                return $this->handleUserDelete($post_info);
-            
-                    
+                return app(\app\controller\admin\User::class)->user_post($action);
+
             default:
                 return show(500, 'error', '你不对劲');
         }
     }
+
     
     /**
      * 双因素认证相关操作
      */
     public function twofa_post(string $action)
     {
-        $post_info = $this->request->post();
-        $currentAdminId = (int)($this->admin_info['id'] ?? 0);
-        
-        try {
-            if (!$this->directRequestPathMatches('twofa_post/' . $action)) {
-                return show(403, 'error', '2FA请求路径错误');
-            }
-
-            if (!$this->directValidateRequiredCsrfToken()) {
-                Log::warning('admin twofa invalid csrf blocked', [
-                    'admin_id' => $currentAdminId,
-                    'action' => $action,
-                    'ip' => (string)$this->request->ip(),
-                    'path' => $this->directCurrentRequestPath(),
-                ]);
-                return show(403, 'error', '2FA请求校验失败');
-            }
-
-            if ($currentAdminId <= 0) {
-                return show(403, 'error', '管理员未登录');
-            }
-
-            $id = (int)($post_info['id'] ?? $currentAdminId);
-            if ($id !== $currentAdminId) {
-                return show(403, 'error', '只能操作当前登录管理员的2FA设置');
-            }
-
-            $model = AdminModel::find($id);
-            if (!$model) {
-                return show(500, 'error', '管理员不存在');
-            }
-
-            $account = (string)($model->account ?? '');
-            $logPrefix = "管理员[{$account}]";
-            
-            switch ($action) {
-                case 'generate':
-                    $payload = $this->beginAdminTwofaSetup($model);
-
-                    Log::info("{$logPrefix}初始化2FA绑定");
-                    return show(200, 'success', '请使用身份验证器扫描二维码并输入当前验证码完成绑定', $payload);
-
-                case 'enable':
-                    $code = trim((string)($post_info['code'] ?? $post_info['twofa_code'] ?? ''));
-                    $inputError = $this->validateAdminTwofaCodeInput($code);
-                    if ($inputError !== null) {
-                        return show(500, 'error', $inputError);
-                    }
-
-                    $secret = (string)Session::get('admin_twofa_temp_secret', '');
-                    $tempAdminId = (int)Session::get('admin_twofa_temp_admin_id', 0);
-                    if ($secret === '' || $tempAdminId !== (int)$model->id) {
-                        return show(500, 'error', '请先开始2FA绑定');
-                    }
-
-                    $twofa = new TwoFactorAuth();
-                    if (!$twofa->verifyCode($secret, $code, 2)) {
-                        Log::warning("{$logPrefix}2FA启用失败：验证码错误");
-                        return show(500, 'error', '请确认APP时间同步后再重试');
-                    }
-
-                    $recoveryCodes = Session::get('admin_twofa_temp_recovery_codes');
-                    if (!is_array($recoveryCodes) || $recoveryCodes === []) {
-                        return show(500, 'error', '恢复码初始化失败，请重新开始绑定');
-                    }
-
-                    $model->twofa_secret = $this->encryptAdminData($secret);
-                    $model->twofa_recovery_codes = $this->hashAdminRecoveryCodes($recoveryCodes);
-                    $model->twofa_enabled = 1;
-                    $model->save();
-
-                    $this->clearPendingAdminTwofaSetup();
-
-                    $this->directWriteAdminOperationLog('启用管理员2FA', '管理员管理', '管理员账号：' . $account . '，已启用2FA认证', [
-                        'target_id' => (int)($model->id ?? 0),
-                        'target_type' => 'admin',
-                    ]);
-
-                    Log::info("{$logPrefix}成功启用2FA");
-                    return show(200, 'success', '2FA已成功启用，请立即离线保存恢复码', [
-                        'recovery_codes' => $recoveryCodes,
-                    ]);
-
-                case 'disable':
-                    if (empty($model->twofa_enabled)) {
-                        return show(500, 'error', '您尚未开启2FA认证');
-                    }
-
-                    $verified = $this->verifyAdminTwofaOrRecovery($model, (array)$post_info, 'disable');
-                    if (empty($verified['ok'])) {
-                        return show(500, 'error', (string)($verified['message'] ?? '验证失败'));
-                    }
-
-                    $model->twofa_enabled = 0;
-                    $model->twofa_secret = null;
-                    $model->twofa_recovery_codes = null;
-                    $model->save();
-
-                    $this->clearPendingAdminTwofaSetup();
-
-                    $this->directWriteAdminOperationLog('禁用管理员2FA', '管理员管理', '管理员账号：' . $account . '，已禁用2FA认证', [
-                        'target_id' => (int)($model->id ?? 0),
-                        'target_type' => 'admin',
-                    ]);
-
-                    Log::info("{$logPrefix}成功禁用2FA");
-                    return show(200, 'success', '2FA已成功禁用');
-
-                case 'verify':
-                    $verified = $this->verifyAdminTwofaCode($model, trim((string)($post_info['code'] ?? $post_info['twofa_code'] ?? '')));
-                    if (empty($verified['ok'])) {
-                        return show(500, 'error', (string)($verified['message'] ?? '验证码不正确'));
-                    }
-
-                    return show(200, 'success', '验证码验证成功');
-
-                case 'recover':
-                    $verified = $this->consumeAdminRecoveryCode($model, (string)($post_info['recovery_code'] ?? ''), 'recover');
-                    if (empty($verified['ok'])) {
-                        return show(500, 'error', (string)($verified['message'] ?? '恢复失败'));
-                    }
-
-                    Log::info("{$logPrefix}使用恢复码成功");
-                    return show(200, 'success', (string)($verified['message'] ?? '恢复码验证成功'), [
-                        'remaining_count' => (int)($verified['remaining_count'] ?? 0),
-                    ]);
-
-                case 'regenerate_recovery_codes':
-                    if (!$model->twofa_enabled) {
-                        return show(500, 'error', '未启用2FA');
-                    }
-
-                    $verified = $this->verifyAdminTwofaOrRecovery($model, (array)$post_info, 'regenerate_recovery_codes');
-                    if (empty($verified['ok'])) {
-                        return show(500, 'error', (string)($verified['message'] ?? '验证失败'));
-                    }
-
-                    $recoveryCodes = $this->generateAdminRecoveryCodes(8);
-                    $model->twofa_recovery_codes = $this->hashAdminRecoveryCodes($recoveryCodes);
-                    $model->save();
-
-                    $this->directWriteAdminOperationLog('重置管理员2FA恢复码', '管理员管理', '管理员账号：' . $account . '，已重新生成2FA恢复码', [
-                        'target_id' => (int)($model->id ?? 0),
-                        'target_type' => 'admin',
-                    ]);
-
-                    Log::info("{$logPrefix}重新生成2FA恢复码");
-                    return show(200, 'success', '恢复码已重新生成', [
-                        'recovery_codes' => $recoveryCodes,
-                        'message' => '请保存新的恢复码，旧的恢复码已失效'
-                    ]);
-
-                case 'reset':
-                    if (!$model->twofa_enabled) {
-                        return show(500, 'error', '您尚未开启2FA认证');
-                    }
-
-                    $verified = $this->verifyAdminTwofaOrRecovery($model, (array)$post_info, 'reset');
-                    if (empty($verified['ok'])) {
-                        return show(500, 'error', (string)($verified['message'] ?? '验证失败'));
-                    }
-
-                    $payload = $this->beginAdminTwofaSetup($model, true);
-
-                    Log::info("{$logPrefix}重置2FA绑定");
-                    return show(200, 'success', '2FA已重置，请使用新的密钥重新绑定', $payload);
-                    
-                default:
-                    return show(500, 'error', '无效的操作');
-            }
-        } catch (Exception $e) {
-            Log::error("2FA操作失败：" . $e->getMessage());
-            return show(500, 'error', '操作失败：' . $e->getMessage());
-        }
+        // B10-32: Auth/Security 业务实现已迁移至 admin\Auth，此处反向薄转发（行为等价，Delegation Only）。
+        return app(\app\controller\admin\Auth::class)->twofa_post($action);
     }
 
 
     public function admin_post(string $action)
     {
-        $post_info = $this->request->post();
-        try {
-            switch ($action) {
-                case 'add_modify':
-                    if (!$this->directHasAdminPermission('管理员列表')) {
-                        return $this->directDenyAdminPermission('管理员列表');
-                    }
-                    if (!$this->directRequestPathMatches('admin_post/add_modify')) {
-                        return show(403, 'error', '管理员请求路径错误');
-                    }
-                    if (!$this->directValidateRequiredCsrfToken()) {
-                        Log::warning('admin add_modify invalid csrf blocked', [
-                            'admin_id' => (int)($this->admin_info['id'] ?? 0),
-                            'ip' => (string)$this->request->ip(),
-                            'path' => $this->directCurrentRequestPath(),
-                        ]);
-                        return show(403, 'error', '管理员请求校验失败');
-                    }
-                    // P5-P1-002: 操作者权限边界
-                    $isSuperAdmin = $this->directIsCurrentAdminSuperAdmin();
-                    $currentAdminId = (int)($this->admin_info['id'] ?? 0);
-                    $AdminModel = AdminModel::find($post_info['id']);
-                    if(empty($post_info['account'])){
-                        return show(500, 'error', '请输入登录账号');
-                    }
-                    if(empty($post_info['name'])){
-                        return show(500, 'error', '请输入管理员名称');
-                    }
-                    $salt = randomkeys(4);
-                    if($AdminModel){
-                        $beforeAdmin = $AdminModel->getData();
-                        $targetId = (int)$AdminModel['id'];
-                        // P5-P1-002: 非超级管理员禁止修改超级管理员
-                        if (!$isSuperAdmin && $targetId === 1) {
-                            return show(500, 'error', '无权修改超级管理员');
-                        }
-                        // P5-P1-002: power 白名单校验
-                        $powerResult = $this->directValidateAdminPowerValue((string)($post_info['power'] ?? ''));
-                        if (empty($powerResult['ok'])) {
-                            return show(500, 'error', (string)($powerResult['message'] ?? '权限校验失败'));
-                        }
-                        $cleanedPower = (string)($powerResult['cleaned'] ?? '');
-                        if($post_info['account'] != $AdminModel['account']){
-                            $AdminModels = AdminModel::where('account', $post_info['account'])->find();
-                            if($AdminModels){
-                                return show(500, 'error', '登录账号已存在，请修改');
-                            }
-                        }
-                        $AdminModel->account = $post_info['account'];
-                        $AdminModel->name = $post_info['name'];
-                        // P5-P1-002: 仅超级管理员可修改 power 字段，防止自我提权和横向提权
-                        if ($isSuperAdmin) {
-                            $AdminModel->power = $cleanedPower;
-                        }
-                        // P5-P1-003: 非超级管理员不能修改其他管理员的密码（防止账号接管）
-                        if (!$isSuperAdmin && $targetId !== $currentAdminId && !empty($post_info['password'])) {
-                            return show(500, 'error', '仅超级管理员可修改其他管理员密码');
-                        }
-                        // P5-P1-002: 修改密码需敏感操作二次验证
-                        if(!empty($post_info['password'])){
-                            $sensitiveResult = $this->directValidateSensitiveOperation($post_info, 'admin_password_change');
-                            if (empty($sensitiveResult['ok'])) {
-                                return show(500, 'error', (string)($sensitiveResult['message'] ?? '敏感操作验证失败'));
-                            }
-                            $AdminModel->password = password_hash(($post_info['password'] . $salt), PASSWORD_BCRYPT);
-                            $AdminModel->salt = $salt;
-                        }
-                        $AdminModel->save();
-                        $powerChangedText = $isSuperAdmin
-                            ? ('，权限：' . (string)($beforeAdmin['power'] ?? '无') . ' -> ' . $cleanedPower)
-                            : '';
-                        $this->directWriteAdminOperationLog('修改管理员', '管理员管理', '管理员ID：' . (int)($AdminModel['id'] ?? 0) . '，账号：' . (string)($beforeAdmin['account'] ?? '') . ' -> ' . (string)$post_info['account'] . '，名称：' . (string)($beforeAdmin['name'] ?? '') . ' -> ' . (string)$post_info['name'] . $powerChangedText . (!empty($post_info['password']) ? '，密码：已重置' : ''), [
-                            'target_id' => (int)($AdminModel['id'] ?? 0),
-                            'target_type' => 'admin',
-                        ]);
-                        return show(200, 'success', '修改成功');
-                    }
-                    // P5-P1-002: 仅超级管理员可创建新管理员
-                    if (!$isSuperAdmin) {
-                        return show(500, 'error', '仅超级管理员可创建管理员');
-                    }
-                    if(empty($post_info['password'])){
-                        return show(500, 'error', '请输入登录密码');
-                    }
-                    $AdminModel = AdminModel::where('account', $post_info['account'])->find();
-                    if($AdminModel){
-                        return show(500, 'error', '登录账号已存在，请修改');
-                    }
-                    // P5-P1-002: 新建管理员 power 白名单校验
-                    $powerResult = $this->directValidateAdminPowerValue((string)($post_info['power'] ?? ''));
-                    if (empty($powerResult['ok'])) {
-                        return show(500, 'error', (string)($powerResult['message'] ?? '权限校验失败'));
-                    }
-                    $cleanedPower = (string)($powerResult['cleaned'] ?? '');
-                    AdminModel::create([
-                        'account' => $post_info['account'],
-                        'password' => password_hash(($post_info['password'] . $salt), PASSWORD_BCRYPT),
-                        'salt' => $salt,
-                        'name' => $post_info['name'],
-                        'power' => $cleanedPower,
-                        // 新增：默认禁用2FA
-                        'twofa_enabled' => 0,
-                        'twofa_secret' => null,
-                        'twofa_recovery_codes' => null
-                    ]);
-                    $newAdmin = AdminModel::where('account', $post_info['account'])->find();
-                    $this->directWriteAdminOperationLog('新增管理员', '管理员管理', '新增管理员账号：' . (string)$post_info['account'] . '，名称：' . (string)$post_info['name'] . '，权限：' . $cleanedPower, [
-                        'target_id' => (int)($newAdmin['id'] ?? 0),
-                        'target_type' => 'admin',
-                    ]);
-                    return show(200, 'success', '添加成功');
-                    
-                case 'info':
-                    // P2-001: 权限校验
-                    if (!$this->directHasAdminPermission('管理员列表')) {
-                        return $this->directDenyAdminPermission('管理员列表');
-                    }
-                    // P2-001: 路径校验
-                    if (!$this->directRequestPathMatches('admin_post/info')) {
-                        return show(403, 'error', '管理员请求路径错误');
-                    }
-                    // P2-001: CSRF 校验
-                    if (!$this->directValidateRequiredCsrfToken()) {
-                        Log::warning('admin info invalid csrf blocked', [
-                            'admin_id' => (int)($this->admin_info['id'] ?? 0),
-                            'ip' => (string)$this->request->ip(),
-                            'path' => $this->directCurrentRequestPath(),
-                        ]);
-                        return show(403, 'error', '管理员请求校验失败');
-                    }
-                    $id = (int)($post_info['id'] ?? 0);
-                    if ($id <= 0) {
-                        return show(500, 'error', '参数错误');
-                    }
-
-                    $res = AdminModel::find($id);
-                    if (!$res) {
-                        return show(500, 'error', '管理员不存在');
-                    }
-
-                    $street = [
-                        "用户列表", "支付管理", "充值业务 - 产品列表", "查询业务 - 产品列表", "充值业务 - 订单列表",
-                        "查询业务 - 订单列表", "交易挂单数据", "交易订单数据", "充值订单记录", "提现订单记录",
-                        "返佣记录", "首页轮播图", "积分管理", "管理员列表", "操作记录", "系统设置管理"
-                    ];
-
-                    $powerValue = (string)($res['power'] ?? '');
-                    $power_selected = '';
-                    foreach ($street as $name) {
-                        $selected = (strpos($powerValue, $name) !== false) ? 'selected' : '';
-                        $power_selected .= "<option value=\"{$name}\" {$selected}>{$name}</option>";
-                    }
-
-                    // P2-001: 字段白名单，禁止返回 password/salt/twofa_secret/twofa_recovery_codes 等敏感字段
-                    $data = [
-                        'id' => (int)($res['id'] ?? 0),
-                        'account' => (string)($res['account'] ?? ''),
-                        'name' => (string)($res['name'] ?? ''),
-                        'power' => (string)($res['power'] ?? ''),
-                        'power_selected' => $power_selected,
-                    ];
-
-                    return show(200, 'success', '获取信息成功', $data);
-
-                case 'del':
-                    // P5-P1-001: 权限校验
-                    if (!$this->directHasAdminPermission('管理员列表')) {
-                        return $this->directDenyAdminPermission('管理员列表');
-                    }
-                    // P5-P1-001: 路径校验
-                    if (!$this->directRequestPathMatches('admin_post/del')) {
-                        return show(403, 'error', '管理员请求路径错误');
-                    }
-                    // P5-P1-001: CSRF 校验
-                    if (!$this->directValidateRequiredCsrfToken()) {
-                        Log::warning('admin del invalid csrf blocked', [
-                            'admin_id' => (int)($this->admin_info['id'] ?? 0),
-                            'ip' => (string)$this->request->ip(),
-                            'path' => $this->directCurrentRequestPath(),
-                        ]);
-                        return show(403, 'error', '管理员请求校验失败');
-                    }
-                    $targetId = (int)($post_info['id'] ?? 0);
-                    $currentAdminId = (int)($this->admin_info['id'] ?? 0);
-                    // P5-P1-001: 禁止删除超级管理员
-                    if ($targetId === 1) {
-                        return show(500, 'error', '禁止删除超级管理员');
-                    }
-                    // P5-P1-001: 禁止删除自己
-                    if ($targetId === $currentAdminId) {
-                        return show(500, 'error', '禁止删除当前登录账号');
-                    }
-                    if ($targetId <= 0) {
-                        return show(500, 'error', '参数错误');
-                    }
-                    // P5-P1-001: 敏感操作二次验证
-                    $sensitiveResult = $this->directValidateSensitiveOperation($post_info, 'admin_delete');
-                    if (empty($sensitiveResult['ok'])) {
-                        return show(500, 'error', (string)($sensitiveResult['message'] ?? '敏感操作验证失败'));
-                    }
-                    // P5-P1-001: 删除前确认目标存在
-                    $deleteAdmin = AdminModel::find($targetId);
-                    if (!$deleteAdmin) {
-                        return show(500, 'error', '管理员不存在');
-                    }
-                    AdminModel::destroy($targetId);
-                    $this->directWriteAdminOperationLog('删除管理员', '管理员管理', '删除管理员ID：' . (int)($deleteAdmin['id'] ?? 0) . '，账号：' . (string)($deleteAdmin['account'] ?? '') . '，名称：' . (string)($deleteAdmin['name'] ?? ''), [
-                        'target_id' => (int)($deleteAdmin['id'] ?? 0),
-                        'target_type' => 'admin',
-                    ]);
-                    return show(200, 'success', '删除成功');
-                default:
-                    return show(500, 'error', '你不对劲');
-            }
-        } catch (DbException $e) {
-            return show(500, 'error', $e->getMessage());
-        }
+        // B09: admin_post 的 add_modify / info / del 已迁移至 admin\Admin，旧入口保持兼容转发
+        return app(\app\controller\admin\Admin::class)->admin_post($action);
     }
 
 
     public function account_post(string $action)
     {
-        // P2-004 P3-002: 显式 CSRF 双重保护（全局 CsrfCheck 已保护，此处增加 controller 层校验）
-        if (!$this->directValidateRequiredCsrfToken()) {
-            return show(403, 'error', '请求校验失败');
-        }
-        $post_info = $this->request->post();
-        try {
-            switch ($action) {
-                case 'account':
-                    if(empty($post_info['account'])){
-                        return show(500, 'error', '登录账号不可为空');
-                    }
-                    $admin_info = AdminModel::where('id', $this->admin_info['id'])->find();
-                    if(!empty($post_info['password'])){
-                        $salt = randomkeys(4);
-                        $admin_info->password = password_hash(($post_info['password'] . $salt), PASSWORD_BCRYPT);
-                        $admin_info->salt = $salt;
-                    }
-                    $admin_info->account = $post_info['account'];
-                    $admin_info->save();
-                    return show(200, 'success', '信息修改成功');
-                case 'avatar':
-                    try {
-                        $stored = (new UploadService())->storeImageUpload(
-                            (string)$this->request->post('result'),
-                            [
-                                'directory' => 'storage/avatar',
-                                'basename' => (string)($this->admin_info['account'] ?? ''),
-                                'allowed_mimes' => ['image/jpeg', 'image/png'],
-                                'empty_message' => '图片上传错误',
-                            ]
-                        );
-                        $admin_info = AdminModel::where('id', $this->admin_info['id'])->find();
-                        if (!$admin_info) {
-                            return show(500, 'error', '管理员信息不存在');
-                        }
-                        $admin_info->avatar = $stored['public_path'];
-                        $admin_info->save();
-                        return show(200, 'success', '头像上传成功');
-                    } catch (Exception $e) {
-                        return show(500, 'error', $e->getMessage());
-                    }
-                default:
-                    return show(500, 'error', '你不对劲');
-            }
-        } catch (DbException $e) {
-            return show(500, 'error', $e->getMessage());
-        }
+        // B05-B: 业务实现已迁移至 admin\Account，此处反向薄转发（行为等价，Delegation Only）。
+        return app(\app\controller\admin\Account::class)->account_post($action);
     }
 
     /**
@@ -4450,423 +2656,64 @@ public function order_post(string $action)
      */
     public function login_check()
     {
-        $post_info = $this->request->post();
-        $account = trim((string)($post_info['account'] ?? ''));
-        $password = (string)($post_info['password'] ?? '');
-
-        // 判断是否输入账号密码
-        if ($account === '' || $password === '') {
-            return show(500, 'error', '账号或密码不得为空');
-        }
-
-        $rateLimiter = new LoginRateLimiter();
-        try {
-            $rateLimiter->assertNotLimited($this->request->ip(), $account);
-        } catch (\RuntimeException $e) {
-            return show(500, 'error', $e->getMessage());
-        } catch (\Throwable $e) {
-            Log::error('admin login rate limit check error: ' . $e->getMessage(), [
-                'account' => $account,
-                'ip' => $this->request->ip(),
-            ]);
-            return show(500, 'error', '系统繁忙，请稍后再试');
-        }
-
-        $admin_info = AdminModel::where('account', '=', $account)->find();
-        
-        // 验证账号密码
-        if (!$admin_info || !password_verify(($password . $admin_info->salt), $admin_info->password)) {
-            try {
-                $rateLimiter->recordFailure($this->request->ip(), $account);
-            } catch (\Throwable $e) {
-                Log::error('admin login rate limit record error: ' . $e->getMessage(), [
-                    'account' => $account,
-                    'ip' => $this->request->ip(),
-                ]);
-                return show(500, 'error', '系统繁忙，请稍后再试');
-            }
-            Log::warning("登录失败：账号或密码错误，尝试登录的账号为{$account}");
-            return show(500, 'error', '请检查您输入的用户名或密码是否正确。');
-        }
-        
-        // 检查是否启用了2FA
-        if ($admin_info->twofa_enabled) {
-            $verificationCode = trim((string)($post_info['twofa_code'] ?? ''));
-            if ($verificationCode === '') {
-                return show(403, 'need_twofa', '请输入二步验证码或恢复码', [
-                    'twofa_required' => 1,
-                ], 403);
-            }
-
-            $twofaResult = $this->verifyAdminTwofaOrRecovery($admin_info, [
-                'verification_code' => $verificationCode,
-            ], 'login');
-            if (empty($twofaResult['ok'])) {
-                $attemptMode = $this->detectAdminLoginVerificationAttempt($verificationCode);
-                try {
-                    $rateLimiter->recordFailure($this->request->ip(), $account);
-                } catch (\Throwable $e) {
-                    Log::error('admin login rate limit record error: ' . $e->getMessage(), [
-                        'account' => $account,
-                        'ip' => $this->request->ip(),
-                    ]);
-                    return show(500, 'error', '系统繁忙，请稍后再试');
-                }
-                if ($attemptMode === 'recovery') {
-                    Log::warning("管理员{$account}登录失败：恢复码校验失败", [
-                        'account' => $account,
-                        'admin_id' => (int)($admin_info['id'] ?? 0),
-                        'ip' => (string)$this->request->ip(),
-                        'message' => (string)($twofaResult['message'] ?? ''),
-                    ]);
-                } else {
-                    Log::warning("管理员{$account}登录失败：动态码校验失败", [
-                        'account' => $account,
-                        'admin_id' => (int)($admin_info['id'] ?? 0),
-                        'ip' => (string)$this->request->ip(),
-                        'message' => (string)($twofaResult['message'] ?? ''),
-                    ]);
-                }
-                return show(500, 'error', (string)($twofaResult['message'] ?? '二步验证码或恢复码不正确'));
-            }
-
-            if (($twofaResult['mode'] ?? '') === 'recovery') {
-                Log::info("管理员{$account}登录成功：使用恢复码完成校验", [
-                    'account' => $account,
-                    'admin_id' => (int)($admin_info['id'] ?? 0),
-                    'ip' => (string)$this->request->ip(),
-                ]);
-            }
-        }
-
-        try {
-            $rateLimiter->clear($this->request->ip(), $account);
-        } catch (\Throwable $e) {
-            Log::warning('admin login rate limit clear error: ' . $e->getMessage(), [
-                'account' => $account,
-                'ip' => $this->request->ip(),
-            ]);
-        }
-        
-        // 登录成功，记录日志
-        $loginVerificationSummary = '，未启用2FA';
-        if (!empty($admin_info->twofa_enabled)) {
-            $loginVerificationSummary = (($twofaResult['mode'] ?? '') === 'recovery')
-                ? '，已通过恢复码完成二步验证'
-                : '，已通过动态码完成二步验证';
-        }
-
-        Log::info("管理员{$account}登录成功" . ($admin_info->twofa_enabled ? '（已完成二步验证）' : ''));
-        $this->rotateSessionForAdminLogin($admin_info->getData());
-        $this->directWriteAdminOperationLog('管理员登录成功', '管理员管理', '管理员账号：' . $account . $loginVerificationSummary, [
-            'admin' => $admin_info->getData(),
-            'target_id' => (int)($admin_info['id'] ?? 0),
-            'target_type' => 'admin',
-        ]);
-        return show(200, 'success', '登录成功', getConfig('backstage_entrance'));
+        // B10-32: Auth/Security 业务实现已迁移至 admin\Auth，此处反向薄转发（行为等价，Delegation Only）。
+        return app(\app\controller\admin\Auth::class)->login_check();
     }
 
     // 后台管理员退出登录
     public function logout()
     {
-        // 防被动登出：后台退出仅允许 POST，阻断第三方页面通过 GET 链接或图片直接触发退出。
-        if (!$this->request->isPost()) {
-            return show(405, 'error', '不支持的请求方法', null, 405);
-        }
-
-        $account = $this->admin_info['account'] ?? '未知管理员';
-        Log::info("管理员{$account}退出登录");
-        $this->destroyAdminSession();
-        return redirect((string)url(getConfig('backstage_entrance').'/login'));
+        // B10-32: Auth/Security 业务实现已迁移至 admin\Auth，此处反向薄转发（行为等价，Delegation Only）。
+        return app(\app\controller\admin\Auth::class)->logout();
     }
 
 
     // 图片上传（Logo & 二维码）
     public function upload_post()
     {
-        $fileBag = (array)$this->request->file();
-        $keyname = array_key_first($fileBag);
-        $file = $keyname !== null ? ($fileBag[$keyname] ?? null) : null;
-        if ($keyname === null || !is_object($file)) {
-            return show(404, 'error', '请选择图片');
-        }
-
-        // P2-004 P2-002: 按 keyname 动态权限检查
-        $settingKeys = ['a_recommend_upload', 'b_recommend_upload', 'contact_service_upload', 'user_avatar_upload'];
-        if (in_array($keyname, $settingKeys, true)) {
-            if (!$this->directHasAdminPermission('系统设置管理')) {
-                return $this->directDenyAdminPermission('系统设置管理');
-            }
-        } elseif ($keyname === 'upload') {
-            // 通用上传：产品管理/轮播图/系统设置任意一个权限即可
-            $hasUploadPerm = $this->directHasAdminPermission('充值业务 - 产品列表')
-                || $this->directHasAdminPermission('查询业务 - 产品列表')
-                || $this->directHasAdminPermission('首页轮播图')
-                || $this->directHasAdminPermission('系统设置管理');
-            if (!$hasUploadPerm) {
-                return $this->directDenyAdminPermission('文件上传');
-            }
-        }
-
-        $uploader = new UploadService();
-        if (in_array($keyname, ['a_recommend_upload', 'b_recommend_upload', 'contact_service_upload', 'user_avatar_upload', 'upload'], true)) {
-            try {
-                $stored = $uploader->storeImageUpload($file, [
-                    'directory' => 'storage',
-                    'allowed_mimes' => ['image/jpeg', 'image/png', 'image/gif'],
-                ]);
-                return show(200, 'success', '上传成功', $stored['public_path']);
-            } catch (Exception $e) {
-                return show(404, 'error', $e->getMessage());
-            }
-        }
-
-        return show(404, 'error', '非白名单文件，禁止上传' . $keyname);
+        // B05-B: 业务实现已迁移至 admin\Upload，此处反向薄转发（行为等价，Delegation Only）。
+        return app(\app\controller\admin\Upload::class)->upload_post();
     }
 
     public function message_send()
     {
-        // P2-007: 消息发送权限检查
-        if (!$this->directHasAdminPermission('系统设置管理')) {
-            return $this->directDenyAdminPermission('系统设置管理');
-        }
-        $post_info = $this->request->post();
-
-        try {
-            $isGlobal = (int)($post_info['is_global'] ?? 0) > 0 ? 1 : 0;
-            $userId = (int)($post_info['user_id'] ?? $post_info['uid'] ?? 0);
-            $account = trim((string)($post_info['account'] ?? $post_info['mobile'] ?? ''));
-            $title = trim((string)($post_info['title'] ?? ''));
-            $summary = trim((string)($post_info['summary'] ?? ''));
-            $content = trim((string)($post_info['content'] ?? ''));
-            $isPinned = (int)($post_info['is_pinned'] ?? 0) > 0 ? 1 : 0;
-            $messageType = UserMessageService::normalizeMessageType((string)($post_info['message_type'] ?? 'official'));
-            $actionType = UserMessageService::normalizeActionType((string)($post_info['action_type'] ?? 'none'));
-            $actionValue = trim((string)($post_info['action_value'] ?? ''));
-            $normalizedActionValue = UserMessageService::normalizeActionValue($actionType, $actionValue);
-
-            if ($title === '') {
-                return show(500, 'error', '请输入消息标题');
-            }
-            if ($content === '') {
-                return show(500, 'error', '请输入消息正文');
-            }
-
-            if ($isGlobal === 1) {
-                $publishResult = UserMessageService::publishGlobalMessage(
-                    $title,
-                    $content,
-                    'admin',
-                    $actionType,
-                    $normalizedActionValue,
-                    (int)($this->admin_info['id'] ?? 0),
-                    $summary === '' ? null : $summary,
-                    $isPinned
-                );
-
-                $message = $publishResult['template'];
-                $queued = (int)($publishResult['queued'] ?? 0);
-
-                return show(200, 'success', '全局消息发送成功', [
-                    'id' => (int)($message['id'] ?? 0),
-                    'is_global' => 1,
-                    'queued' => $queued,
-                    'message_type' => 'global',
-                ]);
-            }
-
-            $user = null;
-            if ($userId > 0) {
-                $user = UserModel::where('id', $userId)->find();
-            }
-            if (!$user && $account !== '') {
-                $user = UserModel::where('mobile', $account)->find();
-            }
-            if (!$user && $account !== '') {
-                $user = UserModel::where('nickname', $account)->find();
-            }
-            if (!$user && $account !== '') {
-                $user = UserModel::where('surname', $account)->find();
-            }
-            if (!$user) {
-                return show(500, 'error', '目标用户不存在，请检查用户ID或账号');
-            }
-
-            if ($actionType !== 'none' && $actionValue === '') {
-                return show(500, 'error', '请选择动作类型后填写跳转地址');
-            }
-            if ($actionType !== 'none' && $normalizedActionValue === null) {
-                return show(500, 'error', '跳转地址不安全或不在允许范围内');
-            }
-
-            $message = createUserMessage(
-                (int)$user['id'],
-                $title,
-                $content,
-                'admin',
-                $messageType,
-                null,
-                $actionType,
-                $normalizedActionValue,
-                (int)($this->admin_info['id'] ?? 0),
-                $summary === '' ? null : $summary,
-                $isPinned
-            );
-
-            return show(200, 'success', '消息发送成功', [
-                'id' => (int)($message['id'] ?? 0),
-                'user_id' => (int)($user['id'] ?? 0),
-                'account' => (string)($user['mobile'] ?? $user['nickname'] ?? $user['surname'] ?? ''),
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('admin message_send error: ' . $e->getMessage(), [
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'post' => $post_info,
-            ]);
-            return show(500, 'error', '消息发送失败：' . $e->getMessage());
-        }
+        // B06: 业务实现已迁移至 admin\Message，此处反向薄转发（行为等价，Delegation Only）。
+        return app(\app\controller\admin\Message::class)->message_send();
     }
 
     public function message_detail()
     {
-        $id = (int)$this->request->get('id', 0);
-        if ($id <= 0) {
-            return show(500, 'error', '缺少消息ID');
-        }
-
-        $message = UserMessage::find($id);
-        if (!$message) {
-            return show(500, 'error', '消息不存在');
-        }
-
-        $user = UserModel::field('id,mobile,nickname,surname')->find((int)($message['user_id'] ?? 0));
-        $sender = AdminModel::field('id,name,account')->find((int)($message['sender_admin_id'] ?? 0));
-
-        return show(200, 'success', '查询成功', [
-            'id' => (int)($message['id'] ?? 0),
-            'user_id' => (int)($message['user_id'] ?? 0),
-            'title' => (string)($message['title'] ?? ''),
-            'summary' => UserMessageService::buildSummary((string)($message['summary'] ?? ''), (string)($message['content'] ?? '')),
-            'content' => (string)($message['content'] ?? ''),
-            'source_type' => (string)($message['source_type'] ?? 'admin'),
-            'message_type' => (string)($message['message_type'] ?? 'official'),
-            'action_type' => (string)($message['action_type'] ?? 'none'),
-            'action_value' => (string)($message['action_value'] ?? ''),
-            'is_pinned' => (int)($message['is_pinned'] ?? 0),
-            'is_read' => (int)($message['is_read'] ?? 0),
-            'read_time' => (string)($message['read_time'] ?? ''),
-            'created_at' => (string)($message['created_at'] ?? ''),
-            'updated_at' => (string)($message['updated_at'] ?? ''),
-            'user_info' => $user ? [
-                'id' => (int)($user['id'] ?? 0),
-                'mobile' => (string)($user['mobile'] ?? ''),
-                'nickname' => (string)($user['nickname'] ?? ''),
-                'surname' => (string)($user['surname'] ?? ''),
-                'account' => (string)($user['mobile'] ?? $user['nickname'] ?? $user['surname'] ?? ''),
-            ] : null,
-            'sender_admin' => $sender ? [
-                'id' => (int)($sender['id'] ?? 0),
-                'name' => (string)($sender['name'] ?? ''),
-                'account' => (string)($sender['account'] ?? ''),
-            ] : null,
-        ]);
+        // B06: 业务实现已迁移至 admin\Message，此处反向薄转发（行为等价，Delegation Only）。
+        return app(\app\controller\admin\Message::class)->message_detail();
     }
 
     public function message_pin()
     {
-        // P2-007: 消息置顶权限检查
-        if (!$this->directHasAdminPermission('系统设置管理')) {
-            return $this->directDenyAdminPermission('系统设置管理');
-        }
-        $post_info = $this->request->post();
-        $id = (int)($post_info['id'] ?? 0);
-        $isPinned = (int)($post_info['is_pinned'] ?? -1);
-
-        if ($id <= 0) {
-            return show(500, 'error', '缺少消息ID');
-        }
-
-        if ($isPinned !== 0 && $isPinned !== 1) {
-            return show(500, 'error', '置顶状态错误');
-        }
-
-        $message = UserMessage::find($id);
-        if (!$message) {
-            return show(500, 'error', '消息不存在');
-        }
-
-        $message->is_pinned = $isPinned;
-        $message->save();
-
-        return show(200, 'success', $isPinned === 1 ? '置顶成功' : '已取消置顶', [
-            'id' => (int)($message['id'] ?? 0),
-            'is_pinned' => (int)($message['is_pinned'] ?? 0),
-        ]);
+        // B06: 业务实现已迁移至 admin\Message，此处反向薄转发（行为等价，Delegation Only）。
+        return app(\app\controller\admin\Message::class)->message_pin();
     }
 
-public function message_delete()
-{
-    // P2-007: 消息删除权限检查
-    if (!$this->directHasAdminPermission('系统设置管理')) {
-        return $this->directDenyAdminPermission('系统设置管理');
+    public function message_delete()
+    {
+        // B06: 业务实现已迁移至 admin\Message，此处反向薄转发（行为等价，Delegation Only）。
+        return app(\app\controller\admin\Message::class)->message_delete();
     }
-    $post_info = $this->request->post();
-    $id = (int)($post_info['id'] ?? 0);
-
-    if ($id <= 0) {
-        return show(500, 'error', '缺少消息ID');
-    }
-
-    $message = UserMessage::find($id);
-    if (!$message) {
-        return show(500, 'error', '消息不存在');
-    }
-
-    if ((int)($message['is_deleted'] ?? 0) === 1) {
-        return show(200, 'success', '消息已删除', [
-            'id' => (int)($message['id'] ?? 0),
-            'deleted' => 1,
-        ]);
-    }
-
-    $message->is_deleted = 1;
-    $message->updated_at = date('Y-m-d H:i:s');
-    $message->save();
-
-    return show(200, 'success', '删除成功', [
-        'id' => (int)($message['id'] ?? 0),
-        'deleted' => 1,
-    ]);
-}
 
     public function admin_footer(string $action)
     {
-        $post_info = $this->request->post();
-        switch ($action) {
-            case 'out_order':
-                $order_cz = Order::where('status', 0)->where('type', 1)->count();
-                $order_cx = Order::where('status', 0)->where('type', 2)->count();
-                $recharge = Recharge::where('status', 1)->count();
-                $withdrawal = Withdrawal::where('status', 0)->count();
-                $data = [
-                    'order_cz' => $order_cz,
-                    'order_cx' => $order_cx,
-                    'recharge' => $recharge,
-                    'withdrawal' => $withdrawal,
-                ];
-                return show(200, 'success', '查询成功', $data);
-
-            default:
-                return show(500, 'error', '请求出错');
-        }
+        // B05-A: 业务实现已迁移至 admin\Setting 控制器；本入口反向薄转发保持旧路由兼容。
+        return app(\app\controller\admin\Setting::class)->admin_footer($action);
     }
     
 
 
 public function setting_post(string $action)
     {
-        switch ($action) {
+                if (!$this->authorize('admin.setting.manage')) {
+            return $this->directDenyAdminPermission('admin.setting.manage');
+        }
+
+switch ($action) {
             case 'setting':
                 return $this->handleSetting((array)$this->request->post());
                 

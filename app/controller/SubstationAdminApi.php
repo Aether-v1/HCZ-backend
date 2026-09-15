@@ -1,5 +1,5 @@
 <?php
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace app\controller;
 
@@ -11,22 +11,63 @@ use app\model\SubstationProfile;
 use app\model\SubstationProfileAudit;
 use app\model\Config;
 use app\model\User as UserModel;
+use app\service\AuthorizationService;
 use think\App;
 use think\Request;
 use think\facade\Db;
 
+/**
+ * 分站管理后台 API
+ *
+ * Batch 2-D1: 接入 RBAC 授权体系
+ * - 每个业务方法开头调用 $this->authorize() 进行权限检查
+ * - 兼容策略：新 RBAC 权限 OR 旧 power() 权限，任一通过即放行
+ * - 旧 power() 兼容检查"系统设置管理"（分站管理属于系统级功能）
+ * - 不使用 admin.id===1 硬编码，超级管理员通过 role.code='super_admin' 判断
+ */
 class SubstationAdminApi
 {
     protected Request $request;
     protected App $app;
     protected mixed $admin_info;
     protected array $middleware = [AdminAuth::class];
+    protected AuthorizationService $authService;
 
-    public function __construct(App $app)
+    public function __construct(App $app, AuthorizationService $authService)
     {
         $this->app = $app;
         $this->request = $app->request;
         $this->admin_info = $this->request->session('admin');
+        $this->authService = $authService;
+    }
+
+    /**
+     * 授权检查（Batch 2-D1 新增）
+     *
+     * 兼容策略：新 RBAC 权限 OR 旧 power() 权限，任一通过即放行。
+     * 旧 power() 检查"系统设置管理"（分站管理属于系统级功能，向后兼容已有管理员）。
+     *
+     * @param string $permission RBAC 权限 code（如 substation.view）
+     * @return \think\Response|null  null=放行，Response=拒绝
+     */
+    private function authorize(string $permission): ?\think\Response
+    {
+        $adminId = (int)($this->admin_info['id'] ?? 0);
+
+        // 1. 新 RBAC 权限检查（严格匹配，super_admin 通过角色判断）
+        if ($adminId > 0 && $this->authService->can($adminId, $permission)) {
+            return null;
+        }
+
+        // 2. 旧 power() 兼容检查（向后兼容已有管理员）
+        //    分站管理属于系统级功能，检查"系统设置管理"权限
+        $power = (string)($this->admin_info['power'] ?? '');
+        if ($power !== '' && power($power, '系统设置管理') != 2) {
+            return null;
+        }
+
+        // 3. 两者都失败 → 拒绝
+        return show(403, 'error', '权限不足');
     }
 
     private function profileTable(): string
@@ -50,6 +91,10 @@ class SubstationAdminApi
 
     public function applyList()
     {
+        if ($denied = $this->authorize('substation.view')) {
+            return $denied;
+        }
+
         $page = max(1, (int)$this->request->get('page', 1));
         $limit = max(1, min(100, (int)$this->request->get('limit', 20)));
         $keyword = trim((string)$this->request->get('keyword', ''));
@@ -71,6 +116,10 @@ class SubstationAdminApi
 
     public function profileAuditList()
     {
+        if ($denied = $this->authorize('substation.view')) {
+            return $denied;
+        }
+
         $page = max(1, (int)$this->request->get('page', 1));
         $limit = max(1, min(100, (int)$this->request->get('limit', 20)));
         $keyword = trim((string)$this->request->get('keyword', ''));
@@ -89,6 +138,10 @@ class SubstationAdminApi
 
     public function saveBaseDomain()
     {
+        if ($denied = $this->authorize('substation.manage')) {
+            return $denied;
+        }
+
         try {
             $value = strtolower(trim((string)$this->request->post('base_domain', '')));
             if ($value === '') {
@@ -114,6 +167,10 @@ class SubstationAdminApi
 
     public function audit()
     {
+        if ($denied = $this->authorize('substation.audit')) {
+            return $denied;
+        }
+
         try {
             $auditId = (int)$this->request->post('audit_id', 0);
             $status = (int)$this->request->post('status', 0);
@@ -165,7 +222,7 @@ class SubstationAdminApi
                     if ($profile->save() === false) {
                         throw new \Exception('保存正式配置失败');
                     }
-                    $substation->status = 2;
+                    $substation->status = Substation::STATUS_APPROVED;
                     $substation->open_time = $substation['open_time'] ?: date('Y-m-d H:i:s');
                     $substation->reject_reason = null;
                     $substation->update_time = date('Y-m-d H:i:s');
@@ -173,7 +230,7 @@ class SubstationAdminApi
                 } else {
                     $substation->reject_reason = $rejectReason;
                     if ((int)$audit['audit_type'] === 1) {
-                        $substation->status = 3;
+                        $substation->status = Substation::STATUS_REJECTED;
                     }
                     $substation->update_time = date('Y-m-d H:i:s');
                     $substation->save();
@@ -193,6 +250,10 @@ class SubstationAdminApi
 
     public function list()
     {
+        if ($denied = $this->authorize('substation.view')) {
+            return $denied;
+        }
+
         $page = max(1, (int)$this->request->get('page', 1));
         $limit = max(1, min(100, (int)$this->request->get('limit', 20)));
         $keyword = trim((string)$this->request->get('keyword', ''));
@@ -221,6 +282,10 @@ class SubstationAdminApi
 
     public function manageAction()
     {
+        if ($denied = $this->authorize('substation.manage')) {
+            return $denied;
+        }
+
         try {
             $action = trim((string)$this->request->post('action', ''));
             $ids = trim((string)$this->request->post('ids', ''));
@@ -235,11 +300,11 @@ class SubstationAdminApi
                 foreach ($list as $row) {
                     $beforeBalance = round((float)($row['wallet_balance'] ?? 0), 2);
                     if ($action === 'freeze') {
-                        $row->status = 4;
+                        $row->status = Substation::STATUS_SUSPENDED;
                     } elseif ($action === 'resume') {
-                        $row->status = 2;
+                        $row->status = Substation::STATUS_APPROVED;
                     } elseif ($action === 'cancel') {
-                        $row->status = 0;
+                        $row->status = Substation::STATUS_PENDING;
                     } elseif ($action === 'wallet_add' || $action === 'wallet_deduct') {
                         if ($amount <= 0) {
                             throw new \Exception('请输入正确的调整金额');
@@ -284,6 +349,10 @@ class SubstationAdminApi
 
     public function orders()
     {
+        if ($denied = $this->authorize('substation.view')) {
+            return $denied;
+        }
+
         $substationId = (int)$this->request->get('substation_id', 0);
         $page = max(1, (int)$this->request->get('page', 1));
         $limit = max(1, min(100, (int)$this->request->get('limit', 20)));
@@ -318,6 +387,10 @@ class SubstationAdminApi
 
     public function incomeLog()
     {
+        if ($denied = $this->authorize('substation.view')) {
+            return $denied;
+        }
+
         $substationId = (int)$this->request->get('substation_id', 0);
         $page = max(1, (int)$this->request->get('page', 1));
         $limit = max(1, min(100, (int)$this->request->get('limit', 20)));

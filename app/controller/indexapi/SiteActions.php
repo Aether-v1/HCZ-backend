@@ -110,7 +110,7 @@ trait SiteActions
     protected function handleApiProductDetail($id)
     {
         $product = Product::find((int)$id);
-        if (!$product || (int)($product['status'] ?? 0) !== 1) {
+        if (!$product || (int)($product['status'] ?? 0) !== Product::STATUS_ENABLED) {
             return show(404, 'error', '商品不存在', null, 404);
         }
         $substationContext = SubstationService::resolveByRequest($this->request);
@@ -137,7 +137,7 @@ trait SiteActions
         $allProducts = [];
         $substationContext = SubstationService::resolveByRequest($this->request);
         $substationId = (int)($substationContext['substation_id'] ?? 0);
-        $products = Product::where('status', 1)->where('type', 1)->order('sort', 'desc')->select();
+        $products = Product::where('status', Product::STATUS_ENABLED)->where('type', 1)->order('sort', 'desc')->select();
         foreach ($products as $product) {
             $allProducts[] = $this->normalizeSiteProduct($product, '', $substationId, $summaryOnly);
         }

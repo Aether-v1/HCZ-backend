@@ -11,6 +11,14 @@ use think\facade\Log;
  */
 class Order extends Model
 {
+    // ===== Canonical Order Status (R1.6a) =====
+    // 0 = pending, 1 = processing, 2 = completed, 3 = cancelled
+    // Numeric values FROZEN - do not renumber. DB/API contract depends on these.
+    public const STATUS_PENDING = 0;
+    public const STATUS_PROCESSING = 1;
+    public const STATUS_COMPLETED = 2;
+    public const STATUS_CANCELLED = 3;
+
     protected const USER_SOFT_DELETE_FIELD = 'user_deleted';
     protected const USER_SOFT_DELETE_TIME_FIELD = 'user_deleted_time';
 

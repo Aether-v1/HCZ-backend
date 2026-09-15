@@ -17,6 +17,7 @@ use app\model\TransactionOrder;
 use app\model\TransactionProduct;
 use app\model\UserMessage;
 use app\service\UserMessageService;
+use app\service\AuthorizationService;
 
 use think\App;
 use think\facade\View;
@@ -49,16 +50,18 @@ class AdminList
     protected App $app;
 
     protected mixed $admin_info;
+    protected AuthorizationService $authService;
     protected string|array|bool $config = [];
     protected array $middleware = [AdminAuth::class];
 
-    public function __construct(App $app)
+    public function __construct(App $app, AuthorizationService $authService)
     {
         $this->app = $app;
         $this->request = $this->app->request;
         // 将当前登录管理员信息写入至私有属性
         $this->admin_info = $this->request->session('admin');
         $this->config = getConfig();
+        $this->authService = $authService;
     }
 
     private function listPayload(): array
@@ -170,15 +173,60 @@ class AdminList
         return json($result);
     }
 
+    /**
+     * 旧中文权限名 → 新 RBAC permission code 映射
+     * Batch 2-D2: 用于 directHasAdminPermission() 中的 RBAC 检查
+     *
+     * @param string $legacyPermission 旧中文权限名
+     * @return string|null RBAC permission code，无映射时返回 null
+     */
+    private function legacyToRbacPermission(string $legacyPermission): ?string
+    {
+        $map = [
+            '用户列表'             => 'admin.user.view',
+            '充值业务 - 产品列表'   => 'admin.product.recharge.view',
+            '查询业务 - 产品列表'   => 'admin.product.query.view',
+            '首页轮播图'           => 'admin.banner.manage',
+            '充值订单记录'         => 'admin.recharge.view',
+            '提现订单记录'         => 'admin.withdrawal.view',
+            '充值业务 - 订单列表'   => 'admin.order.recharge.view',
+            '查询业务 - 订单列表'   => 'admin.order.query.view',
+            '交易挂单数据'         => 'admin.transaction.pending.view',
+            '交易订单数据'         => 'admin.transaction.order.view',
+            '支付管理'             => 'admin.payment.manage',
+            '返佣记录'             => 'admin.rebate.view',
+            '管理员列表'           => 'admin.admin.view',
+            '操作记录'             => 'admin.log.view',
+        ];
+
+        return $map[$legacyPermission] ?? null;
+    }
+
     private function directHasAdminPermission(string $permission): bool
     {
         $adminId = (int)($this->admin_info['id'] ?? 0);
-        if ($adminId === 1) {
-            return true;
-        }
         if ($adminId <= 0) {
             return false;
         }
+
+        // Batch 2-D2: 1. 新 RBAC 权限检查（严格匹配，super_admin 通过 role.code 判断）
+        $rbacPermission = $this->legacyToRbacPermission($permission);
+        if ($rbacPermission !== null) {
+            try {
+                if ($this->authService->can($adminId, $rbacPermission)) {
+                    return true;
+                }
+            } catch (\Throwable $e) {
+                // RBAC 检查异常时安全降级到旧 power() 检查，不直接拒绝
+                \think\facade\Log::warning('AdminList RBAC 检查异常，降级到旧 power()', [
+                    'admin_id' => $adminId,
+                    'permission' => $permission,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        // Batch 2-D2: 2. 旧 power() 兼容检查（OR 逻辑，向后兼容已有管理员）
         return power((string)($this->admin_info['power'] ?? ''), $permission) != 2;
     }
 

@@ -1,6 +1,7 @@
 <?php
 namespace app\middleware;
 
+use app\support\V1Context;
 use Closure;
 use think\Request;
 use think\Response;
@@ -28,6 +29,12 @@ class ApiResponseFormat
     protected function shouldNormalize(Request $request, Response $response): bool
     {
         if (!($response instanceof Json)) {
+            return false;
+        }
+
+        // R1.4 P2-02 修复：/api/v1 与 /api/v1/* 不经过 legacy response normalization
+        // V1 响应由 V1ApiResponse 直接输出，保持 {success,data,meta} / {success,error,request_id} 格式
+        if (V1Context::isV1Request($request)) {
             return false;
         }
 

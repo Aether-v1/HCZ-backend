@@ -3,13 +3,68 @@ namespace app\job;
 
 use think\queue\Job;
 use app\service\PointsService;
+use app\service\RefundIntentService;
 use app\common\library\TelegramHelper;
 use app\service\TelegramService;
 use think\facade\Log;
 use think\facade\Config;
+use think\facade\Cache;
 
 class BatchPhoneQuery
 {
+    /** 返还幂等键 TTL（秒），与 QueryHandler batch_trace_ttl 默认值一致 */
+    const REFUND_KEY_TTL = 172800;
+
+    /**
+     * 积分返还幂等执行：同一 refund identity 最多成功一次 addPoints。
+     * 非空 trace_id → 构造 refund_key → 进入 DB Outbox（RefundIntent），crash 后 Worker 可恢复。
+     * 空 trace_id 无法安全构造确定性幂等键，fail-closed 拒绝静默直接返还（F14/F15）。
+     * @return array{code:int,msg:string}
+     */
+    private function refundPointsOnce($userId, $points, $traceId, $refundEvent, $businessItem, $reason)
+    {
+        $points = (int)$points;
+        if ($points <= 0) {
+            return ['code' => 1, 'msg' => '无需返还积分'];
+        }
+
+        $traceId = (string)$traceId;
+
+        // F15: 空 trace_id 无法建立幂等身份。不能静默直接 addPoints（会绕过 Outbox，
+        // 且在 job 重投时可能重复返还）。fail-closed：明确失败 + critical 日志，由运营介入。
+        if ($traceId === '') {
+            Log::critical('批量查询返还缺少trace_id，拒绝静默直接返还（需人工处理）', [
+                'user_id' => $userId,
+                'points' => $points,
+                'refund_event' => $refundEvent,
+                'business_item' => (string)$businessItem,
+            ]);
+            return ['code' => 0, 'msg' => '积分返还失败：缺少幂等身份(trace_id)，需人工处理'];
+        }
+
+        // INFO-022-A: 使用 DB Outbox 持久化返还义务，crash 后 Worker 可恢复
+        $key = "tg:batch:refund:{$traceId}:{$refundEvent}";
+        $item = (string)$businessItem;
+        if ($item !== '') {
+            $key .= ":{$item}";
+        }
+
+        try {
+            $intentService = new RefundIntentService();
+            return $intentService->createAndProcess($key, (int)$userId, $points, $reason);
+        } catch (\Throwable $e) {
+            Log::critical('批量查询积分返还 Outbox 处理失败', [
+                'user_id' => $userId,
+                'trace_id' => $traceId,
+                'refund_event' => $refundEvent,
+                'points' => $points,
+                'key' => $key,
+                'error' => $e->getMessage(),
+            ]);
+            return ['code' => 0, 'msg' => '积分返还失败: ' . $e->getMessage()];
+        }
+    }
+
     /**
      * 执行队列任务
      * @param Job $job
@@ -123,6 +178,8 @@ class BatchPhoneQuery
         $invalidNumbers = $data['invalid_numbers'] ?? [];
         $checkPoints = (int)$data['check_points'];
         $totalPoints = $data['total_points'];
+        // F14: 在号码循环前保存 Job 原始 trace_id，避免后续 $data 被查询结果遮蔽后丢失
+        $jobTraceId = $data['trace_id'] ?? '';
         
         $successCount = 0;
         $failCount = 0;
@@ -166,9 +223,12 @@ class BatchPhoneQuery
                         $responseText .= "错误信息：{$result['msg']}\n";
                         
                         // 为查询失败的号码返还积分，并检查结果
-                        $refundResult = $pointsService->addPoints(
+                        $refundResult = $this->refundPointsOnce(
                             $userId, 
                             $checkPoints, 
+                            $jobTraceId,
+                            'phone',
+                            $phoneNumber,
                             "手机号{$phoneNumber}话费查询失败，返还积分"
                         );
                         
@@ -198,9 +258,12 @@ class BatchPhoneQuery
                     
                     // 为查询异常的号码返还积分，增加异常捕获
                     try {
-                        $refundResult = $pointsService->addPoints(
+                        $refundResult = $this->refundPointsOnce(
                             $userId, 
                             $checkPoints, 
+                            $jobTraceId,
+                            'phone',
+                            $phoneNumber,
                             "手机号{$phoneNumber}话费查询异常，返还积分"
                         );
                         
@@ -251,9 +314,12 @@ class BatchPhoneQuery
                 
                 // 返还无效号码的积分
                 $refundPoints = $invalidCount * $checkPoints;
-                $refundResult = $pointsService->addPoints(
+                $refundResult = $this->refundPointsOnce(
                     $userId, 
                     $refundPoints, 
+                    $jobTraceId,
+                    'invalid_numbers',
+                    '',
                     "批量查询无效号码{$invalidCount}个，返还积分"
                 );
                 

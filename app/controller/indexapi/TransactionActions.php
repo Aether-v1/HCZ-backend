@@ -190,7 +190,7 @@ trait TransactionActions
                     // 使用 lock(true) 强制当前读，确保看到已提交的最新活跃订单
                     $committedAmount = (float)Db::name('transaction_order')
                         ->where('pid', $pid)
-                        ->whereIn('status', [0, 1])
+                        ->whereIn('status', [TransactionOrder::STATUS_PENDING, TransactionOrder::STATUS_REMITTED])
                         ->lock(true)
                         ->sum('pay_amount');
                     $available = round((float)$product['sell_account'] - $committedAmount, 2);
@@ -343,7 +343,7 @@ trait TransactionActions
                     if ($lockedTransactionProduct) {
                         $activeCommitted = (float)Db::name('transaction_order')
                             ->where('pid', (int)$lockedTransactionProduct['id'])
-                            ->whereIn('status', [0, 1])
+                            ->whereIn('status', [TransactionOrder::STATUS_PENDING, TransactionOrder::STATUS_REMITTED])
                             ->lock(true)
                             ->sum('pay_amount');
                     }
@@ -701,7 +701,7 @@ trait TransactionActions
             'total' => $total,
             'totalPages' => max(1, (int)ceil($total / $pageSize)),
             'TransactionProduct_count' => (int)TransactionProduct::where('uid', $uid)->count(),
-            'TransactionOrder_count' => (int)TransactionOrder::where('uid', $uid)->whereIn('status', [0, 1])->count(),
+            'TransactionOrder_count' => (int)TransactionOrder::where('uid', $uid)->whereIn('status', [TransactionOrder::STATUS_PENDING, TransactionOrder::STATUS_REMITTED])->count(),
             'sort' => $sortDesc ? 'desc' : 'asc',
             'onlyMine' => $onlyMine ? 1 : 0,
         ]);
@@ -725,13 +725,13 @@ trait TransactionActions
         });
 
         if ($tab === 'pending_payment') {
-            $query->where('status', 0);
+            $query->where('status', TransactionOrder::STATUS_PENDING);
         } elseif ($tab === 'paid') {
-            $query->where('status', 1);
+            $query->where('status', TransactionOrder::STATUS_REMITTED);
         } elseif ($tab === 'cancelled') {
-            $query->where('status', 2);
+            $query->where('status', TransactionOrder::STATUS_CANCELLED);
         } elseif ($tab === 'completed') {
-            $query->where('status', 3);
+            $query->where('status', TransactionOrder::STATUS_COMPLETED);
         }
 
         $query->order('id', 'desc');

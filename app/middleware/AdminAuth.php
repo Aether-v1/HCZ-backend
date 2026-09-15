@@ -21,14 +21,15 @@ class AdminAuth
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // 方法白名单
-        $White_list_Controller = ['login', 'login_check', 'password'];
+        // 方法白名单：无需认证即可访问的方法
+        // login = Admin 页面登录页，login_check = AdminApi 登录验证
+        $White_list_Controller = ['login', 'login_check'];
         $thisAction = $request->action();
 
         if (!in_array($thisAction, $White_list_Controller)) {
             // 获取当前用户
             $admin_info = Session::get('admin');
-            
+
             // 优化验证逻辑：只检查用户ID是否存在，弱化IP验证
             if (empty($admin_info['id'])) {
                 // 记录日志便于排查（可选）
@@ -37,7 +38,7 @@ class AdminAuth
                     'current_ip' => $request->ip(),
                     'url' => $request->url()
                 ]);
-                
+
                 if ($request->isAjax()) {
                     return show(403, 'error', '未登录，禁止请求');
                 }
@@ -63,7 +64,7 @@ class AdminAuth
                 }
                 return redirect((string)url(getConfig('backstage_entrance').'/login'));
             }
-            
+
             // 可选：仅记录IP变化（不强制登出）
             if (!empty($admin_info['login_ip']) && $admin_info['login_ip'] !== $request->ip()) {
                 Log::info('管理员IP发生变化（正常现象，非安全问题）', [
@@ -99,4 +100,3 @@ class AdminAuth
         }
     }
 }
-    

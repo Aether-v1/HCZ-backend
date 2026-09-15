@@ -1,4 +1,4 @@
-﻿{{include file="layout/admin_header" web_title="充值业务 - 订单列表"/}}
+{{include file="layout/admin_header" web_title="充值业务 - 订单列表"/}}
 <div id="kt_content_container" class="app-container container-fluid">
  <div class="card">
  <div class="card-header">
@@ -674,6 +674,10 @@ KTUtil.onDOMContentLoaded(function () {
  toastr.error('实际到账', {closeButton: true, timeOut: 3000});
  return;
  }
+ if (parseFloat(amount) > 99999999.99) {
+ toastr.error('实际到账金额超出合理范围', {closeButton: true, timeOut: 3000});
+ return;
+ }
  
  $.ajax({
  url: "{{:getConfig('backstage_entrance')}}/order_post/set_amount_received",
@@ -719,6 +723,10 @@ KTUtil.onDOMContentLoaded(function () {
  
  if (!amount || isNaN(amount) || parseFloat(amount) < 0) {
  toastr.error('请输入有效的实际到账金额', {closeButton: true, timeOut: 3000});
+ return;
+ }
+ if (parseFloat(amount) > 99999999.99) {
+ toastr.error('实际到账金额超出合理范围', {closeButton: true, timeOut: 3000});
  return;
  }
  

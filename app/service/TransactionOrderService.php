@@ -31,14 +31,14 @@ class TransactionOrderService
             if (!$order) {
                 throw new Exception('交易订单不存在');
             }
-            if ((int)($order['status'] ?? 0) !== 0) {
+            if ((int)($order['status'] ?? 0) !== TransactionOrder::STATUS_PENDING) {
                 throw new Exception('当前订单状态不可提交凭证');
             }
             if ($this->isExpiredPendingOrder($order)) {
                 throw new Exception('订单已超时取消，请重新下单');
             }
 
-            $order->status = 1;
+            $order->status = TransactionOrder::STATUS_REMITTED;
             $order->submit_time = date('Y-m-d H:i:s');
             if ($order->save() === false) {
                 throw new Exception('操作失败');
@@ -75,11 +75,11 @@ class TransactionOrderService
             if (!$order) {
                 throw new Exception('交易订单不存在');
             }
-            if ((int)($order['status'] ?? 0) !== 0) {
+            if ((int)($order['status'] ?? 0) !== TransactionOrder::STATUS_PENDING) {
                 throw new Exception('当前订单不可取消');
             }
 
-            $order->status = 2;
+            $order->status = TransactionOrder::STATUS_CANCELLED;
             if (empty($order['cancel_time'])) {
                 $order->cancel_time = date('Y-m-d H:i:s');
             }
@@ -111,7 +111,7 @@ class TransactionOrderService
             if (!$order) {
                 throw new Exception('交易订单不存在');
             }
-            if ((int)($order['status'] ?? 0) !== 1) {
+            if ((int)($order['status'] ?? 0) !== TransactionOrder::STATUS_REMITTED) {
                 throw new Exception('当前订单状态不可放币');
             }
 
@@ -166,7 +166,7 @@ class TransactionOrderService
                 throw new Exception('订单金额不匹配：usdt_amount + transaction_fees != pay_amount');
             }
 
-            $order->status = 3;
+            $order->status = TransactionOrder::STATUS_COMPLETED;
             $order->complete_time = date('Y-m-d H:i:s');
             if ($order->save() === false) {
                 throw new Exception('操作失败');
@@ -281,7 +281,7 @@ class TransactionOrderService
     public function expirePendingOrders(?int $uid = null): int
     {
         $expireBefore = date('Y-m-d H:i:s', time() - TransactionOrder::pendingTimeoutSeconds());
-        $query = TransactionOrder::where('status', 0)->where('create_time', '<', $expireBefore);
+        $query = TransactionOrder::where('status', TransactionOrder::STATUS_PENDING)->where('create_time', '<', $expireBefore);
 
         if (!empty($uid)) {
             $query->where(function ($builder) use ($uid) {
@@ -310,12 +310,12 @@ class TransactionOrderService
                 Db::rollback();
                 return null;
             }
-            if ((int)($order['status'] ?? 0) !== 0 || !$this->isExpiredPendingOrder($order)) {
+            if ((int)($order['status'] ?? 0) !== TransactionOrder::STATUS_PENDING || !$this->isExpiredPendingOrder($order)) {
                 Db::rollback();
                 return null;
             }
 
-            $order->status = 2;
+            $order->status = TransactionOrder::STATUS_CANCELLED;
             if (empty($order['cancel_time'])) {
                 $order->cancel_time = date('Y-m-d H:i:s');
             }

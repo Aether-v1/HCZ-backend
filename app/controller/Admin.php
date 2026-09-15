@@ -176,7 +176,7 @@ class Admin
             $userTodayNew = (int)UserModel::whereDay('create_time')->count();
             View::assign('user_today_new', $userTodayNew);
             // 待处理统计
-            $pendingWithdrawal = (int)Withdrawal::where('status', 0)->count();
+            $pendingWithdrawal = (int)Withdrawal::where('status', \app\model\Withdrawal::STATUS_PENDING)->count();
             $pendingRecharge = (int)Recharge::where('status', 1)->count();
             $pendingOrderCz = (int)Order::where('status', 0)->where('type', 1)->count();
             $pendingOrderCx = (int)Order::where('status', 0)->where('type', 2)->count();
@@ -201,7 +201,7 @@ class Admin
             $recentOrdersFormatted = [];
             foreach ($recentOrders as $ro) {
                 $roUser = UserModel::field('id,mobile,nickname,surname')->find((int)($ro['uid'] ?? 0));
-                $statusMap = [0 => '待处理', 1 => '处理中', 2 => '已完成', 3 => '已取消'];
+                $statusMap = [\app\model\Order::STATUS_PENDING => '待处理', \app\model\Order::STATUS_PROCESSING => '处理中', \app\model\Order::STATUS_COMPLETED => '已完成', \app\model\Order::STATUS_CANCELLED => '已取消'];
                 $typeMap = [1 => '充值', 2 => '查询'];
                 $recentOrdersFormatted[] = [
                     'order_number' => (string)($ro['order_number'] ?? ''),
