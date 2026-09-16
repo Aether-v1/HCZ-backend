@@ -110,7 +110,7 @@
                 stateSave: false,
                 pagingType: 'simple_numbers',
                 ajax: {
-                    url: "{{:getConfig('backstage_entrance')}}/admin_list",
+                    url: "/{{:getConfig('backstage_entrance')}}/admin_list",
                 },
                 columns: [
                     { data: 'id' },
@@ -193,7 +193,7 @@
             }
 
             $.ajax({
-                url: "{{:getConfig('backstage_entrance')}}/admin_post/info",
+                url: "/{{:getConfig('backstage_entrance')}}/admin_post/info",
                 method: 'POST',
                 data: {
                     id: id,
@@ -249,7 +249,7 @@
 
     function add_modify() {
         $.ajax({
-            url: "{{:getConfig('backstage_entrance')}}/admin_post/add_modify",
+            url: "/{{:getConfig('backstage_entrance')}}/admin_post/add_modify",
             method: 'POST',
             data: {
                 id: $('#admin_id').val(),
@@ -298,7 +298,7 @@
         }).then((result) => {
             if (result.isConfirmed) {
                 $.ajax({
-                    url: "{{:getConfig('backstage_entrance')}}/admin_post/del",
+                    url: "/{{:getConfig('backstage_entrance')}}/admin_post/del",
                     method: 'POST',
                     data: {
                         id: id,

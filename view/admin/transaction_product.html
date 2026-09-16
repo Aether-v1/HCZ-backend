@@ -64,7 +64,7 @@
                 stateSave: false,
                 pagingType: 'simple_numbers',
                 ajax: {
-                    url: "{{:getConfig('backstage_entrance')}}/transaction_product_list",
+                    url: "/{{:getConfig('backstage_entrance')}}/transaction_product_list",
                 },
                 columns: [
                     { data: 'id' },
@@ -253,7 +253,7 @@
         }).then((result) => {
             if (result.isConfirmed) {
                 $.ajax({
-                    url: "{{:getConfig('backstage_entrance')}}/transaction_product_post/operate",
+                    url: "/{{:getConfig('backstage_entrance')}}/transaction_product_post/operate",
                     method: 'POST',
                     data: {
                         status: status,
@@ -296,7 +296,7 @@
         }).then((result) => {
             if (result.isConfirmed) {
                 $.ajax({
-                    url: "{{:getConfig('backstage_entrance')}}/transaction_product_post/del",
+                    url: "/{{:getConfig('backstage_entrance')}}/transaction_product_post/del",
                     method: 'POST',
                     data: {
                         id: id,
@@ -341,7 +341,7 @@
                     ids += $(this).val() + ",";
                 });
                 $.ajax({
-                    url: "{{:getConfig('backstage_entrance')}}/transaction_product_post/dels",
+                    url: "/{{:getConfig('backstage_entrance')}}/transaction_product_post/dels",
                     method: 'POST',
                     data: {
                         ids:ids,

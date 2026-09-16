@@ -157,7 +157,7 @@
  stateSave: false,
  pagingType: 'simple_numbers',
  ajax: {
- url: "{{:getConfig('backstage_entrance')}}/order_cx_list?uid={{$_REQUEST['uid']|default=''}}",
+ url: "/{{:getConfig('backstage_entrance')}}/order_cx_list?uid={{$_REQUEST['uid']|default=''}}",
  },
  columns: [
  { data: 'id' },
@@ -419,7 +419,7 @@
  }).then((result) => {
  if (result.isConfirmed) {
  $.ajax({
- url: "{{:getConfig('backstage_entrance')}}/order_post/query",
+ url: "/{{:getConfig('backstage_entrance')}}/order_post/query",
  method: 'POST',
  data: {
  status: status,
@@ -462,7 +462,7 @@
  }).then((result) => {
  if (result.isConfirmed) {
  $.ajax({
- url: "{{:getConfig('backstage_entrance')}}/order_post/del",
+ url: "/{{:getConfig('backstage_entrance')}}/order_post/del",
  method: 'POST',
  data: {
  id: id,
@@ -495,7 +495,7 @@
  ids += $(this).val() + ",";
  });
  $.ajax({
- url: "{{:getConfig('backstage_entrance')}}/order_post/example_b",
+ url: "/{{:getConfig('backstage_entrance')}}/order_post/example_b",
  method: 'POST',
  data: {
  ids:ids,
@@ -545,7 +545,7 @@
  
  reader.onload = function(e){ 
  $.ajax({
- url: "{{:getConfig('backstage_entrance')}}/order_post/picture_upload",
+ url: "/{{:getConfig('backstage_entrance')}}/order_post/picture_upload",
  method: 'POST',
  data: {
  result: this.result,

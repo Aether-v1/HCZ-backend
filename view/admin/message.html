@@ -507,7 +507,7 @@
 
     function sendMessage() {
         $.ajax({
-            url: "{{:getConfig('backstage_entrance')}}/message/send",
+            url: "/{{:getConfig('backstage_entrance')}}/message/send",
             method: 'POST',
             dataType: 'json',
             data: {

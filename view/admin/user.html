@@ -209,7 +209,7 @@
                 stateSave: false,
                 pagingType: 'simple_numbers',
                 ajax: {
-                    url: "{{:getConfig('backstage_entrance')}}/user_list",
+                    url: "/{{:getConfig('backstage_entrance')}}/user_list",
                 },
                 columns: [
                     { data: 'id' },
@@ -425,7 +425,7 @@
         }).then((result) => {
             if (result.isConfirmed) {
                 $.ajax({
-                    url: "{{:getConfig('backstage_entrance')}}/user_post/del",
+                    url: "/{{:getConfig('backstage_entrance')}}/user_post/del",
                     method: 'POST',
                     data: {
                         id: id,
@@ -459,7 +459,7 @@
     }
     function password_submit() {
         $.ajax({
-            url: "{{:getConfig('backstage_entrance')}}/user_post/password",
+            url: "/{{:getConfig('backstage_entrance')}}/user_post/password",
             method: 'POST',
             data: {
                 uid: $('#uid').val(),
@@ -496,7 +496,7 @@
     function balance_submit() {
         withAdminSensitiveAuth('请完成余额变更安全验证', function (authPayload) {
             $.ajax({
-                url: "{{:getConfig('backstage_entrance')}}/user_post/balance",
+                url: "/{{:getConfig('backstage_entrance')}}/user_post/balance",
                 method: 'POST',
                 data: Object.assign({
                     uid: $('#uid').val(),
@@ -538,7 +538,7 @@
         }).then((result) => {
             if (!result.isConfirmed) return;
             $.ajax({
-                url: "{{:getConfig('backstage_entrance')}}/user_post/status_switch",
+                url: "/{{:getConfig('backstage_entrance')}}/user_post/status_switch",
                 method: 'POST',
                 data: { uid: uid },
                 dataType: 'json',
@@ -580,7 +580,7 @@
 
             withAdminSensitiveAuth('请完成用户2FA解绑安全验证', function (authPayload) {
                 $.ajax({
-                    url: "{{:getConfig('backstage_entrance')}}/user_post/twofa_unbind",
+                    url: "/{{:getConfig('backstage_entrance')}}/user_post/twofa_unbind",
                     method: 'POST',
                     data: Object.assign({
                         uid: uid,
@@ -635,7 +635,7 @@
 
             withAdminSensitiveAuth(`请完成${actionLabel}安全验证`, function (authPayload) {
                 $.ajax({
-                    url: "{{:getConfig('backstage_entrance')}}/user_post/rights",
+                    url: "/{{:getConfig('backstage_entrance')}}/user_post/rights",
                     method: 'POST',
                     data: Object.assign({
                         uid: uid,

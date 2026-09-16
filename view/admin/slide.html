@@ -102,7 +102,7 @@
                 stateSave: false,
                 pagingType: 'simple_numbers',
                 ajax: {
-                    url: "{{:getConfig('backstage_entrance')}}/slide_list",
+                    url: "/{{:getConfig('backstage_entrance')}}/slide_list",
                 },
                 columns: [
                     { data: 'id' },
@@ -182,7 +182,7 @@
     
     function submit() {
         $.ajax({
-            url: "{{:getConfig('backstage_entrance')}}/slide_post/submit",
+            url: "/{{:getConfig('backstage_entrance')}}/slide_post/submit",
             method: 'POST',
             data: {
                 id: $('#sid').val(),
@@ -215,7 +215,7 @@
             $('.name').html('添加轮播图');
         }else{
             $.ajax({
-                url: "{{:getConfig('backstage_entrance')}}/slide_post/info",
+                url: "/{{:getConfig('backstage_entrance')}}/slide_post/info",
                 method: 'POST',
                 data: {
                     id: id,
@@ -254,7 +254,7 @@
         }).then((result) => {
             if (result.isConfirmed) {
                 $.ajax({
-                    url: "{{:getConfig('backstage_entrance')}}/slide_post/del",
+                    url: "/{{:getConfig('backstage_entrance')}}/slide_post/del",
                     method: 'POST',
                     data: {
                         id: id,
@@ -285,7 +285,7 @@
 
     function upload(name) {
         var myDropzone = new Dropzone("#" + name, {
-            url: "{{:getConfig('backstage_entrance')}}/upload_post",
+            url: "/{{:getConfig('backstage_entrance')}}/upload_post",
             headers: {
                 "X-CSRF-Token": adminCsrfToken
             },

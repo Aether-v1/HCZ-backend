@@ -94,7 +94,7 @@
     function account() {
         withAdminSensitiveAuth('请完成管理员资料修改安全验证', function (authPayload) {
             $.ajax({
-                url: "{{:getConfig('backstage_entrance')}}/account_post/account",
+                url: "/{{:getConfig('backstage_entrance')}}/account_post/account",
                 method: 'POST',
                 data: Object.assign({
                     account: $('#account').val(),
@@ -345,7 +345,7 @@
             const uploadResult = this.result;
             withAdminSensitiveAuth('请完成管理员头像修改安全验证', function (authPayload) {
                 $.ajax({
-                    url: "{{:getConfig('backstage_entrance')}}/account_post/avatar",
+                    url: "/{{:getConfig('backstage_entrance')}}/account_post/avatar",
                     method: 'POST',
                     data: Object.assign({
                         result: uploadResult,

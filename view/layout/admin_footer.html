@@ -377,7 +377,7 @@
             out_order();
             function out_order() {
                 $.ajax({
-                    url: "{{:getConfig('backstage_entrance')}}/admin_footer/out_order",
+                    url: "/{{:getConfig('backstage_entrance')}}/admin_footer/out_order",
                     method: 'POST',
                     dataType: 'json',
                     success: function(res) {

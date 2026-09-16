@@ -52,7 +52,7 @@
                 stateSave: false,
                 pagingType: 'simple_numbers',
                 ajax: {
-                    url: "{{:getConfig('backstage_entrance')}}/user_t_list?uid={{$_REQUEST['uid']|default=''}}",
+                    url: "/{{:getConfig('backstage_entrance')}}/user_t_list?uid={{$_REQUEST['uid']|default=''}}",
                 },
                 columns: [
                     { data: 'id' },
@@ -129,7 +129,7 @@
         }).then((result) => {
             if (result.isConfirmed) {
                 $.ajax({
-                    url: "{{:getConfig('backstage_entrance')}}/transaction_order_post/del",
+                    url: "/{{:getConfig('backstage_entrance')}}/transaction_order_post/del",
                     method: 'POST',
                     data: {
                         id: id,

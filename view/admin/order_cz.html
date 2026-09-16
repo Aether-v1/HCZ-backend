@@ -279,7 +279,7 @@
  stateSave: false,
  pagingType: 'simple_numbers',
  ajax: {
- url: "{{:getConfig('backstage_entrance')}}/order_cz_list?uid={{$_REQUEST['uid']|default=''}}",
+ url: "/{{:getConfig('backstage_entrance')}}/order_cz_list?uid={{$_REQUEST['uid']|default=''}}",
  },
  columns: [
  { data: 'id' },
@@ -680,7 +680,7 @@ KTUtil.onDOMContentLoaded(function () {
  }
  
  $.ajax({
- url: "{{:getConfig('backstage_entrance')}}/order_post/set_amount_received",
+ url: "/{{:getConfig('backstage_entrance')}}/order_post/set_amount_received",
  method: 'POST',
  data: {
  id: id,
@@ -737,7 +737,7 @@ KTUtil.onDOMContentLoaded(function () {
  });
  
  $.ajax({
- url: "{{:getConfig('backstage_entrance')}}/order_post/batch_set_amount_received",
+ url: "/{{:getConfig('backstage_entrance')}}/order_post/batch_set_amount_received",
  method: 'POST',
  data: {
  ids: ids,
@@ -776,7 +776,7 @@ KTUtil.onDOMContentLoaded(function () {
  }).then((result) => {
  if (result.isConfirmed) {
  $.ajax({
- url: "{{:getConfig('backstage_entrance')}}/order_post/audit",
+ url: "/{{:getConfig('backstage_entrance')}}/order_post/audit",
  method: 'POST',
  data: {
  status: status,
@@ -825,7 +825,7 @@ KTUtil.onDOMContentLoaded(function () {
  ids += $(this).val() + ",";
  });
  $.ajax({
- url: "{{:getConfig('backstage_entrance')}}/order_post/audit_s",
+ url: "/{{:getConfig('backstage_entrance')}}/order_post/audit_s",
  method: 'POST',
  data: {
  status: status,
@@ -872,7 +872,7 @@ KTUtil.onDOMContentLoaded(function () {
  }).then((result) => {
  if (result.isConfirmed) {
  $.ajax({
- url: "{{:getConfig('backstage_entrance')}}/order_post/del",
+ url: "/{{:getConfig('backstage_entrance')}}/order_post/del",
  method: 'POST',
  data: {
  id: id,
@@ -919,7 +919,7 @@ KTUtil.onDOMContentLoaded(function () {
  ids += $(this).val() + ",";
  });
  $.ajax({
- url: "{{:getConfig('backstage_entrance')}}/order_post/dels",
+ url: "/{{:getConfig('backstage_entrance')}}/order_post/dels",
  method: 'POST',
  data: {
  ids:ids,
@@ -954,7 +954,7 @@ KTUtil.onDOMContentLoaded(function () {
  ids += $(this).val() + ",";
  });
  $.ajax({
- url: "{{:getConfig('backstage_entrance')}}/order_post/example_a",
+ url: "/{{:getConfig('backstage_entrance')}}/order_post/example_a",
  method: 'POST',
  data: {
  ids:ids,

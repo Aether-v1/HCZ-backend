@@ -211,7 +211,7 @@
 						$.ajax({
 							type: 'POST',
 							dataType: 'json',
-							url: "{{:getConfig('backstage_entrance')}}/login_check",
+							url: "/{{:getConfig('backstage_entrance')}}/login_check",
 							timeout: 10000,
 							data: payload
 						}).done(function (response) {

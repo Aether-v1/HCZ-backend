@@ -61,7 +61,7 @@
                 stateSave: false,
                 pagingType: 'simple_numbers',
                 ajax: {
-                    url: "{{:getConfig('backstage_entrance')}}/bank_card_list?uid={{$_REQUEST['uid']|default=''}}",
+                    url: "/{{:getConfig('backstage_entrance')}}/bank_card_list?uid={{$_REQUEST['uid']|default=''}}",
                 },
                 columns: [
                     { data: 'id' },
@@ -196,7 +196,7 @@
                     ids += $(this).val() + ",";
                 });
                 $.ajax({
-                    url: "{{:getConfig('backstage_entrance')}}/bank_card_post/dels",
+                    url: "/{{:getConfig('backstage_entrance')}}/bank_card_post/dels",
                     method: 'POST',
                     data: {
                         ids:ids,

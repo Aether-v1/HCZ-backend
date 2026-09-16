@@ -191,7 +191,7 @@
                 stateSave: false,
                 pagingType: 'simple_numbers',
                 ajax: {
-                    url: "{{:getConfig('backstage_entrance')}}/product_list?type=2",
+                    url: "/{{:getConfig('backstage_entrance')}}/product_list?type=2",
                 },
                 columns: [
                     { data: 'id' },
@@ -340,7 +340,7 @@
     function product_add_modify(type, id) {
         if(type == 1){
             $.ajax({
-                url: "{{:getConfig('backstage_entrance')}}/product_post/info",
+                url: "/{{:getConfig('backstage_entrance')}}/product_post/info",
                 method: 'POST',
                 data: {
                     id: id,
@@ -394,7 +394,7 @@
 
     function add_modify() {
         $.ajax({
-            url: "{{:getConfig('backstage_entrance')}}/product_post/add_modify",
+            url: "/{{:getConfig('backstage_entrance')}}/product_post/add_modify",
             method: 'POST',
             data: {
                 type: 2,
@@ -445,7 +445,7 @@
         }).then((result) => {
             if (!result.isConfirmed) return;
             $.ajax({
-                url: "{{:getConfig('backstage_entrance')}}/product_post/status_switch",
+                url: "/{{:getConfig('backstage_entrance')}}/product_post/status_switch",
                 method: 'POST',
                 data: { id: id },
                 dataType: 'json',
@@ -463,7 +463,7 @@
 
     function sort(id) {
         $.ajax({
-            url: "{{:getConfig('backstage_entrance')}}/product_post/sort",
+            url: "/{{:getConfig('backstage_entrance')}}/product_post/sort",
             method: 'POST',
             data: {
                 id: id,
@@ -490,7 +490,7 @@
 
     function upload(name) {
         var myDropzone = new Dropzone("#" + name, {
-            url: "{{:getConfig('backstage_entrance')}}/upload_post",
+            url: "/{{:getConfig('backstage_entrance')}}/upload_post",
             headers: {
                 "X-CSRF-Token": adminCsrfToken
             },
@@ -542,7 +542,7 @@
         }).then((result) => {
             if (result.isConfirmed) {
                 $.ajax({
-                    url: "{{:getConfig('backstage_entrance')}}/product_post/del",
+                    url: "/{{:getConfig('backstage_entrance')}}/product_post/del",
                     method: 'POST',
                     data: {
                         id: id,
@@ -589,7 +589,7 @@
                     ids += $(this).val() + ",";
                 });
                 $.ajax({
-                    url: "{{:getConfig('backstage_entrance')}}/product_post/dels",
+                    url: "/{{:getConfig('backstage_entrance')}}/product_post/dels",
                     method: 'POST',
                     data: {
                         ids:ids,

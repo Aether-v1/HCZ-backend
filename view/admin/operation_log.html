@@ -157,7 +157,7 @@
                 stateSave: false,
                 pagingType: 'simple_numbers',
                 ajax: {
-                    url: "{{:getConfig('backstage_entrance')}}/operation_log_list",
+                    url: "/{{:getConfig('backstage_entrance')}}/operation_log_list",
                     data: function (d) {
                         d.admin_username = $('#admin_username').val();
                         d.module = $('#module_filter').val();
