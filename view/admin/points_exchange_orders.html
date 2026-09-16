@@ -50,7 +50,7 @@ function loadOrders(page) {
     page = Math.max(1, Number(page || 1));
     if (page > totalPages && totalPages > 0) page = totalPages;
     currentPage = page;
-    $.get("{{:getConfig('backstage_entrance')}}/points_exchange_orders_json", {
+    $.get("/{{:getConfig('backstage_entrance')}}/points_exchange_orders_json", {
         page: currentPage,
         limit: limit,
         keyword: $('#exo_keyword').val(),
@@ -100,7 +100,7 @@ function fulfillOrder(id) {
         customClass: { confirmButton: 'btn btn-success', cancelButton: 'btn btn-light' }
     }).then(function (result) {
         if (!result.isConfirmed) return;
-        $.post("{{:getConfig('backstage_entrance')}}/points_exchange_order_post/fulfill", { id: id, remark: result.value || '' }, function (res) {
+        $.post("/{{:getConfig('backstage_entrance')}}/points_exchange_order_post/fulfill", { id: id, remark: result.value || '' }, function (res) {
             if (res.code === 200) { toastr.success(res.message || '操作成功'); loadOrders(currentPage); }
             else { toastr.error(res.message || '操作失败'); }
         }, 'json');
@@ -120,7 +120,7 @@ function rejectOrder(id) {
         customClass: { confirmButton: 'btn btn-danger', cancelButton: 'btn btn-light' }
     }).then(function (result) {
         if (!result.isConfirmed) return;
-        $.post("{{:getConfig('backstage_entrance')}}/points_exchange_order_post/reject", { id: id, remark: result.value || '' }, function (res) {
+        $.post("/{{:getConfig('backstage_entrance')}}/points_exchange_order_post/reject", { id: id, remark: result.value || '' }, function (res) {
             if (res.code === 200) { toastr.success(res.message || '操作成功'); loadOrders(currentPage); }
             else { toastr.error(res.message || '操作失败'); }
         }, 'json');

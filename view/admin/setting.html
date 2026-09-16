@@ -599,7 +599,7 @@
         }
         _initRequest() {
             const xhr = this.xhr = new XMLHttpRequest();
-            xhr.open( 'POST', "{{:getConfig('backstage_entrance')}}/setting_post/upload", true );
+            xhr.open( 'POST', "/{{:getConfig('backstage_entrance')}}/setting_post/upload", true );
             xhr.responseType = 'json';
         }
         _initListeners( resolve, reject, file ) {

@@ -89,7 +89,7 @@
 {{include file="layout/admin_footer"/}}
 <script type="text/javascript">
     const adminTwofaAccountId = Number("{{$admin_info['id']|default=0}}");
-    const adminTwofaPostBase = "{{:getConfig('backstage_entrance')}}/twofa_post/";
+    const adminTwofaPostBase = "/{{:getConfig('backstage_entrance')}}/twofa_post/";
 
     function account() {
         withAdminSensitiveAuth('请完成管理员资料修改安全验证', function (authPayload) {

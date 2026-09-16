@@ -45,7 +45,7 @@ function loadPointsRecords(page) {
     page = Math.max(1, Number(page || 1));
     if (page > totalPages) page = totalPages;
     currentPage = page;
-    $.get("{{:getConfig('backstage_entrance')}}/points_records_json", {
+    $.get("/{{:getConfig('backstage_entrance')}}/points_records_json", {
         page: currentPage,
         limit: 20,
         keyword: $('#points_keyword').val(),

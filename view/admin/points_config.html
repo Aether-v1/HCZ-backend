@@ -47,7 +47,7 @@
 <script>
 $('#points_config_form').on('submit', function (event) {
     event.preventDefault();
-    $.post("{{:getConfig('backstage_entrance')}}/points_post/config_save", $(this).serialize(), function (res) {
+    $.post("/{{:getConfig('backstage_entrance')}}/points_post/config_save", $(this).serialize(), function (res) {
         if (res.code === 200) {
             toastr.success(res.message || '保存成功');
         } else {

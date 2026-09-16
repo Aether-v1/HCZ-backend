@@ -169,10 +169,10 @@
     const queryParams = new URLSearchParams(window.location.search);
     const presetUid = queryParams.get('uid') || '';
     const presetAccount = queryParams.get('account') || '';
-    const messageListUrl = "{{:getConfig('backstage_entrance')}}/message/list";
-    const messagePinUrl = "{{:getConfig('backstage_entrance')}}/message/pin";
-    const messageDetailUrl = "{{:getConfig('backstage_entrance')}}/message/detail";
-    const messageDeleteUrl = "{{:getConfig('backstage_entrance')}}/message/delete";
+    const messageListUrl = "/{{:getConfig('backstage_entrance')}}/message/list";
+    const messagePinUrl = "/{{:getConfig('backstage_entrance')}}/message/pin";
+    const messageDetailUrl = "/{{:getConfig('backstage_entrance')}}/message/detail";
+    const messageDeleteUrl = "/{{:getConfig('backstage_entrance')}}/message/delete";
     const initialMessageRows = getInitialMessageRows();
     let dt = null;
 

@@ -143,7 +143,7 @@
 									</div>
 									<div class="menu menu-sub menu-sub-dropdown menu-column menu-rounded menu-gray-800 menu-state-bg menu-state-color fw-semibold py-4 fs-6 w-125px" data-kt-menu="true">
 										<div class="menu-item px-5 my-1">
-											<a href="{{:getConfig('backstage_entrance')}}/account" class="menu-link px-5">信息修改</a>
+											<a href="/{{:getConfig('backstage_entrance')}}/account" class="menu-link px-5">信息修改</a>
 										</div>
 										<div class="menu-item px-5">
 											<form method="post" action="{{:url(getConfig('backstage_entrance').'/logout')}}" style="margin:0;">
@@ -196,7 +196,7 @@
 										{{/if}}
 										{{if power($admin_info['power'],'用户列表') == 1}}
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='用户列表'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/user">
+											<a class="menu-link <?php if('[web_title]'=='用户列表'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/user">
 												<span class="menu-icon">
 													<span class="svg-icon svg-icon-2">
 														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -211,7 +211,7 @@
 										{{/if}}
 										{{if power($admin_info['power'],'用户列表') == 1}}
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='站内消息'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/message">
+											<a class="menu-link <?php if('[web_title]'=='站内消息'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/message">
 												<span class="menu-icon">
 													<span class="svg-icon svg-icon-2">
 														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -226,7 +226,7 @@
 										{{/if}}
 										{{if power($admin_info['power'],'支付管理') == 1}}
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='支付管理'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/bank_card">
+											<a class="menu-link <?php if('[web_title]'=='支付管理'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/bank_card">
 												<span class="menu-icon">
 													<span class="svg-icon svg-icon-2">
 														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -245,31 +245,31 @@
                                             </div>
                                         </div>
                                         <div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='域名审核'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/substation_apply">
+											<a class="menu-link <?php if('[web_title]'=='域名审核'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/substation_apply">
                                                 <span class="menu-icon"><span class="svg-icon svg-icon-2"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 10.5 12 5l9 5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 10v8.5h14V10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 18.5V13h6v5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
 												<span class="menu-title">域名审核</span>
                                             </a>
                                         </div>
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='分站资料修改记录'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/substation_profile_audit">
+											<a class="menu-link <?php if('[web_title]'=='分站资料修改记录'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/substation_profile_audit">
 												<span class="menu-icon"><span class="svg-icon svg-icon-2"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 5h12v14H6z" stroke="currentColor" stroke-width="1.8"/><path d="M9 9h6M9 13h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span></span>
 												<span class="menu-title">分站资料修改记录</span>
 											</a>
 										</div>
                                         <div class="menu-item">
-                                            <a class="menu-link <?php if('[web_title]'=='分站管理'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/substation_manage">
+                                            <a class="menu-link <?php if('[web_title]'=='分站管理'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/substation_manage">
                                                 <span class="menu-icon"><span class="svg-icon svg-icon-2"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 19h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 15l3-3 3 2 4-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 9h2v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span></span>
                                                 <span class="menu-title">分站管理</span>
                                             </a>
                                         </div>
                                         <div class="menu-item">
-                                            <a class="menu-link <?php if('[web_title]'=='分站订单'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/substation_order">
+                                            <a class="menu-link <?php if('[web_title]'=='分站订单'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/substation_order">
                                                 <span class="menu-icon"><span class="svg-icon svg-icon-2"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 4h10l2 3v13H5V7l2-3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M5 9h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9 13h6M9 17h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span></span>
                                                 <span class="menu-title">分站订单</span>
                                             </a>
                                         </div>
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='分站收益记录'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/substation_income">
+											<a class="menu-link <?php if('[web_title]'=='分站收益记录'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/substation_income">
 												<span class="menu-icon"><span class="svg-icon svg-icon-2"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7 14h3v4H7zM11 10h3v8h-3zM15 7h3v11h-3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span></span>
 												<span class="menu-title">分站收益记录</span>
 											</a>
@@ -283,7 +283,7 @@
 										{{/if}}
 										{{if power($admin_info['power'],'充值业务 - 产品列表') == 1}}
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='充值业务 - 产品列表'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/product_cz">
+											<a class="menu-link <?php if('[web_title]'=='充值业务 - 产品列表'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/product_cz">
 												<span class="menu-icon">
 													<span class="svg-icon svg-icon-2">
 														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -298,7 +298,7 @@
 										{{/if}}
 										{{if power($admin_info['power'],'查询业务 - 产品列表') == 1}}
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='查询业务 - 产品列表'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/product_cx">
+											<a class="menu-link <?php if('[web_title]'=='查询业务 - 产品列表'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/product_cx">
 												<span class="menu-icon">
 													<span class="svg-icon svg-icon-2">
 														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -320,7 +320,7 @@
 										{{/if}}
 										{{if power($admin_info['power'],'充值业务 - 订单列表') == 1}}
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='充值业务 - 订单列表'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/order_cz">
+											<a class="menu-link <?php if('[web_title]'=='充值业务 - 订单列表'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/order_cz">
 												<span class="menu-icon">
 													<span class="svg-icon svg-icon-2">
 														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -335,7 +335,7 @@
 										{{/if}}
 										{{if power($admin_info['power'],'查询业务 - 订单列表') == 1}}
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='查询业务 - 订单列表'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/order_cx">
+											<a class="menu-link <?php if('[web_title]'=='查询业务 - 订单列表'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/order_cx">
 												<span class="menu-icon">
 													<span class="svg-icon svg-icon-2">
 														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -355,19 +355,19 @@
 											</div>
 										</div>
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='积分记录'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/points_records">
+											<a class="menu-link <?php if('[web_title]'=='积分记录'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/points_records">
 												<span class="menu-icon"><span class="svg-icon svg-icon-2"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path opacity="0.3" d="M4 5h16v14H4V5Z" fill="currentColor"/><path d="M8 9h8M8 13h8M8 17h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span></span>
 												<span class="menu-title">积分记录</span>
 											</a>
 										</div>
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='兑换设置'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/points_exchange">
+											<a class="menu-link <?php if('[web_title]'=='兑换设置'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/points_exchange">
 												<span class="menu-icon"><span class="svg-icon svg-icon-2"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path opacity="0.3" d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3H4V7Z" fill="currentColor"/><path d="M4 10h16v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7Zm8-3v12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span></span>
 												<span class="menu-title">兑换设置</span>
 											</a>
 										</div>
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='兑换订单'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/points_exchange_orders">
+											<a class="menu-link <?php if('[web_title]'=='兑换订单'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/points_exchange_orders">
 												<span class="menu-icon"><span class="svg-icon svg-icon-2"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path opacity="0.3" d="M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" fill="currentColor"/><path d="M8 9h8M8 13h8M8 17h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="17" r="3" fill="currentColor"/><path d="m15 17 .8.8L17.5 16" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
 												<span class="menu-title">兑换订单</span>
 											</a>
@@ -382,7 +382,7 @@
 										{{/if}}
 										{{if power($admin_info['power'],'充值订单记录') == 1}}
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='充值订单记录'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/recharge">
+											<a class="menu-link <?php if('[web_title]'=='充值订单记录'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/recharge">
 												<span class="menu-icon">
 													<span class="svg-icon svg-icon-2">
 														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -397,7 +397,7 @@
 										{{/if}}
 										{{if power($admin_info['power'],'提现订单记录') == 1}}
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='提现订单记录'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/withdrawal">
+											<a class="menu-link <?php if('[web_title]'=='提现订单记录'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/withdrawal">
 												<span class="menu-icon">
 													<span class="svg-icon svg-icon-2">
 														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -412,7 +412,7 @@
 										{{/if}}
 										{{if power($admin_info['power'],'返佣记录') == 1}}
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='返佣记录'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/rebate_record">
+											<a class="menu-link <?php if('[web_title]'=='返佣记录'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/rebate_record">
 												<span class="menu-icon">
 													<span class="svg-icon svg-icon-2">
 														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -434,7 +434,7 @@
 										{{/if}}
 										{{if power($admin_info['power'],'交易挂单数据') == 1}}
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='交易挂单数据'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/transaction_product">
+											<a class="menu-link <?php if('[web_title]'=='交易挂单数据'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/transaction_product">
 												<span class="menu-icon">
 													<span class="svg-icon svg-icon-2">
 														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -449,7 +449,7 @@
 										{{/if}}
 										{{if power($admin_info['power'],'交易订单数据') == 1}}
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='交易订单数据'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/transaction_order">
+											<a class="menu-link <?php if('[web_title]'=='交易订单数据'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/transaction_order">
 												<span class="menu-icon">
 													<span class="svg-icon svg-icon-2">
 														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -471,7 +471,7 @@
 										{{/if}}
 										{{if power($admin_info['power'],'首页轮播图') == 1}}
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='首页轮播图'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/slide">
+											<a class="menu-link <?php if('[web_title]'=='首页轮播图'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/slide">
 												<span class="menu-icon">
 													<span class="svg-icon svg-icon-2">
 														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -487,7 +487,7 @@
 
 										{{if power($admin_info['power'],'管理员列表') == 1}}
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='管理员列表'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/admin">
+											<a class="menu-link <?php if('[web_title]'=='管理员列表'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/admin">
 												<span class="menu-icon">
 													<span class="svg-icon svg-icon-2">
 														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -503,7 +503,7 @@
 
 										{{if power($admin_info['power'],'操作记录') == 1 || (!empty($admin_info['id']) && $admin_info['id'] == 1)}}
 										<div class="menu-item">
-											<a class="menu-link <?php if('[web_title]'=='操作记录'){echo 'active';}?>" href="{{:getConfig('backstage_entrance')}}/operation_log">
+											<a class="menu-link <?php if('[web_title]'=='操作记录'){echo 'active';}?>" href="/{{:getConfig('backstage_entrance')}}/operation_log">
 												<span class="menu-icon">
 													<span class="svg-icon svg-icon-2">
 														<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -523,7 +523,7 @@
 						</div>
 						{{if power($admin_info['power'],'系统设置管理') == 1}}
 						<div class="app-sidebar-footer flex-column-auto pt-2 pb-6 px-6" id="kt_app_sidebar_footer">
-							<a href="{{:getConfig('backstage_entrance')}}/setting" class="btn btn-flex flex-center btn-custom btn-primary overflow-hidden text-nowrap px-0 h-40px w-100">
+							<a href="/{{:getConfig('backstage_entrance')}}/setting" class="btn btn-flex flex-center btn-custom btn-primary overflow-hidden text-nowrap px-0 h-40px w-100">
 								<span class="btn-label">系统设置管理</span>
 								<i class="ki-duotone ki-document btn-icon fs-2 m-0">
 									<span class="path1"></span>
