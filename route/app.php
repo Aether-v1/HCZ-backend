@@ -186,8 +186,8 @@ Route::group('api/callback', function () {
     Route::post('bepusdt', 'Notify/api_callback_bepusdt');
 });
 
-// 后台管理路由分组（动态后台入口）
-Route::group(getConfig('backstage_entrance'), static function () {
+// 后台管理路由分组（动态后台入口，未配置时默认 admin）
+Route::group(getConfig('backstage_entrance') ?: 'admin', static function () {
     // 后台首页
     Route::get('/', 'Admin/index');
     // 后台登录
