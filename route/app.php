@@ -195,11 +195,11 @@ Route::group(getConfig('backstage_entrance') ?: 'admin', static function () {
     // 后台登录验证
     Route::post('login_check', 'AdminApi/login_check');
     // B10-32: NEW route - Auth Controller 独立入口（行为等价，admin.Auth/login_check，action 名保持 login_check 兼容 AdminAuth 白名单）
-    Route::post('admin/auth/login_check', 'admin.Auth/login_check');
+    Route::post('auth/login_check', 'admin.Auth/login_check');
     // 防被动登出：后台退出改为 POST，避免第三方页面通过 GET 链接或图片触发退出。
     Route::post('logout', 'AdminApi/logout');
     // B10-32: NEW route - Auth Controller 独立入口（行为等价，admin.Auth/logout）
-    Route::post('admin/auth/logout', 'admin.Auth/logout');
+    Route::post('auth/logout', 'admin.Auth/logout');
     // 系统设置
     Route::get('setting', 'Admin/setting');
     // 系统设置提交
@@ -211,7 +211,7 @@ Route::group(getConfig('backstage_entrance') ?: 'admin', static function () {
     // 管理员2FA请求
     Route::post('twofa_post/:action', 'AdminApi/twofa_post');
     // B10-32: NEW route - Auth Controller 独立入口（行为等价，admin.Auth/twofa_post）
-    Route::post('admin/auth/twofa/:action', 'admin.Auth/twofa_post');
+    Route::post('auth/twofa/:action', 'admin.Auth/twofa_post');
     // 私有导出下载接口
     Route::get('export_download', 'AdminApi/export_download');
 

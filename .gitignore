@@ -42,6 +42,9 @@ composer.phar
 .buildpath
 .project
 
+# Server-specific (宝塔/环境相关，不应入库)
+.user.ini
+
 # PHPUnit
 .phpunit.result.cache
 
